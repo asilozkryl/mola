@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
-import type { CallPeer, User } from "../../shared/types";
+import type { CallPeer, User, VoiceChannelRoster } from "../../shared/types";
+import { subscribeVoiceRoster } from "./voiceRoster";
 
 export interface CallParticipant extends CallPeer {
   stream: MediaStream | null;
@@ -57,10 +58,18 @@ const stopStream = (stream: MediaStream | null) =>
 export function useCall({
   socket,
   user,
+  workspaceId,
+  initialVoiceChannels,
 }: {
   socket: Socket | null;
   user: User | null;
+  workspaceId: string | null;
+  initialVoiceChannels?: VoiceChannelRoster[];
 }) {
+  const [voiceRoster, setVoiceRoster] = useState<{
+    workspaceId: string | null;
+    channels: VoiceChannelRoster[];
+  }>({ workspaceId, channels: initialVoiceChannels ?? [] });
   const [channelId, setChannelId] = useState<string | null>(null);
   const [channelName, setChannelName] = useState("");
   const [joining, setJoining] = useState(false);
@@ -86,6 +95,14 @@ export function useCall({
   const joinedRef = useRef(false);
   const pendingSignals = useRef<CallSignal[]>([]);
   const stateRef = useRef({ mic: true, camera: false, sharing: false });
+
+  useEffect(() => {
+    setVoiceRoster({ workspaceId, channels: initialVoiceChannels ?? [] });
+    if (!socket || !workspaceId) return;
+    return subscribeVoiceRoster(socket, workspaceId, (channels) =>
+      setVoiceRoster({ workspaceId, channels }),
+    );
+  }, [socket, workspaceId, initialVoiceChannels]);
 
   const syncPeers = useCallback(() => {
     setPeers(
@@ -376,7 +393,7 @@ export function useCall({
       socket.off("disconnect", onDisconnect);
       leave();
     };
-  }, [socket, updatePeers, handleSignal, leave]);
+  }, [socket, workspaceId, updatePeers, handleSignal, leave]);
 
   useEffect(() => {
     if (!joined) return;
@@ -730,6 +747,8 @@ export function useCall({
   }, [publishState]);
 
   return {
+    voiceChannels:
+      voiceRoster.workspaceId === workspaceId ? voiceRoster.channels : [],
     channelId,
     channelName,
     canJoin: Boolean(socket?.connected),

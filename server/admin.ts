@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { Repository, type Row } from './db.js';
 import { HttpError } from './errors.js';
-import { closeCallRoom } from './calls.js';
+import { closeCallRoom, updateCallUser } from './calls.js';
 import type { AuditEvent, SystemAdminData, WorkspaceAdminData } from '../shared/types.js';
 
 const uuid = z.string().uuid();
@@ -31,14 +31,15 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
     for (const socket of io.sockets.sockets.values()) if (socket.data.user?.siteAdmin && socket.data.workspaceId !== workspaceId) socket.emit('admin:refresh');
   };
   const currentActor = (req: Request) => {
-    const actor = repo.get('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE u.id=? AND s.token_hash=? AND s.expires_at>?', req.auth!.id, req.sessionHash!, Date.now());
+    const actor = repo.session(req.sessionHash!);
     if (!actor) throw new HttpError(401, 'Oturumunuz sona erdi. Yeniden giriş yapın.');
+    if (actor.id !== req.auth!.id || actor.workspace_id !== req.auth!.workspace_id) throw new HttpError(409, 'Çalışma alanınız değişti. Güncel alan yükleniyor.', 'WORKSPACE_CHANGED');
     if (actor.suspended_at) throw new HttpError(403, 'Hesabınız askıya alındı.', 'ACCOUNT_SUSPENDED');
     return actor;
   };
   const teamAdmin = (req: Request) => {
     const actor = currentActor(req);
-    if (actor.suspended_at || (actor.role !== 'owner' && !actor.site_admin)) throw new HttpError(403, 'Ekip yönetimine yalnızca çalışma alanı sahibi erişebilir.');
+    if (actor.suspended_at || actor.membership_suspended_at || actor.membership_removed_at || (actor.role !== 'owner' && !actor.site_admin)) throw new HttpError(403, 'Ekip yönetimine yalnızca çalışma alanı sahibi erişebilir.');
     if (repo.workspace(actor.workspace_id).suspended) throw new HttpError(403, 'Bu çalışma alanı askıya alındı.', 'WORKSPACE_SUSPENDED');
     return actor;
   };
@@ -48,10 +49,11 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
     return actor;
   };
   const revokeUser = (id: string) => { repo.run('DELETE FROM sessions WHERE user_id=?', id); io.in(`user:${id}`).disconnectSockets(true); };
+  const revokeMembership = (id: string, workspaceId: string) => { repo.run('DELETE FROM sessions WHERE user_id=? AND workspace_id=?', id, workspaceId); io.in(`workspace-user:${workspaceId}:${id}`).disconnectSockets(true); };
   const member = (id: unknown, workspaceId?: string) => {
     if (!uuid.safeParse(id).success) throw new HttpError(404, 'Üye bulunamadı.');
-    const row = workspaceId ? repo.get('SELECT * FROM users WHERE id=? AND workspace_id=?', String(id), workspaceId) : repo.get('SELECT * FROM users WHERE id=?', String(id));
-    if (!row) throw new HttpError(404, 'Üye bulunamadı.');
+    const row = workspaceId ? repo.member(String(id), workspaceId) : repo.get('SELECT u.*,(SELECT wm.workspace_id FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=u.id AND wm.removed_at IS NULL AND w.is_demo=0 ORDER BY wm.joined_at LIMIT 1) AS workspace_id FROM users u WHERE u.id=?', String(id));
+    if (!row || row.membership_removed_at) throw new HttpError(404, 'Üye bulunamadı.');
     return row;
   };
   const suspendMember = (req: Request, target: Row, suspended: boolean, system: boolean) => {
@@ -60,24 +62,25 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
       const actor = system ? siteAdmin(req) : teamAdmin(req);
       target = member(target.id, system ? undefined : actor.workspace_id);
       if (suspended && (actor.id === target.id || target.site_admin)) throw new HttpError(409, 'Kendi hesabınız veya uygulama yöneticisi askıya alınamaz.');
-      if (suspended && target.role === 'owner') throw new HttpError(409, 'Önce çalışma alanının sahipliğini başka bir aktif üyeye devredin.');
-      repo.run('UPDATE users SET suspended_at=? WHERE id=?', suspended ? new Date().toISOString() : null, target.id);
+      if (suspended && (system ? repo.get("SELECT 1 FROM workspace_members WHERE user_id=? AND role='owner' AND removed_at IS NULL", target.id) : target.role === 'owner')) throw new HttpError(409, 'Önce çalışma alanının sahipliğini başka bir aktif üyeye devredin.');
+      if (system) repo.run('UPDATE users SET suspended_at=? WHERE id=?', suspended ? new Date().toISOString() : null, target.id);
+      else repo.run('UPDATE workspace_members SET suspended_at=? WHERE user_id=? AND workspace_id=?', suspended ? new Date().toISOString() : null, target.id, target.workspace_id);
       recordAudit(repo, actor, target.workspace_id, `${system ? 'system' : 'workspace'}.member.${suspended ? 'suspended' : 'restored'}`, 'user', target.id);
-      if (suspended) repo.run('DELETE FROM sessions WHERE user_id=?', target.id);
+      if (suspended) { if (system) repo.run('DELETE FROM sessions WHERE user_id=?', target.id); else repo.run('DELETE FROM sessions WHERE user_id=? AND workspace_id=?', target.id, target.workspace_id); }
     });
-    if (suspended) revokeUser(target.id);
-    refresh(target.workspace_id);
+    if (suspended) { if (system) revokeUser(target.id); else revokeMembership(target.id, target.workspace_id); }
+    if (system) for (const workspace of repo.workspaces(target.id)) refresh(workspace.id); else refresh(target.workspace_id);
   };
   app.use('/api/admin', rateLimit({ windowMs: 60_000, limit: 90, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Yönetim isteği sınırına ulaştınız. Bir dakika sonra tekrar deneyin.' } }));
   app.get('/api/admin/workspace', (req, res) => {
     const actor = teamAdmin(req); const wid = actor.workspace_id;
     const data: WorkspaceAdminData = {
       workspace: repo.workspace(wid),
-      members: repo.all('SELECT * FROM users WHERE workspace_id=? ORDER BY created_at,id LIMIT 1000', wid).map(row => ({ ...repo.user(row), joinedAt: row.created_at })),
+      members: repo.members(wid).filter(row => !row.membership_removed_at).slice(0, 1000).map(row => ({ ...repo.user(row), joinedAt: row.joined_at })),
       channels: repo.all("SELECT * FROM channels WHERE workspace_id=? AND kind!='dm' ORDER BY created_at,id LIMIT 1000", wid).map(row => repo.channel(row)),
       invites: repo.all('SELECT i.*,u.name AS creator_name FROM invites i JOIN users u ON u.id=i.created_by WHERE i.workspace_id=? ORDER BY i.created_at DESC,i.id DESC LIMIT 100', wid).map(row => ({ id: row.id, createdAt: row.created_at, expiresAt: new Date(row.expires_at).toISOString(), uses: row.uses, maxUses: row.max_uses, revoked: Boolean(row.revoked_at), createdBy: row.creator_name })),
       audit: repo.all('SELECT * FROM audit_events WHERE workspace_id=? ORDER BY created_at DESC,id DESC LIMIT 100', wid).map(event),
-      stats: { members: repo.get('SELECT count(*) AS n FROM users WHERE workspace_id=?', wid)!.n, channels: repo.get("SELECT count(*) AS n FROM channels WHERE workspace_id=? AND kind!='dm'", wid)!.n, messages: repo.get('SELECT count(*) AS n FROM messages m JOIN channels c ON c.id=m.channel_id WHERE c.workspace_id=?', wid)!.n, storageBytes: repo.get('SELECT coalesce(sum(size),0) AS n FROM attachments WHERE workspace_id=?', wid)!.n },
+      stats: { members: repo.get('SELECT count(*) AS n FROM workspace_members WHERE workspace_id=? AND removed_at IS NULL', wid)!.n, channels: repo.get("SELECT count(*) AS n FROM channels WHERE workspace_id=? AND kind!='dm'", wid)!.n, messages: repo.get('SELECT count(*) AS n FROM messages m JOIN channels c ON c.id=m.channel_id WHERE c.workspace_id=?', wid)!.n, storageBytes: repo.get('SELECT coalesce(sum(size),0) AS n FROM attachments WHERE workspace_id=?', wid)!.n },
       limits: { members: 1000, channels: 1000, invites: 100, audit: 100 },
     };
     res.json(data);
@@ -91,6 +94,17 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
     const actor = teamAdmin(req); const input = parse(z.object({ suspended: z.boolean() }).strict(), req.body);
     suspendMember(req, member(req.params.id, actor.workspace_id), input.suspended, false); res.json({ ok: true });
   });
+  app.delete('/api/admin/workspace/members/:id', (req, res) => {
+    const removed = repo.transaction(() => {
+      const actor = teamAdmin(req); const target = member(req.params.id, actor.workspace_id);
+      if (target.id === actor.id || target.site_admin || target.role === 'owner') throw new HttpError(409, 'Alan sahibi, kendi hesabınız veya uygulama yöneticisi ekipten çıkarılamaz.');
+      repo.run('UPDATE workspace_members SET removed_at=? WHERE workspace_id=? AND user_id=?', new Date().toISOString(), actor.workspace_id, target.id);
+      repo.run('DELETE FROM sessions WHERE user_id=? AND workspace_id=?', target.id, actor.workspace_id);
+      recordAudit(repo, actor, actor.workspace_id, 'workspace.member.removed', 'user', target.id);
+      return target;
+    });
+    revokeMembership(removed.id, removed.workspace_id); refresh(removed.workspace_id); res.status(204).end();
+  });
   const transferLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Çok fazla sahiplik devri denemesi. 15 dakika sonra tekrar deneyin.' } });
   app.post('/api/admin/workspace/transfer', transferLimiter, async (req, res) => {
     const actor = teamAdmin(req);
@@ -103,13 +117,14 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
       if (fresh.role !== 'owner') throw new HttpError(403, 'Sahiplik devri yetkiniz artık yok.');
       if (fresh.password_hash !== actor.password_hash || !repo.get('SELECT 1 FROM sessions WHERE token_hash=? AND user_id=? AND expires_at>?', req.sessionHash!, actor.id, Date.now())) throw new HttpError(401, 'Oturumunuz değişti. Yeniden giriş yapın.');
       const target = member(input.userId, actor.workspace_id);
-      if (target.id === actor.id || target.suspended_at || !target.email_verified || !target.password_hash || target.role === 'owner') throw new HttpError(409, 'Doğrulanmış, aktif ve kendi parolası olan başka bir üye seçin.');
-      repo.run("UPDATE users SET role='member' WHERE workspace_id=? AND role='owner'", actor.workspace_id);
-      repo.run("UPDATE users SET role='owner' WHERE id=?", target.id);
+      if (target.id === actor.id || target.suspended_at || target.membership_suspended_at || !target.email_verified || !target.password_hash || target.role === 'owner') throw new HttpError(409, 'Doğrulanmış, aktif ve kendi parolası olan başka bir üye seçin.');
+      repo.run("UPDATE workspace_members SET role='member' WHERE workspace_id=? AND role='owner'", actor.workspace_id);
+      repo.run("UPDATE workspace_members SET role='owner' WHERE workspace_id=? AND user_id=?", actor.workspace_id, target.id);
       recordAudit(repo, actor, actor.workspace_id, 'workspace.ownership.transferred', 'user', target.id);
     });
     // Refresh authorization carried in socket presence; HTTP reads roles per request.
-    for (const socket of io.sockets.sockets.values()) if (socket.data.workspaceId === actor.workspace_id) socket.data.user = repo.user(repo.get('SELECT * FROM users WHERE id=?', socket.data.user.id)!);
+    for (const socket of io.sockets.sockets.values()) if (socket.data.workspaceId === actor.workspace_id) socket.data.user = repo.user(repo.member(socket.data.user.id, actor.workspace_id)!);
+    for (const id of [actor.id, input.userId]) updateCallUser(io, actor.workspace_id, repo.user(repo.member(id, actor.workspace_id)!));
     refresh(actor.workspace_id); res.json({ ok: true });
   });
   app.patch('/api/admin/workspace/channels/:id', (req, res) => {
@@ -137,15 +152,16 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
     siteAdmin(req);
     const query = parse(z.object({ page: z.coerce.number().int().min(1).max(100000).default(1), limit: z.coerce.number().int().min(1).max(100).default(100), q: z.string().trim().max(100).default(''), status: z.enum(['all', 'active', 'suspended']).default('all') }), req.query);
     const pattern = `%${query.q.normalize('NFKC').toLocaleLowerCase('tr-TR').replace(/[\\%_]/g, value => `\\${value}`)}%`;
-    const workspaceWhere = "w.is_demo=0 AND fold_text(w.name||' '||coalesce((SELECT group_concat(name,' ') FROM users WHERE workspace_id=w.id AND role='owner'),'')) LIKE ? ESCAPE '\\'" + (query.status === 'all' ? '' : ` AND w.suspended_at IS ${query.status === 'active' ? '' : 'NOT '}NULL`);
-    const userWhere = "w.is_demo=0 AND (fold_text(u.name) LIKE ? ESCAPE '\\' OR fold_text(u.email) LIKE ? ESCAPE '\\' OR fold_text(w.name) LIKE ? ESCAPE '\\')" + (query.status === 'all' ? '' : ` AND u.suspended_at IS ${query.status === 'active' ? '' : 'NOT '}NULL`);
+    const workspaceWhere = "w.is_demo=0 AND fold_text(w.name||' '||coalesce((SELECT group_concat(uo.name,' ') FROM workspace_members wo JOIN users uo ON uo.id=wo.user_id WHERE wo.workspace_id=w.id AND wo.role='owner' AND wo.removed_at IS NULL),'')) LIKE ? ESCAPE '\\'" + (query.status === 'all' ? '' : ` AND w.suspended_at IS ${query.status === 'active' ? '' : 'NOT '}NULL`);
+    const workspaceNames = "(SELECT group_concat(uw.name,', ') FROM workspace_members um JOIN workspaces uw ON uw.id=um.workspace_id WHERE um.user_id=u.id AND um.removed_at IS NULL AND uw.is_demo=0)";
+    const userWhere = `EXISTS (SELECT 1 FROM workspace_members um JOIN workspaces uw ON uw.id=um.workspace_id WHERE um.user_id=u.id AND um.removed_at IS NULL AND uw.is_demo=0) AND (fold_text(u.name) LIKE ? ESCAPE '\\' OR fold_text(u.email) LIKE ? ESCAPE '\\' OR fold_text(${workspaceNames}) LIKE ? ESCAPE '\\')` + (query.status === 'all' ? '' : ` AND u.suspended_at IS ${query.status === 'active' ? '' : 'NOT '}NULL`);
     const auditWhere = "fold_text(actor_name||' '||action||' '||target_id||' '||details) LIKE ? ESCAPE '\\'";
     const offset = (query.page - 1) * query.limit;
     const data: SystemAdminData = {
-      workspaces: repo.all(`SELECT w.*,(SELECT group_concat(name,', ') FROM users WHERE workspace_id=w.id AND role='owner') AS owner_name,(SELECT count(*) FROM users WHERE workspace_id=w.id) AS member_count,(SELECT count(*) FROM messages m JOIN channels c ON c.id=m.channel_id WHERE c.workspace_id=w.id) AS message_count,(SELECT coalesce(sum(size),0) FROM attachments WHERE workspace_id=w.id) AS storage_bytes FROM workspaces w WHERE ${workspaceWhere} ORDER BY w.created_at DESC,w.id LIMIT ? OFFSET ?`, pattern, query.limit, offset).map(row => ({ id: row.id, name: row.name, isDemo: false, suspended: Boolean(row.suspended_at), ownerName: row.owner_name || '', memberCount: row.member_count, messageCount: row.message_count, storageBytes: row.storage_bytes })),
-      users: repo.all(`SELECT u.*,w.name AS workspace_name FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE ${userWhere} ORDER BY u.created_at DESC,u.id LIMIT ? OFFSET ?`, pattern, pattern, pattern, query.limit, offset).map(row => ({ ...repo.user(row), joinedAt: row.created_at, workspaceId: row.workspace_id, workspaceName: row.workspace_name })),
+      workspaces: repo.all(`SELECT w.*,(SELECT group_concat(uo.name,', ') FROM workspace_members wo JOIN users uo ON uo.id=wo.user_id WHERE wo.workspace_id=w.id AND wo.role='owner' AND wo.removed_at IS NULL) AS owner_name,(SELECT count(*) FROM workspace_members WHERE workspace_id=w.id AND removed_at IS NULL) AS member_count,(SELECT count(*) FROM messages m JOIN channels c ON c.id=m.channel_id WHERE c.workspace_id=w.id) AS message_count,(SELECT coalesce(sum(size),0) FROM attachments WHERE workspace_id=w.id) AS storage_bytes FROM workspaces w WHERE ${workspaceWhere} ORDER BY w.created_at DESC,w.id LIMIT ? OFFSET ?`, pattern, query.limit, offset).map(row => ({ id: row.id, name: row.name, isDemo: false, suspended: Boolean(row.suspended_at), ownerName: row.owner_name || '', memberCount: row.member_count, messageCount: row.message_count, storageBytes: row.storage_bytes })),
+      users: repo.all(`SELECT u.*,CASE WHEN EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.user_id=u.id AND wm.role='owner' AND wm.removed_at IS NULL) THEN 'owner' ELSE 'member' END AS role,${workspaceNames} AS workspace_name FROM users u WHERE ${userWhere} ORDER BY u.created_at DESC,u.id LIMIT ? OFFSET ?`, pattern, pattern, pattern, query.limit, offset).map(row => ({ ...repo.user(row), joinedAt: row.created_at, workspaceId: row.workspace_id, workspaceName: row.workspace_name })),
       audit: repo.all(`SELECT * FROM audit_events WHERE ${auditWhere} ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?`, pattern, query.limit, offset).map(event),
-      pagination: { page: query.page, limit: query.limit, workspaceTotal: repo.get(`SELECT count(*) AS n FROM workspaces w WHERE ${workspaceWhere}`, pattern)!.n, userTotal: repo.get(`SELECT count(*) AS n FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE ${userWhere}`, pattern, pattern, pattern)!.n, auditTotal: repo.get(`SELECT count(*) AS n FROM audit_events WHERE ${auditWhere}`, pattern)!.n },
+      pagination: { page: query.page, limit: query.limit, workspaceTotal: repo.get(`SELECT count(*) AS n FROM workspaces w WHERE ${workspaceWhere}`, pattern)!.n, userTotal: repo.get(`SELECT count(*) AS n FROM users u WHERE ${userWhere}`, pattern, pattern, pattern)!.n, auditTotal: repo.get(`SELECT count(*) AS n FROM audit_events WHERE ${auditWhere}`, pattern)!.n },
     };
     res.json(data);
   });
@@ -156,7 +172,7 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
     repo.transaction(() => {
       const fresh = siteAdmin(req);
       repo.run('UPDATE workspaces SET suspended_at=? WHERE id=?', input.suspended ? new Date().toISOString() : null, target.id);
-      if (input.suspended) repo.run('DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE workspace_id=? AND site_admin=0)', target.id);
+      if (input.suspended) repo.run('DELETE FROM sessions WHERE workspace_id=? AND user_id IN (SELECT id FROM users WHERE site_admin=0)', target.id);
       recordAudit(repo, fresh, target.id, `system.workspace.${input.suspended ? 'suspended' : 'restored'}`, 'workspace', target.id);
     });
     refresh(target.id);
@@ -165,7 +181,7 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
   });
   app.patch('/api/admin/system/users/:id', (req, res) => {
     const actor = siteAdmin(req); const input = parse(z.object({ suspended: z.boolean() }).strict(), req.body); const target = member(req.params.id);
-    if (repo.workspace(target.workspace_id).isDemo) throw new HttpError(404, 'Üye bulunamadı.');
+    if (!target.workspace_id) throw new HttpError(404, 'Üye bulunamadı.');
     suspendMember(req, target, input.suspended, true); res.json({ ok: true });
   });
 }

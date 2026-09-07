@@ -1,6 +1,29 @@
 # Doğrulama — 7 Eylül 2026
 
-Kapsam: yerelde çalışan Mola, ekip ve genel yönetim panelleri, Docker dağıtım paketi, hesap kurtarma/doğrulama, yedekleme, izleme ve görüşme dayanıklılığı. Gerçek alan adı, dış sunucu, SMTP sağlayıcısı veya harici yedek hesabına bağlantı yapılmadı. Coolify dağıtımı kullanıcı isteğiyle sonraya bırakıldı.
+## Çoklu çalışma alanı ve sesli oda katılımcıları
+
+Yeni sürüm aynı kimlikle birden fazla ekip üyeliği, davetle katılma, oturuma bağlı workspace geçişi ve sesli odalarda canlı katılımcı listesi ekler. Google ile giriş kullanıcı isteğiyle ertelendi. Kullanım ve şema v4 geçişi: [WORKSPACES.md](WORKSPACES.md).
+
+| Kontrol | Sonuç |
+| --- | --- |
+| Sunucu testleri | **64/64** geçti; migration, üyelik/rol/oturum izolasyonu, özel mesajlar, gecikmiş yönetim istekleri ve canlı roster dahil |
+| Ana tarayıcı akışları | **36 senaryo** hedefli koşularda doğrulandı; 5 mevcut görüşme testi, 5 yeni workspace testi, 1 taslak izolasyonu testi ve diğer 25 senaryo |
+| Hesap / genel yönetim | **3/3 + 2/2** geçti |
+| Veri geçişi | v1/v2/v3 → v4; kimlik, roller, mesaj, dosya, oturum süresi, davet, şifreli e-posta, özel indeks/tetikleyici korunur; yeniden açılış idempotent; eski ana workspace silinse de diğer üyelik/mesaj/oturum korunur |
+| Sesli odalar | İki hesapla katılma/mikrofon/ayrılma güncellemeleri; DM ve diğer workspace görüşmeleri gizli; profil/rol güncellemeleri yansır |
+| Workspace geçişi | Yeni alan, davet, tekrar giriş/yenileme, role göre yönetim erişimi; ayrı oturum bağımsızlığı; aynı çerezli sekmelerin eşitlenmesi; aktif görüşmede vazgeç/onay ve medya kaynaklarının kapanması |
+| Erişilebilirlik ve görünüm | Liste/oluştur/katıl pencerelerinde ciddi/kritik axe ihlali yok; 1440×900 ve 390×844 ekranlar görsel olarak incelendi |
+| Bağımlılıklar | `npm audit --omit=dev --audit-level=high`: bildirilen açık yok |
+
+Toplam **105 uygulama testi** doğrulandı. TypeScript/Vite üretim derlemesi başarılı. İlk geniş tarayıcı koşusunda iki eski beklenti güncellendi: üyelik askısı artık global girişi engellemek yerine boş/erişimi kısıtlı bootstrap döndürür; kaydedilenler seçicisi yalnızca gezinmeyi hedefler. Liste rol yazısının kontrastı ve çalışma alanı geri açıldığında genel yönetim panelinin kapanması düzeltildi; ilgili kontroller tekrar geçti. Ana sohbet ve yanıt taslakları kullanıcıya bağlandı; aynı workspace'te farklı hesaba giriş, yazarın geri dönmesi ve workspace değişiminde taslak koruması ayrıca doğrulandı.
+
+Ekran kanıtları (git dışında): `artifacts/workspace-{list,create,join}-{desktop,mobile}.png`, `artifacts/voice-sidebar-{desktop,mobile}.png`. Fiziksel cihazlarda yeni manuel görüşme testi yapılmadı; otomatik testler gerçek WebRTC bağlantısında tarayıcının test medya kaynaklarını kullanır.
+
+Canlı geçiş öncesinde **2026-09-07 15:18:44 UTC** tam yedeği alındı ve SQLite/checksum doğrulamasından geçti. Yedek: `backup-20260907T151844Z-eb582ee1`; günlük saklama döngüsünden ayrı kopyası VPS üzerinde `/root/mola-verification/pre-workspaces-20260907/` altında tutulur. SMTP ve TURN bu değişiklikten önce canlıda doğrulanmıştı; aşağıdaki bölümler daha önceki yerel turların tarihsel kayıtlarıdır.
+
+## Önceki yerel kontrollerin kapsamı
+
+Aşağıdaki kayıtlar bu yeni sürümden önceki yerel Mola, ekip/genel yönetim, Docker, hesap kurtarma/doğrulama, yedekleme, izleme ve görüşme testlerine aittir. O aşamada dış sunucu ve sağlayıcılara henüz bağlanılmamıştı.
 
 ## Coolify paketi — son doğrulama
 

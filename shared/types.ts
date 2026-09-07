@@ -15,6 +15,10 @@ export interface Workspace {
   isDemo: boolean;
   suspended?: boolean;
 }
+export interface WorkspaceMembership extends Workspace {
+  role: "owner" | "member";
+  membershipSuspended: boolean;
+}
 export interface Channel {
   id: string;
   name: string;
@@ -50,9 +54,11 @@ export interface Message {
 export interface Bootstrap {
   user: User;
   workspace: Workspace;
+  workspaces: WorkspaceMembership[];
   channels: Channel[];
   members: User[];
   onlineIds: string[];
+  voiceChannels: VoiceChannelRoster[];
   emailVerificationRequired: boolean;
   emailDeliveryAvailable?: boolean;
 }
@@ -70,22 +76,66 @@ export interface CallPeer {
   camera: boolean;
   sharing: boolean;
 }
+export interface VoiceChannelRoster {
+  channelId: string;
+  peers: CallPeer[];
+}
+export interface VoiceRoster {
+  workspaceId: string;
+  channels: VoiceChannelRoster[];
+}
 
-export type AdminMember = User & { joinedAt: string; workspaceId?: string; workspaceName?: string };
-export interface AdminInvite { id: string; createdAt: string; expiresAt: string; uses: number; maxUses: number; revoked: boolean; createdBy: string; }
-export interface AuditEvent { id: string; action: string; actorName: string; targetType: string; targetId: string; createdAt: string; details: string; }
+export type AdminMember = User & {
+  joinedAt: string;
+  workspaceId?: string;
+  workspaceName?: string;
+};
+export interface AdminInvite {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  uses: number;
+  maxUses: number;
+  revoked: boolean;
+  createdBy: string;
+}
+export interface AuditEvent {
+  id: string;
+  action: string;
+  actorName: string;
+  targetType: string;
+  targetId: string;
+  createdAt: string;
+  details: string;
+}
 export interface WorkspaceAdminData {
   workspace: Workspace;
   members: AdminMember[];
   channels: Channel[];
   invites: AdminInvite[];
   audit: AuditEvent[];
-  stats: { members: number; channels: number; messages: number; storageBytes: number };
+  stats: {
+    members: number;
+    channels: number;
+    messages: number;
+    storageBytes: number;
+  };
   limits: { members: number; channels: number; invites: number; audit: number };
 }
 export interface SystemAdminData {
-  workspaces: (Workspace & { ownerName: string; memberCount: number; messageCount: number; storageBytes: number })[];
+  workspaces: (Workspace & {
+    ownerName: string;
+    memberCount: number;
+    messageCount: number;
+    storageBytes: number;
+  })[];
   users: AdminMember[];
   audit: AuditEvent[];
-  pagination: { page: number; limit: number; workspaceTotal: number; userTotal: number; auditTotal: number };
+  pagination: {
+    page: number;
+    limit: number;
+    workspaceTotal: number;
+    userTotal: number;
+    auditTotal: number;
+  };
 }

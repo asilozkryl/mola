@@ -146,10 +146,10 @@ function ParticipantTile({
           {local && <small> (siz)</small>}
         </span>
         {peer.mic ? (
-          <Mic size={14} />
+          <Mic size={14} role="img" aria-label="Mikrofon açık" />
         ) : (
           <span className="call-muted-mark" title="Mikrofon kapalı">
-            <MicOff size={14} />
+            <MicOff size={14} role="img" aria-label="Mikrofon kapalı" />
           </span>
         )}
       </div>
@@ -259,9 +259,6 @@ export function CallPanel({
   );
   const activeShare =
     shares.find((p) => p.socketId === selectedSharing) ?? shares[0];
-  const connectedCount = call.peers.filter(
-    (p) => p.connectionState === "connected",
-  ).length;
   const time = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
   const leaveCall = () => {
     call.leave();
@@ -301,7 +298,7 @@ export function CallPanel({
                   : call.sharing
                     ? `Ekran paylaşılıyor · ${time}`
                     : call.joined
-                      ? `${connectedCount + 1} kişi · ${time}`
+                      ? `${participants.length} kişi · ${time}`
                       : "Görüşme bildirimi"}
               </small>
             </span>
@@ -347,8 +344,8 @@ export function CallPanel({
                     ) : call.joined ? (
                       <>
                         <span className="call-live-dot" />
-                        {connectedCount
-                          ? `${connectedCount + 1} kişi görüşmede`
+                        {participants.length > 1
+                          ? `${participants.length} kişi görüşmede`
                           : "Katılımcılar bekleniyor"}
                         <span className="call-header-divider" />
                         {time}

@@ -182,7 +182,7 @@ test('messages can be saved, pinned, edited and deleted with state preserved aft
   await page.getByRole('tab', { name: 'Sabitlenenler', exact: true }).click();
   await expect(page.getByText(original, { exact: true })).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: /^Kaydedilenler/ }).click();
+  await page.getByRole('navigation').getByRole('button', { name: /^Kaydedilenler/ }).click();
   await expect(page.getByText(original, { exact: true })).toBeVisible();
   await page.locator('.channel-nav').filter({ hasText: /^tasarım$/ }).click();
   await article.hover();
@@ -198,7 +198,7 @@ test('messages can be saved, pinned, edited and deleted with state preserved aft
   await article.getByRole('button', { name: 'Mesajı sil', exact: true }).click();
   await page.getByRole('dialog', { name: 'Mesaj silinsin mi?' }).getByRole('button', { name: 'Mesajı sil', exact: true }).click();
   await expect(page.getByText(updated, { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: /^Kaydedilenler/ }).click();
+  await page.getByRole('navigation').getByRole('button', { name: /^Kaydedilenler/ }).click();
   await expect(page.getByText(updated, { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Aklında kalmasın, burada kalsın.', exact: true })).toBeVisible();
 });

@@ -10,7 +10,7 @@ export function openDatabase(path: string) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
-  if (version > 3) { db.close(); throw new Error('This database was created by a newer Mola release. Restore the matching application version.'); }
+  if (version > 4) { db.close(); throw new Error('This database was created by a newer Mola release. Restore the matching application version.'); }
   db.function('fold_text', { deterministic: true }, value => String(value ?? '').normalize('NFKC').toLocaleLowerCase('tr-TR'));
   db.exec(`PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, is_demo INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
@@ -57,6 +57,35 @@ export function openDatabase(path: string) {
       db.exec('PRAGMA user_version=3; COMMIT;');
     } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
   }
+  if (version < 4) {
+    // SQLite requires FK enforcement to be disabled outside the transaction while
+    // replacing a referenced table. Validate every relation before committing.
+    db.exec('PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE');
+    try {
+      const userSchemaObjects = db.prepare("SELECT sql FROM sqlite_master WHERE tbl_name='users' AND type IN ('index','trigger') AND sql IS NOT NULL ORDER BY type,name").all() as { sql: string }[];
+      // Keep the original home-workspace columns as migration metadata. Membership
+      // and authorization now come exclusively from workspace_members and sessions.
+      // In particular, deleting a former home workspace must not delete an account
+      // or content that the same identity owns in other workspaces.
+      db.exec(`CREATE TABLE users_v4 (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL COLLATE NOCASE UNIQUE, password_hash TEXT, color TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('owner','member')), status TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, email_verified INTEGER NOT NULL DEFAULT 0 CHECK(email_verified IN (0,1)), site_admin INTEGER NOT NULL DEFAULT 0 CHECK(site_admin IN (0,1)), suspended_at TEXT);
+        INSERT INTO users_v4(id,workspace_id,name,email,password_hash,color,role,status,created_at,email_verified,site_admin,suspended_at) SELECT id,workspace_id,name,email,password_hash,color,role,status,created_at,email_verified,site_admin,suspended_at FROM users;
+        DROP TABLE users;
+        ALTER TABLE users_v4 RENAME TO users;
+        CREATE TABLE workspace_members (workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL CHECK(role IN ('owner','member')), joined_at TEXT NOT NULL, suspended_at TEXT, removed_at TEXT, PRIMARY KEY(workspace_id,user_id));
+        CREATE INDEX idx_workspace_members_user ON workspace_members(user_id,removed_at);
+        INSERT INTO workspace_members(workspace_id,user_id,role,joined_at) SELECT workspace_id,id,role,created_at FROM users;
+        ALTER TABLE sessions ADD COLUMN workspace_id TEXT REFERENCES workspaces(id) ON DELETE CASCADE;
+        UPDATE sessions SET workspace_id=(SELECT workspace_id FROM users WHERE users.id=sessions.user_id);
+        CREATE INDEX idx_sessions_workspace ON sessions(workspace_id,user_id);
+        CREATE TRIGGER initial_user_membership AFTER INSERT ON users BEGIN INSERT INTO workspace_members(workspace_id,user_id,role,joined_at) VALUES(NEW.workspace_id,NEW.id,NEW.role,NEW.created_at); END;
+        CREATE TRIGGER initial_session_workspace AFTER INSERT ON sessions WHEN NEW.workspace_id IS NULL BEGIN UPDATE sessions SET workspace_id=(SELECT workspace_id FROM users WHERE id=NEW.user_id) WHERE token_hash=NEW.token_hash; END;
+        PRAGMA user_version=4;`);
+      for (const object of userSchemaObjects) db.exec(object.sql);
+      if (db.prepare('PRAGMA foreign_key_check').all().length > 0) throw new Error('Workspace migration found invalid references. Restore a consistent database backup.');
+      db.exec('COMMIT');
+    } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
+    finally { if (db.isOpen) db.exec('PRAGMA foreign_keys=ON'); }
+  }
   return db;
 }
 
@@ -90,12 +119,16 @@ export class Repository {
     try { const result = fn(); this.db.exec('COMMIT'); return result; }
     catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
-  user(row: Row): User { return { id: row.id, name: row.name, email: row.email, color: row.color, role: row.role, status: row.status || '', emailVerified: Boolean(row.email_verified), siteAdmin: Boolean(row.site_admin), suspended: Boolean(row.suspended_at) }; }
+  user(row: Row): User { return { id: row.id, name: row.name, email: row.email, color: row.color, role: row.role, status: row.status || '', emailVerified: Boolean(row.email_verified), siteAdmin: Boolean(row.site_admin), suspended: Boolean(row.suspended_at || row.membership_suspended_at || row.membership_removed_at) }; }
+  member(userId: string, workspaceId: string): Row | undefined { return this.get('SELECT u.*,wm.workspace_id,wm.role,wm.joined_at,wm.suspended_at AS membership_suspended_at,wm.removed_at AS membership_removed_at FROM users u JOIN workspace_members wm ON wm.user_id=u.id WHERE u.id=? AND wm.workspace_id=?', userId, workspaceId); }
+  members(workspaceId: string): Row[] { return this.all('SELECT u.*,wm.workspace_id,wm.role,wm.joined_at,wm.suspended_at AS membership_suspended_at,wm.removed_at AS membership_removed_at FROM users u JOIN workspace_members wm ON wm.user_id=u.id WHERE wm.workspace_id=? ORDER BY wm.joined_at,u.id', workspaceId); }
+  session(hash: string): Row | undefined { return this.get('SELECT u.*,s.workspace_id,wm.role,wm.suspended_at AS membership_suspended_at,wm.removed_at AS membership_removed_at,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id AND wm.workspace_id=s.workspace_id WHERE s.token_hash=? AND s.expires_at>?', hash, Date.now()); }
+  workspaces(userId: string) { return this.all('SELECT w.*,wm.role,wm.suspended_at AS membership_suspended_at FROM workspaces w JOIN workspace_members wm ON wm.workspace_id=w.id WHERE wm.user_id=? AND wm.removed_at IS NULL ORDER BY wm.joined_at,w.id', userId).map(row => ({ ...this.workspace(row.id), role: row.role as 'owner' | 'member', membershipSuspended: Boolean(row.membership_suspended_at) })); }
   workspace(id: string): Workspace { const row = this.get('SELECT * FROM workspaces WHERE id=?', id)!; return { id: row.id, name: row.name, isDemo: Boolean(row.is_demo), suspended: Boolean(row.suspended_at) }; }
-  canAccessChannel(userId: string, channelId: string): boolean {
-    return Boolean(this.get(`SELECT c.id FROM channels c JOIN users u ON u.workspace_id=c.workspace_id JOIN workspaces w ON w.id=c.workspace_id WHERE c.id=? AND u.id=? AND u.suspended_at IS NULL AND w.suspended_at IS NULL AND (c.kind!='dm' OR EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=u.id))`, channelId, userId));
+  canAccessChannel(userId: string, channelId: string, workspaceId?: string): boolean {
+    return Boolean(this.get(`SELECT c.id FROM channels c JOIN workspace_members wm ON wm.workspace_id=c.workspace_id JOIN users u ON u.id=wm.user_id JOIN workspaces w ON w.id=c.workspace_id WHERE c.id=? AND u.id=? AND (? IS NULL OR c.workspace_id=?) AND u.suspended_at IS NULL AND wm.suspended_at IS NULL AND wm.removed_at IS NULL AND w.suspended_at IS NULL AND (c.kind!='dm' OR EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=u.id))`, channelId, userId, workspaceId ?? null, workspaceId ?? null));
   }
-  canWriteChannel(userId: string, channelId: string): boolean { return this.canAccessChannel(userId, channelId) && !this.get('SELECT archived_at FROM channels WHERE id=?', channelId)?.archived_at; }
+  canWriteChannel(userId: string, channelId: string, workspaceId?: string): boolean { return this.canAccessChannel(userId, channelId, workspaceId) && !this.get('SELECT archived_at FROM channels WHERE id=?', channelId)?.archived_at; }
   channel(row: Row): Channel {
     return { id: row.id, name: row.name, description: row.description, kind: row.kind, archived: Boolean(row.archived_at), ...(row.kind === 'dm' ? { memberIds: this.all('SELECT user_id FROM channel_members WHERE channel_id=? ORDER BY user_id', row.id).map(x => x.user_id) } : {}) };
   }

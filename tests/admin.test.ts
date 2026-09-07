@@ -98,10 +98,13 @@ test('suspending a member revokes sessions and calls while preserving their mess
   await Promise.all([disconnected, removed]);
   assert.equal((await request(a.member, '/auth/me')).status, 401);
   assert.equal(runtime.repo.get('SELECT COUNT(*) AS count FROM sessions WHERE user_id=?', a.member.id)!.count, 0);
-  assert.ok(runtime.repo.get('SELECT suspended_at FROM users WHERE id=?', a.member.id)!.suspended_at);
+  assert.ok(runtime.repo.member(a.member.id, a.member.workspaceId)!.membership_suspended_at);
+  assert.equal(runtime.repo.get('SELECT suspended_at FROM users WHERE id=?', a.member.id)!.suspended_at, null, 'workspace suspension cannot disable the shared account');
   assert.equal(runtime.repo.get('SELECT content FROM messages WHERE id=?', message.id)!.content, 'History stays after suspension');
   assert.equal(await (await request(a.owner, attachment.url.replace('/api', ''))).text(), 'retain this member attachment');
-  assert.ok([401, 403].includes((await request(null, '/auth/login', 'POST', { email: a.member.email, password })).status));
+  const restrictedLogin = await request(null, '/auth/login', 'POST', { email: a.member.email, password });
+  assert.equal(restrictedLogin.status, 200);
+  assert.deepEqual((await restrictedLogin.json()).channels, [], 'the account can sign in to find another team without accessing the suspended membership');
   assert.equal((await request(a.owner, `/admin/workspace/members/${a.member.id}`, 'PATCH', { suspended: false })).status, 200);
   assert.equal((await request(a.member, '/auth/me')).status, 401, 'un-suspending cannot resurrect an old session');
   assert.equal((await request(null, '/auth/login', 'POST', { email: a.member.email, password })).status, 200);
@@ -147,12 +150,12 @@ test('invite revocation keeps an auditable record but prevents registration and 
 test('ownership transfer needs the current password and preserves one active owner', async () => fixture(async ({ accounts: a, request, runtime }) => {
   const denied = await request(a.owner, `/admin/workspace/members/${a.owner.id}`, 'PATCH', { suspended: true }); assert.ok([400, 403, 409].includes(denied.status));
   const wrong = await request(a.owner, '/admin/workspace/transfer', 'POST', { userId: a.member.id, currentPassword: 'wrong-password' }); assert.ok([400, 401, 403].includes(wrong.status));
-  assert.equal(runtime.repo.get('SELECT role FROM users WHERE id=?', a.owner.id)!.role, 'owner');
+  assert.equal(runtime.repo.member(a.owner.id, a.owner.workspaceId)!.role, 'owner');
   assert.equal((await request(a.owner, '/admin/workspace/transfer', 'POST', { userId: a.foreign.id, currentPassword: password })).status, 404);
   assert.equal((await request(a.owner, '/admin/workspace/transfer', 'POST', { userId: a.member.id, currentPassword: password })).status, 200);
-  assert.equal(runtime.repo.get('SELECT role FROM users WHERE id=?', a.owner.id)!.role, 'member');
-  assert.equal(runtime.repo.get('SELECT role FROM users WHERE id=?', a.member.id)!.role, 'owner');
-  assert.equal(runtime.repo.get("SELECT COUNT(*) AS count FROM users WHERE workspace_id=? AND role='owner' AND suspended_at IS NULL", a.owner.workspaceId)!.count, 1);
+  assert.equal(runtime.repo.member(a.owner.id, a.owner.workspaceId)!.role, 'member');
+  assert.equal(runtime.repo.member(a.member.id, a.member.workspaceId)!.role, 'owner');
+  assert.equal(runtime.repo.get("SELECT COUNT(*) AS count FROM workspace_members WHERE workspace_id=? AND role='owner' AND suspended_at IS NULL AND removed_at IS NULL", a.owner.workspaceId)!.count, 1);
   assert.equal((await request(a.owner, '/admin/workspace')).status, 403);
   assert.equal((await request(a.member, '/admin/workspace')).status, 200);
 }));

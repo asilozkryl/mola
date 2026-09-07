@@ -35,7 +35,7 @@ async function api(path: string, options: { user?: string; method?: string; body
 
 function session(name: string, id: string, expiresAt = Date.now() + 60_000) {
   const token = randomBytes(32).toString('hex');
-  runtime.repo.run('INSERT INTO sessions VALUES (?,?,?)', digest(token), id, expiresAt);
+  runtime.repo.run('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,?)', digest(token), id, expiresAt);
   users[name] = { id, cookie: `mola_session=${token}` };
 }
 
@@ -89,7 +89,7 @@ test('mutations require an allowed Origin even with a valid session', async () =
 
 test('unauthenticated, malformed and expired sessions cannot bootstrap', async () => {
   const expired = randomBytes(32).toString('hex');
-  runtime.repo.run('INSERT INTO sessions VALUES (?,?,?)', digest(expired), users.alice.id, Date.now() - 1000);
+  runtime.repo.run('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,?)', digest(expired), users.alice.id, Date.now() - 1000);
   for (const cookie of ['', 'mola_session=../../data.sqlite', `mola_session=${expired}`, `mola_session=${randomBytes(32).toString('hex')}`]) {
     assert.equal((await api('/auth/me', { cookie })).status, 401);
   }

@@ -12,7 +12,7 @@ import { resolve, basename, join } from 'node:path';
 import { z } from 'zod';
 import { openDatabase, Repository, type Row } from './db.js';
 import { createWorkspace } from './seed.js';
-import { getRtcConfig, registerCallHandlers } from './calls.js';
+import { getRtcConfig, registerCallHandlers, getVoiceRoster, updateCallUser } from './calls.js';
 import { createMailService, type MailTransport } from './mail.js';
 import { installOperations, requestMetrics } from './observability.js';
 import { readListenerConfig } from './listeners.js';
@@ -137,24 +137,31 @@ export function createApp(options: AppOptions = {}) {
 
   const findSession = (token: unknown) => {
     if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return undefined;
-    return repo.get('SELECT u.*,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', hashToken(token), Date.now());
+    return repo.session(hashToken(token));
   };
   const authenticate = (req: Request, _res: Response, next: NextFunction) => {
     const token = req.cookies?.[COOKIE];
     const user = findSession(token);
     if (!user) return next(new HttpError(401, 'Devam etmek için giriş yapın.'));
     if (user.suspended_at) return next(new HttpError(403, 'Hesabınız askıya alındı. Çalışma alanı yöneticinize başvurun.', 'ACCOUNT_SUSPENDED'));
+    const expectedWorkspace = req.headers['x-workspace-id'];
+    const refreshContext = req.method === 'GET' && ['/auth/me', '/workspaces'].includes(req.path.replace(/^\/api(?=\/)/, ''));
+    if (expectedWorkspace && expectedWorkspace !== user.workspace_id && !refreshContext) return next(new HttpError(409, 'Çalışma alanınız başka bir sekmede değişti. Güncel alan yükleniyor.', 'WORKSPACE_CHANGED'));
     req.auth = user; req.sessionHash = hashToken(token); next();
   };
   const requiresVerification = (user: Row) => verificationRequired && !user.email_verified && !repo.workspace(user.workspace_id).isDemo;
   const bootstrap = (user: Row): Bootstrap => {
     const workspace = repo.workspace(user.workspace_id);
-    const restricted = requiresVerification(user) || Boolean(user.suspended_at) || workspace.suspended;
-    return { user: repo.user(user), workspace, emailVerificationRequired: verificationRequired && !workspace.isDemo, emailDeliveryAvailable: mail.available, channels: restricted ? [] : repo.channels(user.id, user.workspace_id), members: restricted ? [] : repo.all('SELECT * FROM users WHERE workspace_id=? ORDER BY created_at,rowid', user.workspace_id).map(row => repo.user(row)), onlineIds: restricted ? [] : onlineIds(user.workspace_id) };
+    const restricted = requiresVerification(user) || Boolean(user.suspended_at || user.membership_suspended_at || user.membership_removed_at) || workspace.suspended;
+    const channels = restricted ? [] : repo.channels(user.id, user.workspace_id);
+    return { user: repo.user(user), workspace, workspaces: repo.workspaces(user.id), emailVerificationRequired: verificationRequired && !workspace.isDemo, emailDeliveryAvailable: mail.available, channels, members: restricted ? [] : repo.members(user.workspace_id).map(row => repo.user(row)), onlineIds: restricted ? [] : onlineIds(user.workspace_id), voiceChannels: restricted ? [] : getVoiceRoster(io, user.workspace_id, channels.filter(channel => channel.kind === 'voice').map(channel => channel.id)) };
   };
   const requireActiveWorkspace = (req: Request) => {
-    const user = repo.get('SELECT * FROM users WHERE id=?', req.auth!.id);
-    if (!user || user.suspended_at) throw new HttpError(403, 'Hesabınız askıya alındı.', 'ACCOUNT_SUSPENDED');
+    const user = repo.session(req.sessionHash!);
+    if (!user) throw new HttpError(401, 'Oturumunuz sona erdi. Yeniden giriş yapın.');
+    if (user.workspace_id !== req.auth!.workspace_id) throw new HttpError(409, 'Çalışma alanınız değişti. Güncel alan yükleniyor.', 'WORKSPACE_CHANGED');
+    if (user.suspended_at) throw new HttpError(403, 'Hesabınız askıya alındı.', 'ACCOUNT_SUSPENDED');
+    if (user.membership_suspended_at || user.membership_removed_at) throw new HttpError(403, 'Bu çalışma alanındaki üyeliğiniz etkin değil.', 'MEMBERSHIP_SUSPENDED');
     if (repo.workspace(user.workspace_id).suspended) throw new HttpError(403, 'Bu çalışma alanı askıya alındı. Uygulama yöneticinize başvurun.', 'WORKSPACE_SUSPENDED');
     if (!repo.get('SELECT 1 FROM sessions WHERE token_hash=? AND expires_at>?', req.sessionHash!, Date.now())) throw new HttpError(401, 'Oturumunuz sona erdi. Yeniden giriş yapın.');
   };
@@ -162,9 +169,11 @@ export function createApp(options: AppOptions = {}) {
     const previous = req.cookies?.[COOKIE];
     if (typeof previous === 'string' && /^[a-f0-9]{64}$/.test(previous)) { const hash = hashToken(previous); repo.run('DELETE FROM sessions WHERE token_hash=?', hash); io.in(`session:${hash}`).disconnectSockets(true); }
     const token = randomBytes(32).toString('hex');
-    repo.run('INSERT INTO sessions VALUES (?,?,?)', hashToken(token), userId, Date.now() + SESSION_MS);
+    const available = repo.get('SELECT wm.workspace_id FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=? ORDER BY (wm.removed_at IS NOT NULL),(wm.suspended_at IS NOT NULL OR w.suspended_at IS NOT NULL),wm.joined_at,wm.workspace_id LIMIT 1', userId);
+    if (!available) throw new HttpError(403, 'Etkin bir çalışma alanı üyeliği bulunamadı.');
+    repo.run('INSERT INTO sessions(token_hash,user_id,expires_at,workspace_id) VALUES (?,?,?,?)', hashToken(token), userId, Date.now() + SESSION_MS, available.workspace_id);
     res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: production, maxAge: SESSION_MS, path: '/' });
-    res.json(bootstrap(repo.get('SELECT * FROM users WHERE id=?', userId)!));
+    res.json(bootstrap(repo.session(hashToken(token))!));
   };
   const authLimiter = rateLimit({ windowMs: 15 * 60_000, limit: authLimit, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Çok fazla giriş denemesi. 15 dakika sonra tekrar deneyin.' } });
 
@@ -212,7 +221,6 @@ export function createApp(options: AppOptions = {}) {
     if (repo.get('SELECT password_hash FROM users WHERE id=?', user!.id)?.password_hash !== user!.password_hash) throw new HttpError(401, 'Parolanız değişti. Yeni parolanızla tekrar giriş yapın.');
     const fresh = repo.get('SELECT * FROM users WHERE id=?', user!.id)!;
     if (fresh.suspended_at) throw new HttpError(403, 'Hesabınız askıya alındı. Çalışma alanı yöneticinize başvurun.', 'ACCOUNT_SUSPENDED');
-    if (!fresh.site_admin && repo.workspace(fresh.workspace_id).suspended) throw new HttpError(403, 'Bu çalışma alanı askıya alındı.', 'WORKSPACE_SUSPENDED');
     startSession(req, res, user!.id);
   });
   app.post('/api/auth/logout', authenticate, (req, res) => {
@@ -268,7 +276,7 @@ export function createApp(options: AppOptions = {}) {
       repo.run('UPDATE auth_tokens SET consumed_at=? WHERE user_id=? AND kind=? AND consumed_at IS NULL', Date.now(), token.user_id, 'verify');
       return repo.get('SELECT * FROM users WHERE id=?', token.user_id)!;
     });
-    io.to(`workspace:${user.workspace_id}`).emit('member:updated', repo.user(user));
+    for (const workspace of repo.workspaces(user.id)) { const member = repo.user(repo.member(user.id, workspace.id)!); io.to(`workspace:${workspace.id}`).emit('member:updated', member); updateCallUser(io, workspace.id, member); }
     res.json({ message: 'E-posta adresin doğrulandı. Artık çalışma alanına katılabilirsin.' });
   });
   app.post('/api/auth/resend-verification', authenticate, recoveryLimiter, (req, res) => {
@@ -282,6 +290,61 @@ export function createApp(options: AppOptions = {}) {
 
   app.use('/api', authenticate);
   app.use('/api', (req, _res, next) => requiresVerification(req.auth!) ? next(new HttpError(403, 'Çalışma alanına erişmek için e-posta adresini doğrula.', 'EMAIL_NOT_VERIFIED')) : next());
+  const workspaceLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Çok fazla çalışma alanı işlemi. Biraz sonra tekrar deneyin.' } });
+  const switchWorkspace = (req: Request, workspaceId: string) => {
+    const session = repo.session(req.sessionHash!);
+    if (!session || session.id !== req.auth!.id) throw new HttpError(401, 'Oturumunuz sona erdi.');
+    if (session.workspace_id !== req.auth!.workspace_id) throw new HttpError(409, 'Çalışma alanınız değişti. Güncel alan yükleniyor.', 'WORKSPACE_CHANGED');
+    const member = repo.member(session.id, workspaceId);
+    if (!member || member.membership_removed_at) throw new HttpError(404, 'Çalışma alanı bulunamadı.');
+    if (member.suspended_at || member.membership_suspended_at || repo.workspace(workspaceId).suspended) throw new HttpError(403, 'Bu çalışma alanındaki üyeliğiniz etkin değil.', 'MEMBERSHIP_SUSPENDED');
+    repo.run('UPDATE sessions SET workspace_id=? WHERE token_hash=?', workspaceId, req.sessionHash!);
+    return repo.session(req.sessionHash!)!;
+  };
+  const respondWorkspace = (req: Request, res: Response, user: Row) => {
+    io.to(`session:${req.sessionHash}`).emit('workspace:changed', { workspaceId: user.workspace_id });
+    io.in(`session:${req.sessionHash}`).disconnectSockets(true);
+    res.json(bootstrap(user));
+  };
+  app.get('/api/workspaces', (req, res) => res.json({ workspaces: repo.workspaces(req.auth!.id), activeWorkspaceId: req.auth!.workspace_id }));
+  app.post('/api/workspaces', workspaceLimiter, (req, res) => {
+    const input = parse(z.object({ name: z.string().trim().min(2).max(60) }).strict(), req.body);
+    if (repo.workspace(req.auth!.workspace_id).isDemo) throw new HttpError(403, 'Yeni bir çalışma alanı için kendi hesabınızla giriş yapın.');
+    const user = repo.transaction(() => {
+      if (repo.workspaces(req.auth!.id).length >= 50) throw new HttpError(409, 'En fazla 50 çalışma alanına katılabilirsiniz.');
+      const created = createWorkspace(repo, { name: input.name, userName: req.auth!.name, email: req.auth!.email, passwordHash: null, existingUserId: req.auth!.id });
+      const member = switchWorkspace(req, created.workspaceId);
+      recordAudit(repo, member, created.workspaceId, 'workspace.created', 'workspace', created.workspaceId);
+      return member;
+    });
+    respondWorkspace(req, res, user);
+  });
+  app.post('/api/workspaces/join', workspaceLimiter, (req, res) => {
+    const input = parse(z.object({ inviteToken: tokenInput }).strict(), req.body);
+    if (repo.workspace(req.auth!.workspace_id).isDemo) throw new HttpError(403, 'Bir ekibe katılmak için kendi hesabınızla giriş yapın.');
+    const user = repo.transaction(() => {
+      const invite = repo.get('SELECT i.* FROM invites i JOIN workspaces w ON w.id=i.workspace_id WHERE i.token_hash=? AND i.expires_at>? AND i.revoked_at IS NULL AND w.suspended_at IS NULL AND w.is_demo=0', hashToken(input.inviteToken), Date.now());
+      if (!invite) throw new HttpError(400, 'Davet bağlantısı geçersiz veya süresi dolmuş.');
+      const existing = repo.member(req.auth!.id, invite.workspace_id);
+      if (existing?.membership_suspended_at || existing?.membership_removed_at) throw new HttpError(403, 'Üyeliğiniz kapatılmış. Çalışma alanı sahibiyle iletişime geçin.', 'MEMBERSHIP_SUSPENDED');
+      if (!existing) {
+        if (invite.uses >= invite.max_uses) throw new HttpError(400, 'Bu davetin kullanım sınırına ulaşıldı.');
+        if (repo.workspaces(req.auth!.id).length >= 50) throw new HttpError(409, 'En fazla 50 çalışma alanına katılabilirsiniz.');
+        repo.run("INSERT INTO workspace_members(workspace_id,user_id,role,joined_at) VALUES (?,?,'member',?)", invite.workspace_id, req.auth!.id, new Date().toISOString());
+        repo.run('UPDATE invites SET uses=uses+1 WHERE token_hash=?', invite.token_hash);
+        recordAudit(repo, req.auth!, invite.workspace_id, 'workspace.member.joined', 'user', req.auth!.id);
+      }
+      return switchWorkspace(req, invite.workspace_id);
+    });
+    io.to(`workspace:${user.workspace_id}`).emit('member:updated', repo.user(user));
+    io.to(`workspace:${user.workspace_id}`).emit('admin:refresh');
+    respondWorkspace(req, res, user);
+  });
+  app.post('/api/workspaces/:id/switch', (req, res) => {
+    const workspaceId = parse(idSchema, req.params.id);
+    const user = repo.transaction(() => switchWorkspace(req, workspaceId));
+    respondWorkspace(req, res, user);
+  });
   installAdminRoutes(app, { repo, io, verifyPassword });
   app.use('/api', (req, _res, next) => { try { requireActiveWorkspace(req); next(); } catch (error) { next(error); } });
   const passwordLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Çok fazla parola değiştirme denemesi. 15 dakika sonra tekrar deneyin.' } });
@@ -306,14 +369,14 @@ export function createApp(options: AppOptions = {}) {
   });
   app.get('/api/rtc/config', (_req, res) => res.json(getRtcConfig()));
   const requireChannel = (req: Request, channelId: string) => {
-    if (!idSchema.safeParse(channelId).success || !repo.canAccessChannel(req.auth!.id, channelId)) throw new HttpError(404, 'Kanal bulunamadı.');
+    if (!idSchema.safeParse(channelId).success || !repo.canAccessChannel(req.auth!.id, channelId, req.auth!.workspace_id)) throw new HttpError(404, 'Kanal bulunamadı.');
     const channel = repo.get('SELECT * FROM channels WHERE id=?', channelId)!;
     if (!['GET', 'HEAD'].includes(req.method) && channel.archived_at) throw new HttpError(403, 'Bu kanal arşivlendi. Geçmişi okuyabilirsiniz; yeni işlem için kanalın geri yüklenmesi gerekir.', 'CHANNEL_ARCHIVED');
     return channel;
   };
   const requireMessage = (req: Request, messageId: string) => {
     const message = idSchema.safeParse(messageId).success ? repo.get('SELECT * FROM messages WHERE id=?', messageId) : undefined;
-    if (!message || !repo.canAccessChannel(req.auth!.id, message.channel_id)) throw new HttpError(404, 'Mesaj bulunamadı.');
+    if (!message || !repo.canAccessChannel(req.auth!.id, message.channel_id, req.auth!.workspace_id)) throw new HttpError(404, 'Mesaj bulunamadı.');
     requireChannel(req, message.channel_id);
     return message;
   };
@@ -407,8 +470,8 @@ export function createApp(options: AppOptions = {}) {
   });
   app.post('/api/dms', (req, res) => {
     const input = parse(z.object({ userId: idSchema }), req.body);
-    const other = repo.get('SELECT * FROM users WHERE id=? AND workspace_id=?', input.userId, req.auth!.workspace_id);
-    if (!other || other.suspended_at || other.id === req.auth!.id) throw new HttpError(400, 'Mesajlaşmak için aktif bir ekip arkadaşı seçin.');
+    const other = repo.member(input.userId, req.auth!.workspace_id);
+    if (!other || other.suspended_at || other.membership_suspended_at || other.membership_removed_at || other.id === req.auth!.id) throw new HttpError(400, 'Mesajlaşmak için aktif bir ekip arkadaşı seçin.');
     const existing = repo.get("SELECT c.* FROM channels c WHERE c.workspace_id=? AND c.kind='dm' AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id=c.id AND user_id=?) AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id=c.id AND user_id=?)", req.auth!.workspace_id, req.auth!.id, other.id);
     if (existing) return res.json(repo.channel(existing));
     const id = repo.transaction(() => {
@@ -417,7 +480,7 @@ export function createApp(options: AppOptions = {}) {
       return id;
     });
     const channel = repo.channel(repo.get('SELECT * FROM channels WHERE id=?', id)!);
-    for (const userId of [req.auth!.id, other.id]) { io.in(`user:${userId}`).socketsJoin(`channel:${id}`); io.to(`user:${userId}`).emit('channel:created', channel); }
+    for (const userId of [req.auth!.id, other.id]) { io.in(`workspace-user:${req.auth!.workspace_id}:${userId}`).socketsJoin(`channel:${id}`); io.to(`workspace-user:${req.auth!.workspace_id}:${userId}`).emit('channel:created', channel); }
     res.status(201).json(channel);
   });
   app.get('/api/search', (req, res) => {
@@ -433,7 +496,7 @@ export function createApp(options: AppOptions = {}) {
     const invitationId = randomUUID();
     repo.transaction(() => {
       requireActiveWorkspace(req);
-      const actor = repo.get('SELECT * FROM users WHERE id=?', req.auth!.id)!;
+      const actor = repo.member(req.auth!.id, req.auth!.workspace_id)!;
       if (actor.role !== 'owner' && !actor.site_admin) throw new HttpError(403, 'Davet oluşturma yetkiniz artık yok.');
       repo.run('INSERT INTO invites (token_hash,workspace_id,created_by,expires_at,uses,max_uses,id,created_at) VALUES (?,?,?,?,?,?,?,?)', hashToken(token), req.auth!.workspace_id, req.auth!.id, expiresAt, 0, 20, invitationId, new Date().toISOString());
       recordAudit(repo, actor, actor.workspace_id, 'invite.created', 'invite', invitationId);
@@ -444,9 +507,9 @@ export function createApp(options: AppOptions = {}) {
   app.patch('/api/profile', (req, res) => {
     const input = parse(z.object({ name: displayName.optional(), status: z.string().trim().max(100).optional() }).refine(v => v.name !== undefined || v.status !== undefined), req.body);
     repo.run('UPDATE users SET name=?,status=? WHERE id=?', input.name ?? req.auth!.name, input.status ?? req.auth!.status, req.auth!.id);
-    const user = repo.user(repo.get('SELECT * FROM users WHERE id=?', req.auth!.id)!);
-    for (const socket of io.sockets.sockets.values()) if (socket.data.user?.id === user.id) socket.data.user = user;
-    io.to(`workspace:${req.auth!.workspace_id}`).emit('member:updated', user);
+    const user = repo.user(repo.member(req.auth!.id, req.auth!.workspace_id)!);
+    for (const socket of io.sockets.sockets.values()) if (socket.data.user?.id === user.id) socket.data.user = repo.user(repo.member(user.id, socket.data.workspaceId)!);
+    for (const workspace of repo.workspaces(user.id)) { const member = repo.user(repo.member(user.id, workspace.id)!); io.to(`workspace:${workspace.id}`).emit('member:updated', member); updateCallUser(io, workspace.id, member); }
     res.json(user);
   });
 
@@ -483,7 +546,7 @@ export function createApp(options: AppOptions = {}) {
     if (!file) throw new HttpError(404, 'Dosya bulunamadı.');
     if (file.message_id) {
       const message = repo.get('SELECT * FROM messages WHERE id=?', file.message_id);
-      if (!message || !repo.canAccessChannel(req.auth!.id, message.channel_id)) throw new HttpError(404, 'Dosya bulunamadı.');
+      if (!message || !repo.canAccessChannel(req.auth!.id, message.channel_id, req.auth!.workspace_id)) throw new HttpError(404, 'Dosya bulunamadı.');
     } else if (file.user_id !== req.auth!.id) throw new HttpError(404, 'Dosya bulunamadı.');
     res.setHeader('Content-Type', file.mime);
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
@@ -514,7 +577,7 @@ export function createApp(options: AppOptions = {}) {
     const rawToken = cookies.split(';').map(part => part.trim()).find(part => part.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1);
     const user = findSession(rawToken);
     if (!user) return next(new Error('Oturumunuz sona erdi. Yeniden giriş yapın.'));
-    if (user.suspended_at || repo.workspace(user.workspace_id).suspended) { const error = new Error('Hesap veya çalışma alanı askıya alındı.') as Error & { data: object }; error.data = { code: user.suspended_at ? 'ACCOUNT_SUSPENDED' : 'WORKSPACE_SUSPENDED' }; return next(error); }
+    if (user.suspended_at || user.membership_suspended_at || user.membership_removed_at || repo.workspace(user.workspace_id).suspended) { const error = new Error('Hesap veya çalışma alanı askıya alındı.') as Error & { data: object }; error.data = { code: user.suspended_at ? 'ACCOUNT_SUSPENDED' : 'WORKSPACE_SUSPENDED' }; return next(error); }
     if (requiresVerification(user)) { const error = new Error('Çalışma alanına erişmek için e-posta adresini doğrula.') as Error & { data: object }; error.data = { code: 'EMAIL_NOT_VERIFIED' }; return next(error); }
     socket.data.user = repo.user(user); socket.data.workspaceId = user.workspace_id; socket.data.sessionHash = hashToken(rawToken!); socket.data.expiresAt = user.expires_at;
     next();
@@ -522,19 +585,20 @@ export function createApp(options: AppOptions = {}) {
   io.on('connection', socket => {
     const user = socket.data.user;
     const workspaceId = socket.data.workspaceId;
-    socket.join([`workspace:${workspaceId}`, `user:${user.id}`, `session:${socket.data.sessionHash}`, ...repo.channels(user.id, workspaceId).map(c => `channel:${c.id}`)]);
+    socket.join([`workspace:${workspaceId}`, `user:${user.id}`, `workspace-user:${workspaceId}:${user.id}`, `session:${socket.data.sessionHash}`, ...repo.channels(user.id, workspaceId).map(c => `channel:${c.id}`)]);
     let members = onlineByWorkspace.get(workspaceId); if (!members) { members = new Map(); onlineByWorkspace.set(workspaceId, members); }
     let sockets = members.get(user.id); if (!sockets) { sockets = new Set(); members.set(user.id, sockets); } sockets.add(socket.id);
     emitPresence(workspaceId);
     const expiryTimer = setTimeout(() => socket.disconnect(true), Math.max(1, socket.data.expiresAt - Date.now())); expiryTimer.unref();
+    const socketContextActive = () => { const session = repo.session(socket.data.sessionHash); return Boolean(session && session.workspace_id === workspaceId && !session.suspended_at && !session.membership_suspended_at && !session.membership_removed_at && !repo.workspace(workspaceId).suspended && !requiresVerification(session)); };
     let typingEvents = 0; let typingWindow = Date.now();
     socket.on('typing', (payload: unknown) => {
       if (Date.now() - typingWindow > 10_000) { typingEvents = 0; typingWindow = Date.now(); }
       if (++typingEvents > 30) return;
       const result = z.object({ channelId: idSchema, typing: z.boolean() }).safeParse(payload);
-      if (result.success && repo.canWriteChannel(user.id, result.data.channelId)) socket.to(`channel:${result.data.channelId}`).emit('typing', { channelId: result.data.channelId, userId: user.id, typing: result.data.typing });
+      if (result.success && socketContextActive() && repo.canWriteChannel(user.id, result.data.channelId, workspaceId)) socket.to(`channel:${result.data.channelId}`).emit('typing', { channelId: result.data.channelId, userId: user.id, typing: result.data.typing });
     });
-    registerCallHandlers(io, socket, { user, canAccessChannel: channelId => repo.canWriteChannel(user.id, channelId) });
+    registerCallHandlers(io, socket, { user, workspaceId, getVoiceChannelIds: () => socketContextActive() ? repo.channels(user.id, workspaceId).filter(channel => channel.kind === 'voice' && !channel.archived).map(channel => channel.id) : [], canAccessChannel: channelId => socketContextActive() && repo.canWriteChannel(user.id, channelId, workspaceId) });
     socket.on('disconnect', () => {
       clearTimeout(expiryTimer);
       const members = onlineByWorkspace.get(workspaceId); const sockets = members?.get(user.id); sockets?.delete(socket.id);
@@ -549,7 +613,11 @@ export function createApp(options: AppOptions = {}) {
     repo.run('DELETE FROM auth_tokens WHERE expires_at<?', Date.now() - 7 * 24 * 60 * 60_000);
     const orphaned = repo.all('SELECT id,storage_name FROM attachments WHERE message_id IS NULL AND created_at<?', new Date(Date.now() - 24 * 60 * 60_000).toISOString());
     for (const file of orphaned) { try { unlinkSync(join(uploadDir, file.storage_name)); } catch {} repo.run('DELETE FROM attachments WHERE id=?', file.id); }
-    repo.run('DELETE FROM workspaces WHERE is_demo=1 AND created_at<? AND NOT EXISTS (SELECT 1 FROM users u JOIN sessions s ON s.user_id=u.id WHERE u.workspace_id=workspaces.id)', new Date(Date.now() - SESSION_MS).toISOString());
+    const expiredDemos = repo.all('SELECT id FROM workspaces WHERE is_demo=1 AND created_at<? AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.workspace_id=workspaces.id)', new Date(Date.now() - SESSION_MS).toISOString());
+    for (const workspace of expiredDemos) repo.transaction(() => {
+      repo.run('DELETE FROM users WHERE workspace_id=? AND NOT EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.user_id=users.id AND wm.workspace_id!=?)', workspace.id, workspace.id);
+      repo.run('DELETE FROM workspaces WHERE id=? AND is_demo=1', workspace.id);
+    });
     // Clear files left behind after expired demo data was removed or a process crash.
     for (const fileName of readdirSync(uploadDir)) if (/^[a-f0-9-]{36}\.bin$/.test(fileName) && !repo.get('SELECT id FROM attachments WHERE storage_name=?', fileName)) { try { if (Date.now() - statSync(join(uploadDir, fileName)).mtimeMs > 60_000) unlinkSync(join(uploadDir, fileName)); } catch {} }
   };
@@ -558,8 +626,8 @@ export function createApp(options: AppOptions = {}) {
   // CLI authorization changes happen in another process; revoke their active sockets too.
   const sessionValidationTimer = setInterval(() => {
     for (const socket of io.sockets.sockets.values()) {
-      const account = repo.get('SELECT u.*,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?', socket.data.sessionHash, Date.now());
-      if (!account || account.suspended_at || repo.workspace(account.workspace_id).suspended || requiresVerification(account) || Boolean(account.site_admin) !== Boolean(socket.data.user?.siteAdmin)) socket.disconnect(true);
+      const account = repo.session(socket.data.sessionHash);
+      if (!account || account.workspace_id !== socket.data.workspaceId || account.suspended_at || account.membership_suspended_at || account.membership_removed_at || repo.workspace(account.workspace_id).suspended || requiresVerification(account) || Boolean(account.site_admin) !== Boolean(socket.data.user?.siteAdmin)) socket.disconnect(true);
     }
   }, 5000); sessionValidationTimer.unref();
   let closing: Promise<void> | undefined;

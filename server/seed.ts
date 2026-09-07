@@ -3,12 +3,13 @@ import { Repository } from './db.js';
 
 const colors = ['#e9c487', '#b6aceb', '#d4a890', '#a1c2b5', '#d8a4c4'];
 
-export function createWorkspace(repo: Repository, { name, userName, email, passwordHash, demo = false }: { name: string; userName: string; email: string; passwordHash: string | null; demo?: boolean }) {
+export function createWorkspace(repo: Repository, { name, userName, email, passwordHash, demo = false, existingUserId }: { name: string; userName: string; email: string; passwordHash: string | null; demo?: boolean; existingUserId?: string }) {
   const workspaceId = randomUUID();
-  const userId = randomUUID();
+  const userId = existingUserId || randomUUID();
   const now = new Date().toISOString();
   repo.run('INSERT INTO workspaces (id,name,is_demo,created_at) VALUES (?,?,?,?)', workspaceId, name, demo ? 1 : 0, now);
-  repo.run('INSERT INTO users (id,workspace_id,name,email,password_hash,color,role,status,created_at,email_verified) VALUES (?,?,?,?,?,?,?,?,?,?)', userId, workspaceId, userName, email, passwordHash, colors[0], 'owner', '', now, demo ? 1 : 0);
+  if (existingUserId) repo.run("INSERT INTO workspace_members(workspace_id,user_id,role,joined_at) VALUES (?,?,'owner',?)", workspaceId, userId, now);
+  else repo.run('INSERT INTO users (id,workspace_id,name,email,password_hash,color,role,status,created_at,email_verified) VALUES (?,?,?,?,?,?,?,?,?,?)', userId, workspaceId, userName, email, passwordHash, colors[0], 'owner', '', now, demo ? 1 : 0);
   const channelNames = demo ? ['genel', 'tasarım', 'ürün', 'geliştirme', 'ilham', 'duyurular'] : ['genel', 'duyurular'];
   const descriptions: Record<string, string> = { genel: 'Ekibin buluşma noktası. Fikirler, gelişmeler ve güzel bir merhaba.', tasarım: 'Birlikte daha iyisini tasarlıyoruz. Fikirler, geri bildirimler ve küçük detaylar.', ürün: 'Kullanıcılarımız için bir sonraki güzel adım.', geliştirme: 'Kod, teknik kararlar ve birlikte çözdüğümüz problemler.', ilham: 'Görünce paylaşmadan duramadıklarımız.', duyurular: 'Ekipten haberler ve önemli güncellemeler.' };
   const channels: Record<string, string> = {};

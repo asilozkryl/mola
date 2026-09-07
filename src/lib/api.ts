@@ -1,5 +1,9 @@
 import type { Bootstrap } from "../../shared/types";
 import { readAuthLink } from "./auth-links";
+let activeWorkspaceId: string | undefined;
+export function setApiWorkspace(workspaceId?: string) {
+  activeWorkspaceId = workspaceId;
+}
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -17,6 +21,7 @@ export async function api<T>(
     credentials: "same-origin",
     ...options,
     headers: {
+      ...(activeWorkspaceId ? { "X-Workspace-Id": activeWorkspaceId } : {}),
       ...(options.body && !(options.body instanceof FormData)
         ? { "Content-Type": "application/json" }
         : {}),
@@ -24,6 +29,8 @@ export async function api<T>(
     },
   });
   const body = await response.json().catch(() => ({}));
+  if (response.status === 409 && body.code === "WORKSPACE_CHANGED")
+    window.dispatchEvent(new Event("mola:workspace-changed"));
   if (!response.ok)
     throw new ApiError(
       typeof body.error === "string"

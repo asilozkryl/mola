@@ -1,17 +1,63 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
-import type { CallPeer, User } from '../shared/types';
+import type { CallPeer, User, VoiceChannelRoster, VoiceRoster } from '../shared/types';
 
 type CallRoom = Map<string, CallPeer>;
-interface CallRegistry { rooms: Map<string, CallRoom>; channels: Map<string, string> }
+interface CallRegistry {
+  rooms: Map<string, CallRoom>;
+  channels: Map<string, string>;
+  workspaces: Map<string, string>;
+  voiceChannels: Set<string>;
+}
 const registries = new WeakMap<Server, CallRegistry>();
 const MAX_PARTICIPANTS = 6;
 const roomName = (channelId: string) => `call:${channelId}`;
+
+/** Only public voice channels appear in workspace presence. DMs and text calls stay private. */
+export function getVoiceRoster(io: Server, workspaceId: string, channelIds?: readonly string[]): VoiceChannelRoster[] {
+  const registry = registries.get(io);
+  if (!registry) return [];
+  const allowed = channelIds && new Set(channelIds);
+  return [...registry.voiceChannels]
+    .filter(channelId => registry.workspaces.get(channelId) === workspaceId && (!allowed || allowed.has(channelId)))
+    .map(channelId => ({ channelId, peers: [...(registry.rooms.get(channelId)?.values() ?? [])].map(peer => ({ ...peer, user: { ...peer.user } })) }))
+    .filter(channel => channel.peers.length > 0);
+}
+
+function publishVoiceRoster(io: Server, workspaceId: string) {
+  const payload: VoiceRoster = { workspaceId, channels: getVoiceRoster(io, workspaceId) };
+  io.to(`workspace:${workspaceId}`).emit('voice:roster', payload);
+}
+
+/** Keep identity and workspace role changes visible without interrupting media. */
+export function updateCallUser(io: Server, workspaceId: string, user: User) {
+  for (const socket of io.sockets.sockets.values()) {
+    if (socket.data.workspaceId === workspaceId && socket.data.user?.id === user.id)
+      socket.data.user = { ...user };
+  }
+  const registry = registries.get(io);
+  if (!registry) return;
+  let voiceChanged = false;
+  for (const [channelId, room] of registry.rooms) {
+    if (registry.workspaces.get(channelId) !== workspaceId) continue;
+    let changed = false;
+    for (const [socketId, peer] of room) if (peer.user.id === user.id) {
+      room.set(socketId, { ...peer, user: { ...user } });
+      changed = true;
+    }
+    if (!changed) continue;
+    io.to(roomName(channelId)).emit('call:peers', { channelId, peers: [...room.values()] });
+    if (registry.voiceChannels.has(channelId)) voiceChanged = true;
+  }
+  if (voiceChanged) publishVoiceRoster(io, workspaceId);
+}
 
 /** Remove only the archived call; participants keep their ordinary chat connection. */
 export function closeCallRoom(io: Server, channelId: string, error: string) {
   const registry = registries.get(io);
   if (!registry) return;
+  const workspaceId = registry.workspaces.get(channelId);
+  const wasVoice = registry.voiceChannels.has(channelId);
   for (const socketId of registry.rooms.get(channelId)?.keys() ?? []) {
     registry.channels.delete(socketId);
     const socket = io.sockets.sockets.get(socketId);
@@ -19,6 +65,9 @@ export function closeCallRoom(io: Server, channelId: string, error: string) {
     void socket?.leave(roomName(channelId));
   }
   registry.rooms.delete(channelId);
+  registry.workspaces.delete(channelId);
+  registry.voiceChannels.delete(channelId);
+  if (wasVoice && workspaceId) publishVoiceRoster(io, workspaceId);
 }
 
 /** Coturn REST authentication: credentials expire after one hour. Never return the shared secret. */
@@ -36,11 +85,13 @@ export function getRtcConfig() {
 
 export function registerCallHandlers(io: Server, socket: Socket, options: {
   user: User;
+  workspaceId: string;
+  getVoiceChannelIds: () => string[];
   canAccessChannel: (channelId: string) => boolean | Promise<boolean>;
 }) {
   let registry = registries.get(io);
-  if (!registry) { registry = { rooms: new Map(), channels: new Map() }; registries.set(io, registry); }
-  const { rooms, channels } = registry;
+  if (!registry) { registry = { rooms: new Map(), channels: new Map(), workspaces: new Map(), voiceChannels: new Set() }; registries.set(io, registry); }
+  const { rooms, channels, workspaces, voiceChannels } = registry;
   let joining = false;
   let joinVersion = 0;
   let windowStart = Date.now();
@@ -49,7 +100,23 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
   let stateChanges = 0;
   let joinWindowStart = Date.now();
   let joinRequests = 0;
-  const publish = (channelId: string) => io.to(roomName(channelId)).emit('call:peers', { channelId, peers: [...(rooms.get(channelId)?.values() ?? [])] });
+  let rosterWindowStart = Date.now();
+  let rosterRequests = 0;
+  const publish = (channelId: string) => {
+    io.to(roomName(channelId)).emit('call:peers', { channelId, peers: [...(rooms.get(channelId)?.values() ?? [])] });
+    const workspaceId = workspaces.get(channelId);
+    if (voiceChannels.has(channelId) && workspaceId) publishVoiceRoster(io, workspaceId);
+  };
+  const sendRoster = () => {
+    const payload: VoiceRoster = { workspaceId: options.workspaceId, channels: getVoiceRoster(io, options.workspaceId, options.getVoiceChannelIds()) };
+    socket.emit('voice:roster', payload);
+  };
+  socket.on('voice:roster:request', () => {
+    if (Date.now() - rosterWindowStart > 10_000) { rosterRequests = 0; rosterWindowStart = Date.now(); }
+    if (++rosterRequests <= 20) sendRoster();
+  });
+  // The client also requests after installing listeners, covering reconnect and bootstrap races.
+  sendRoster();
   function leave() {
     const channelId = channels.get(socket.id);
     if (!channelId) return;
@@ -57,8 +124,13 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
     const room = rooms.get(channelId);
     room?.delete(socket.id);
     void socket.leave(roomName(channelId));
-    if (room?.size) publish(channelId);
-    else rooms.delete(channelId);
+    // Publish an empty roster as well, so observers remove the last departing person.
+    publish(channelId);
+    if (!room?.size) {
+      rooms.delete(channelId);
+      workspaces.delete(channelId);
+      voiceChannels.delete(channelId);
+    }
   }
 
   socket.on('call:join', async (payload: unknown, ack: unknown) => {
@@ -75,17 +147,25 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
       if (!await options.canAccessChannel(channelId)) return reply({ ok: false, error: 'Bu görüşmeye erişiminiz yok.' });
       if (!socket.connected || version !== joinVersion) return reply({ ok: false, error: 'Görüşme isteği iptal edildi.' });
       const existing = rooms.get(channelId);
+      if (existing && workspaces.get(channelId) !== options.workspaceId) return reply({ ok: false, error: 'Bu görüşmeye erişiminiz yok.' });
       if (existing && !existing.has(socket.id) && existing.size >= MAX_PARTICIPANTS) return reply({ ok: false, error: 'Bu görüşme dolu. En fazla 6 kişi katılabilir.' });
+      const isVoice = options.getVoiceChannelIds().includes(channelId);
       if (channels.get(socket.id) !== channelId) leave();
       const room = rooms.get(channelId) ?? new Map<string, CallPeer>();
-      room.set(socket.id, { socketId: socket.id, user: options.user, mic: true, camera: false, sharing: false });
+      const user = socket.data.user?.id === options.user.id ? socket.data.user as User : options.user;
+      if (!room.has(socket.id)) room.set(socket.id, { socketId: socket.id, user, mic: true, camera: false, sharing: false });
       rooms.set(channelId, room);
+      workspaces.set(channelId, options.workspaceId);
+      if (isVoice) voiceChannels.add(channelId);
       channels.set(socket.id, channelId);
       await socket.join(roomName(channelId));
       if (!socket.connected || channels.get(socket.id) !== channelId) { leave(); return; }
       reply({ ok: true, peers: [...room.values()] });
       publish(channelId);
-    } catch { reply({ ok: false, error: 'Görüşmeye katılınamadı. Yeniden deneyin.' }); }
+    } catch {
+      if (channels.get(socket.id) === channelId) leave();
+      reply({ ok: false, error: 'Görüşmeye katılınamadı. Yeniden deneyin.' });
+    }
     finally { joining = false; }
   });
 

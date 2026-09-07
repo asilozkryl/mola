@@ -14,6 +14,7 @@ import { api, post } from "../lib/api";
 import { fileSize, IconButton } from "./ui";
 
 export function Composer({
+  userId,
   channelId,
   channelName,
   parentId,
@@ -22,6 +23,7 @@ export function Composer({
   onError,
   members,
 }: {
+  userId: string;
   channelId: string;
   channelName: string;
   parentId?: string;
@@ -30,7 +32,8 @@ export function Composer({
   onError: (error: string) => void;
   members: string[];
 }) {
-  const key = `mola:draft:${channelId}:${parentId || ""}`;
+  // Legacy drafts have no author identity, so they cannot be safely reassigned.
+  const key = `mola:draft:${userId}:${channelId}:${parentId || ""}`;
   const [content, setContent] = useState(
     () => sessionStorage.getItem(key) || "",
   );

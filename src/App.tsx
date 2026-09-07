@@ -52,7 +52,7 @@ import type {
   PublicConfig,
   User,
 } from "../shared/types";
-import { api, bootstrap, post, ApiError } from "./lib/api";
+import { api, bootstrap, post, ApiError, setApiWorkspace } from "./lib/api";
 import { Auth } from "./components/Auth";
 import {
   AccountRecovery,
@@ -75,8 +75,19 @@ import { useCall } from "./lib/useCall";
 import { CallPanel } from "./components/CallPanel";
 import { SettingsDialog } from "./components/SettingsDialog";
 import AdminPanel from "./components/AdminPanel";
+import {
+  WorkspaceSwitcher,
+  workspaceInitials,
+  type WorkspaceAction,
+  type WorkspaceMode,
+} from "./components/WorkspaceSwitcher";
+import {
+  VoiceParticipants,
+  VoiceRoomPreview,
+} from "./components/VoiceParticipants";
 
 type Dialog =
+  | "workspaces"
   | "channel"
   | "invite"
   | "settings"
@@ -117,6 +128,11 @@ export default function App() {
   const [collectionVersion, setCollectionVersion] = useState(0);
   const [savedOwner, setSavedOwner] = useState("");
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("list");
+  const [workspaceBusy, setWorkspaceBusy] = useState(false);
+  const [workspaceTarget, setWorkspaceTarget] = useState<string>();
+  const [workspaceInvite, setWorkspaceInvite] = useState("");
+  const [voicePreviewId, setVoicePreviewId] = useState<string | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const [view, setView] = useState<View>("channel");
   const [tab, setTab] = useState<"chat" | "files" | "pins">("chat");
@@ -145,7 +161,20 @@ export default function App() {
   viewRef.current = view;
   channelRef.current = channelId;
   threadRef.current = thread;
-  const call = useCall({ socket, user: data?.user || null });
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const accessVersion = useRef(0);
+  const workspaceChanging = useRef(false);
+  const call = useCall({
+    socket,
+    user: data?.user || null,
+    workspaceId: data?.workspace.id || null,
+    initialVoiceChannels: data?.voiceChannels,
+  });
+  const callRef = useRef(call);
+  callRef.current = call;
+  const socketRef = useRef(socket);
+  socketRef.current = socket;
   const notify = useCallback((message: string, error = false) => {
     setToast(message);
     setToastError(error);
@@ -155,28 +184,78 @@ export default function App() {
     [notify],
   );
   const acceptData = useCallback((next: Bootstrap) => {
-    setAdminOpen(Boolean(next.workspace.suspended && next.user.siteAdmin));
+    const contextChanged = dataRef.current?.workspace.id !== next.workspace.id || dataRef.current?.user.id !== next.user.id;
+    const changed =
+      dataRef.current?.workspace.id !== next.workspace.id ||
+      dataRef.current?.user.id !== next.user.id ||
+      Boolean(dataRef.current?.user.suspended) !==
+        Boolean(next.user.suspended) ||
+      Boolean(dataRef.current?.workspace.suspended) !==
+        Boolean(next.workspace.suspended);
+    setApiWorkspace(next.workspace.id);
+    initialBootstrap = Promise.resolve(next);
+    if (changed) {
+      accessVersion.current += 1;
+      callRef.current.leave();
+      socketRef.current?.removeAllListeners();
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+      setSocket(null);
+      setConnected(false);
+      setMessages([]);
+      setPins([]);
+      setChannelFiles([]);
+      setReplies([]);
+      setThread(null);
+      threadRef.current = null;
+      setTyping({});
+      setUnread({});
+      setSaved([]);
+      setSavedOwner("");
+      setHasMore(false);
+      setRepliesHasMore(false);
+      setShowCall(false);
+      setVoicePreviewId(null);
+      setView("channel");
+      setTab("chat");
+      setDialog(null);
+      setMobileNav(false);
+      if (contextChanged) setAdminOpen(Boolean(next.workspace.suspended && next.user.siteAdmin));
+      else if (next.workspace.suspended && next.user.siteAdmin) setAdminOpen(true);
+      else if (next.user.suspended && !next.user.siteAdmin) setAdminOpen(false);
+      highlightRef.current = null;
+    } else if (next.user.role !== "owner" && !next.user.siteAdmin)
+      setAdminOpen(false);
+    const selected =
+      !changed &&
+      next.channels.some((c) => c.id === channelRef.current && !c.archived)
+        ? channelRef.current
+        : next.channels.find((c) => c.name === "tasarım" && !c.archived)?.id ||
+          next.channels.find((c) => c.kind === "text" && !c.archived)?.id ||
+          "";
+    channelRef.current = selected;
+    dataRef.current = next;
     setData(next);
-    setChannelId(
-      next.channels.find((c) => c.name === "tasarım" && !c.archived)?.id ||
-        next.channels.find((c) => c.kind === "text" && !c.archived)?.id ||
-        "",
-    );
+    setChannelId(selected);
+    const invite = new URLSearchParams(location.search).get("invite");
+    if (invite && !next.workspace.isDemo) {
+      setWorkspaceInvite(invite);
+      setWorkspaceMode("join");
+      setWorkspaceTarget(undefined);
+      setDialog("workspaces");
+      history.replaceState(null, "", location.pathname + location.hash);
+    }
     setLoading(false);
   }, []);
   const refreshAccess = useCallback(async () => {
+    const version = ++accessVersion.current;
     try {
       const next = await api<Bootstrap>("/auth/me");
-      setData(next);
-      setChannelId((current) =>
-        next.channels.some((c) => c.id === current && !c.archived)
-          ? current
-          : next.channels.find((c) => c.kind === "text" && !c.archived)?.id ||
-            "",
-      );
-      if (next.user.role !== "owner" && !next.user.siteAdmin)
-        setAdminOpen(false);
+      if (version === accessVersion.current && !workspaceChanging.current)
+        acceptData(next);
     } catch (error) {
+      if (version !== accessVersion.current || workspaceChanging.current)
+        return;
       if (
         error instanceof ApiError &&
         (error.status === 401 || error.status === 403)
@@ -189,7 +268,21 @@ export default function App() {
         setDialog(null);
       }
     }
-  }, []);
+  }, [acceptData]);
+  useEffect(() => {
+    const update = () => {
+      void refreshAccess();
+    };
+    window.addEventListener("mola:workspace-changed", update);
+    return () => window.removeEventListener("mola:workspace-changed", update);
+  }, [refreshAccess]);
+  useEffect(() => {
+    if (data) return;
+    setApiWorkspace(undefined);
+    dataRef.current = null;
+    accessVersion.current += 1;
+    callRef.current.leave();
+  }, [data]);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,7 +344,11 @@ export default function App() {
     if (!data) return;
     try {
       const stored: unknown = JSON.parse(
-        localStorage.getItem(`mola:saved:${data.user.id}`) || "[]",
+        localStorage.getItem(
+          `mola:saved:${data.user.id}:${data.workspace.id}`,
+        ) ||
+          localStorage.getItem(`mola:saved:${data.user.id}`) ||
+          "[]",
       );
       setSaved(
         Array.isArray(stored)
@@ -261,6 +358,7 @@ export default function App() {
                   m &&
                   typeof m.id === "string" &&
                   typeof m.channelId === "string" &&
+                  data.channels.some((c) => c.id === m.channelId) &&
                   typeof m.userId === "string" &&
                   typeof m.createdAt === "string" &&
                   typeof m.content === "string" &&
@@ -273,81 +371,63 @@ export default function App() {
     } catch {
       setSaved([]);
     }
-    setSavedOwner(data.user.id);
-  }, [data?.user.id]);
+    setSavedOwner(`${data.user.id}:${data.workspace.id}`);
+  }, [data?.user.id, data?.workspace.id]);
   useEffect(() => {
     if (
       !data?.user.id ||
       verificationPending ||
       authLink ||
-      data.workspace.suspended
+      data.workspace.suspended ||
+      data.user.suspended
     )
       return;
     const client = io({
       transports: ["websocket", "polling"],
       withCredentials: true,
     });
+    let disposed = false;
+    const workspaceId = data.workspace.id;
     setSocket(client);
     client.on("connect", () => {
+      if (disposed || dataRef.current?.workspace.id !== workspaceId) return;
       setConnected(true);
-      api<Bootstrap>("/auth/me")
-        .then((next) => {
-          setData(next);
-          setChannelId((current) =>
-            next.channels.some((c) => c.id === current && !c.archived)
-              ? current
-              : next.channels.find((c) => c.kind === "text" && !c.archived)
-                  ?.id || "",
-          );
-        })
-        .catch(() => {});
+      void refreshAccess();
       const requestedChannel = channelRef.current;
       if (requestedChannel)
         api<{ messages: Message[]; hasMore: boolean }>(
           `/channels/${requestedChannel}/messages`,
         )
           .then((result) => {
-            if (requestedChannel !== channelRef.current) return;
+            if (disposed || requestedChannel !== channelRef.current) return;
             setMessages(result.messages);
             setHasMore(result.hasMore);
           })
           .catch(() => {});
     });
     client.on("disconnect", (reason) => {
+      if (disposed) return;
       setConnected(false);
       if (reason === "io server disconnect") {
-        api<Bootstrap>("/auth/me")
-          .then(() => client.connect())
-          .catch((error) => {
-            if (
-              error instanceof ApiError &&
-              (error.status === 401 || error.status === 403)
-            ) {
-              sessionStorage.setItem("mola:logged-out", "true");
-              initialBootstrap = undefined;
-              setData(null);
-              setMessages([]);
-              setDialog(null);
-              setAdminOpen(false);
-            }
-          });
+        void refreshAccess().then(() => {
+          if (
+            !disposed &&
+            !workspaceChanging.current &&
+            dataRef.current?.workspace.id === workspaceId &&
+            !dataRef.current.user.suspended &&
+            !dataRef.current.workspace.suspended
+          )
+            client.connect();
+        });
       }
     });
     client.on("connect_error", () => {
+      if (disposed) return;
       setConnected(false);
-      api<Bootstrap>("/auth/me").catch((error) => {
-        if (
-          error instanceof ApiError &&
-          (error.status === 401 || error.status === 403)
-        ) {
-          sessionStorage.setItem("mola:logged-out", "true");
-          initialBootstrap = undefined;
-          setData(null);
-          setMessages([]);
-          setDialog(null);
-          setAdminOpen(false);
-        }
-      });
+      void refreshAccess();
+    });
+    client.on("workspace:changed", () => {
+      if (!disposed) void refreshAccess();
     });
     client.on("presence", ({ onlineIds }: { onlineIds: string[] }) =>
       setData((current) => (current ? { ...current, onlineIds } : current)),
@@ -470,12 +550,16 @@ export default function App() {
       2000,
     );
     return () => {
+      disposed = true;
+      client.removeAllListeners();
       client.disconnect();
       clearInterval(timer);
       setSocket(null);
     };
   }, [
     data?.user.id,
+    data?.user.suspended,
+    data?.workspace.id,
     data?.workspace.suspended,
     verificationPending,
     authLink,
@@ -552,10 +636,10 @@ export default function App() {
     };
   }, [thread?.id, fail]);
   useEffect(() => {
-    if (data && savedOwner === data.user.id) {
+    if (data && savedOwner === `${data.user.id}:${data.workspace.id}`) {
       try {
         localStorage.setItem(
-          `mola:saved:${data.user.id}`,
+          `mola:saved:${data.user.id}:${data.workspace.id}`,
           JSON.stringify(saved),
         );
       } catch {
@@ -564,7 +648,7 @@ export default function App() {
         );
       }
     }
-  }, [saved, data?.user.id, savedOwner, fail]);
+  }, [saved, data?.user.id, data?.workspace.id, savedOwner, fail]);
   useEffect(() => {
     if (!channelId || tab === "chat" || view !== "channel") {
       setCollectionLoading(false);
@@ -610,6 +694,60 @@ export default function App() {
       ? data?.members.filter((m) => channel.memberIds?.includes(m.id)) || []
       : data?.members.filter((m) => !m.suspended) || [];
   const totalUnread = Object.values(unread).reduce((a, b) => a + b, 0);
+  const voiceChannels = new Map(
+    call.voiceChannels.map((roster) => [roster.channelId, roster.peers]),
+  );
+  const voicePreview = data?.channels.find(
+    (c) => c.id === voicePreviewId && !c.archived,
+  );
+  function openWorkspaces(mode: WorkspaceMode = "list", target?: string) {
+    setWorkspaceMode(mode);
+    setWorkspaceTarget(target);
+    setWorkspaceInvite("");
+    setDialog("workspaces");
+    setMobileNav(false);
+  }
+  async function changeWorkspace(action: WorkspaceAction) {
+    if (workspaceChanging.current) return;
+    const actorId = dataRef.current?.user.id;
+    if (!actorId) return;
+    workspaceChanging.current = true;
+    accessVersion.current += 1;
+    setWorkspaceBusy(true);
+    try {
+      const next =
+        action.kind === "create"
+          ? await post<Bootstrap>("/workspaces", { name: action.name })
+          : action.kind === "join"
+            ? await post<Bootstrap>("/workspaces/join", {
+                inviteToken: action.inviteToken,
+              })
+            : await post<Bootstrap>(
+                `/workspaces/${encodeURIComponent(action.id)}/switch`,
+              );
+      if (dataRef.current?.user.id !== actorId) return;
+      acceptData(next);
+      setDialog(null);
+      setWorkspaceInvite("");
+      notify(
+        action.kind === "create"
+          ? `${next.workspace.name} hazır. Ekibini davet edebilirsin.`
+          : `${next.workspace.name} alanındasın.`,
+      );
+    } finally {
+      workspaceChanging.current = false;
+      setWorkspaceBusy(false);
+      if (
+        socketRef.current &&
+        !socketRef.current.connected &&
+        dataRef.current &&
+        !dataRef.current.user.suspended &&
+        !dataRef.current.workspace.suspended
+      )
+        socketRef.current.connect();
+      void refreshAccess();
+    }
+  }
   function selectChannel(id: string) {
     channelRef.current = id;
     setChannelId(id);
@@ -707,6 +845,7 @@ export default function App() {
     }
     try {
       const dm = await post<Channel>("/dms", { userId: user.id });
+      if (dataRef.current?.workspace.id !== data?.workspace.id || dataRef.current?.user.id !== data?.user.id) return;
       setData((old) =>
         old
           ? {
@@ -813,7 +952,11 @@ export default function App() {
       return;
     }
     setShowCall(true);
-    if ((call.joined || call.joining) && call.channelId && call.channelId !== target.id) {
+    if (
+      (call.joined || call.joining) &&
+      call.channelId &&
+      call.channelId !== target.id
+    ) {
       fail("Başka bir odaya geçmeden önce mevcut aramadan ayrıl.");
       return;
     }
@@ -921,34 +1064,54 @@ export default function App() {
           <Logo small />
         </button>
         <div className="rail-divider" />
-        <button
-          className="workspace-button active"
-          title={data.workspace.name}
-          onClick={() =>
-            selectChannel(
-              data.channels.find((c) => c.kind === "text" && !c.archived)?.id ||
-                channelId,
-            )
-          }
-        >
-          <span>
-            {data.workspace.name
-              .split(" ")
-              .map((s) => s[0])
-              .slice(0, 2)
-              .join("")
-              .toUpperCase()}
-          </span>
-        </button>
+        <div className="rail-workspaces">
+          {data.workspaces.map((workspace) => (
+            <button
+              key={workspace.id}
+              className={`workspace-button ${workspace.id === data.workspace.id ? "active" : ""}`}
+              title={workspace.name}
+              aria-label={`${workspace.name} alanına geç`}
+              aria-current={
+                workspace.id === data.workspace.id ? "true" : undefined
+              }
+              disabled={
+                workspaceBusy ||
+                Boolean(workspace.membershipSuspended || workspace.suspended)
+              }
+              onClick={() => {
+                if (workspace.id === data.workspace.id)
+                  selectChannel(
+                    data.channels.find((c) => c.kind === "text" && !c.archived)
+                      ?.id || channelId,
+                  );
+                else if (call.joined || call.joining)
+                  openWorkspaces("list", workspace.id);
+                else
+                  void changeWorkspace({
+                    kind: "switch",
+                    id: workspace.id,
+                  }).catch((error) => fail(error.message));
+              }}
+            >
+              <span>{workspaceInitials(workspace.name)}</span>
+            </button>
+          ))}
+        </div>
         <button
           className="rail-add"
-          title="Ekip arkadaşlarını davet et"
-          aria-label="Ekip arkadaşlarını davet et"
-          onClick={() => setDialog("invite")}
+          title="Çalışma alanı ekle"
+          aria-label="Çalışma alanı ekle"
+          onClick={() => openWorkspaces()}
         >
           <Plus size={22} />
         </button>
         <div className="rail-bottom">
+          <IconButton
+            label="Ekip arkadaşlarını davet et"
+            onClick={() => setDialog("invite")}
+          >
+            <Users size={21} />
+          </IconButton>
           {(data.user.role === "owner" || data.user.siteAdmin) && (
             <IconButton
               label="Yönetim paneli"
@@ -985,7 +1148,8 @@ export default function App() {
       >
         <button
           className="workspace-heading"
-          onClick={() => setDialog("members")}
+          aria-label="Çalışma alanlarını değiştir"
+          onClick={() => openWorkspaces()}
         >
           <span>
             <strong>{data.workspace.name}</strong>
@@ -1081,20 +1245,52 @@ export default function App() {
             </div>
             {data.channels
               .filter((c) => c.kind === "voice" && !c.archived)
-              .map((c) => (
-                <button
-                  key={c.id}
-                  className={`channel-nav voice-nav ${call.channelId === c.id ? "voice-active" : ""}`}
-                  onClick={() => startCall(c)}
-                >
-                  <Volume2 size={18} />
-                  <span>{c.name}</span>
-                  {call.channelId === c.id && (
-                    <span className="small-status-dot" />
-                  )}
-                </button>
-              ))}
-            <div className="voice-nav-note">Bir odaya gir, sohbete katıl.</div>
+              .map((c) => {
+                const peers = connected ? voiceChannels.get(c.id) || [] : [];
+                return (
+                  <div key={c.id} className="voice-channel-entry">
+                    <div className="voice-channel-row">
+                      <button
+                        aria-label={c.name}
+                        className={`channel-nav voice-nav ${call.channelId === c.id ? "voice-active" : ""}`}
+                        onClick={() => startCall(c)}
+                      >
+                        <Volume2 size={18} />
+                        <span>{c.name}</span>
+                        {peers.length > 0 && (
+                          <span
+                            className="voice-peer-count"
+                            title={`${peers.length} kişi görüşmede`}
+                          >
+                            {peers.length}
+                          </span>
+                        )}
+                        {call.channelId === c.id && (
+                          <span className="small-status-dot" />
+                        )}
+                      </button>
+                      <IconButton
+                        label={`${c.name} katılımcılarını gör`}
+                        onClick={() => setVoicePreviewId(c.id)}
+                      >
+                        <Users size={15} />
+                      </IconButton>
+                    </div>
+                    {peers.length > 0 && (
+                      <VoiceParticipants
+                        peers={peers}
+                        channelName={c.name}
+                        currentUserId={data.user.id}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            <div className="voice-nav-note">
+              {connected
+                ? "Bir odaya gir, sohbete katıl."
+                : "Katılımcı listesi için bağlanılıyor…"}
+            </div>
           </div>
           <div className="nav-section dm-section">
             <div className="nav-section-title">
@@ -1239,537 +1435,613 @@ export default function App() {
             </button>
           </div>
         </header>
-        {!connected && (
+        {!connected && !data.user.suspended && !data.workspace.suspended && (
           <div className="connection-banner" role="status">
             <WifiOff size={15} /> Bağlantı kuruluyor. Mesaj taslakların
             korunuyor.
           </div>
         )}
         <main id="main-content" className="main-content">
-          <section className="conversation-panel" aria-label="Sohbet">
-            <div className="channel-heading">
-              <div className="channel-title-icon">
-                {view === "saved" ? (
-                  <Bookmark size={23} />
-                ) : view === "inbox" ? (
-                  <Bell size={23} />
-                ) : channel?.kind === "dm" ? (
-                  <MessageCircle size={24} />
-                ) : (
-                  <Hash size={25} />
-                )}
-              </div>
-              <div className="channel-title">
-                <h1>
-                  {view === "saved"
-                    ? "Kaydedilenler"
-                    : view === "inbox"
-                      ? "Gelen kutusu"
-                      : channelName}
-                </h1>
-                <p>
-                  {view === "saved"
-                    ? "Tekrar dönmek istediğin mesajlar, elinin altında."
-                    : view === "inbox"
-                      ? "Sen yokken neler oldu?"
-                      : channel?.description ||
-                        "Ekibinle aynı yerde, aynı sohbette."}
-                </p>
-              </div>
-              {view === "channel" && (
-                <div className="channel-heading-actions">
-                  <button
-                    className="member-stack"
-                    aria-label="Kanal üyelerini gör"
-                    onClick={() => setDialog("members")}
-                  >
-                    {conversationMembers.slice(0, 3).map((u) => (
-                      <Avatar key={u.id} user={u} size="tiny" />
-                    ))}
-                    <span>{conversationMembers.length}</span>
-                  </button>
-                  <button
-                    className="huddle-button"
-                    aria-label="Bir araya gel"
-                    onClick={() => startCall()}
-                  >
-                    <Headphones size={17} />
-                    <span>Bir araya gel</span>
-                  </button>
-                  <IconButton
-                    label="Kanal bilgisi"
-                    pressed={details}
-                    onClick={() => {
-                      if (window.matchMedia("(max-width:1100px)").matches) {
-                        setDialog("info");
-                        return;
-                      }
-                      setDetails(!details);
-                      setThread(null);
-                    }}
-                  >
-                    <Info size={20} />
-                  </IconButton>
-                </div>
-              )}
-            </div>
-            {view === "channel" && (
-              <div
-                className="channel-tabs"
-                role="tablist"
-                aria-label="Kanal içeriği"
+          {data.user.suspended || data.workspace.suspended ? (
+            <section className="workspace-unavailable">
+              <ShieldCheck size={32} />
+              <h1>Bu çalışma alanına erişilemiyor</h1>
+              <p>
+                {data.workspace.suspended
+                  ? "Alan yöneticisi çalışma alanını askıya aldı."
+                  : "Bu alandaki üyeliğin askıya alındı veya sona erdi."}{" "}
+                Diğer ekiplerine geçebilir, yeni bir alan oluşturabilir veya
+                davetle katılabilirsin.
+              </p>
+              <button
+                className="primary-button"
+                onClick={() => openWorkspaces()}
               >
-                <button
-                  role="tab"
-                  aria-selected={tab === "chat"}
-                  className={tab === "chat" ? "active" : ""}
-                  onClick={() => setTab("chat")}
-                >
-                  <MessageSquare size={16} />
-                  Sohbet
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={tab === "files"}
-                  className={tab === "files" ? "active" : ""}
-                  onClick={() => setTab("files")}
-                >
-                  <FileText size={16} />
-                  Dosyalar
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={tab === "pins"}
-                  className={tab === "pins" ? "active" : ""}
-                  onClick={() => setTab("pins")}
-                >
-                  <Pin size={15} />
-                  Sabitlenenler
-                </button>
-                <div className="channel-tab-end">
-                  <span className="small-status-dot" />
-                  {onlineMembers.length} çevrimiçi
+                Çalışma alanlarımı aç <ArrowRight size={17} />
+              </button>
+            </section>
+          ) : (
+            <>
+              <section className="conversation-panel" aria-label="Sohbet">
+                <div className="channel-heading">
+                  <div className="channel-title-icon">
+                    {view === "saved" ? (
+                      <Bookmark size={23} />
+                    ) : view === "inbox" ? (
+                      <Bell size={23} />
+                    ) : channel?.kind === "dm" ? (
+                      <MessageCircle size={24} />
+                    ) : (
+                      <Hash size={25} />
+                    )}
+                  </div>
+                  <div className="channel-title">
+                    <h1>
+                      {view === "saved"
+                        ? "Kaydedilenler"
+                        : view === "inbox"
+                          ? "Gelen kutusu"
+                          : channelName}
+                    </h1>
+                    <p>
+                      {view === "saved"
+                        ? "Tekrar dönmek istediğin mesajlar, elinin altında."
+                        : view === "inbox"
+                          ? "Sen yokken neler oldu?"
+                          : channel?.description ||
+                            "Ekibinle aynı yerde, aynı sohbette."}
+                    </p>
+                  </div>
+                  {view === "channel" && (
+                    <div className="channel-heading-actions">
+                      <button
+                        className="member-stack"
+                        aria-label="Kanal üyelerini gör"
+                        onClick={() => setDialog("members")}
+                      >
+                        {conversationMembers.slice(0, 3).map((u) => (
+                          <Avatar key={u.id} user={u} size="tiny" />
+                        ))}
+                        <span>{conversationMembers.length}</span>
+                      </button>
+                      <button
+                        className="huddle-button"
+                        aria-label="Bir araya gel"
+                        onClick={() => startCall()}
+                      >
+                        <Headphones size={17} />
+                        <span>Bir araya gel</span>
+                      </button>
+                      <IconButton
+                        label="Kanal bilgisi"
+                        pressed={details}
+                        onClick={() => {
+                          if (window.matchMedia("(max-width:1100px)").matches) {
+                            setDialog("info");
+                            return;
+                          }
+                          setDetails(!details);
+                          setThread(null);
+                        }}
+                      >
+                        <Info size={20} />
+                      </IconButton>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-            <div className="message-scroll" ref={scrollRef}>
-              {view === "saved" ? (
-                <>
-                  {saved.length ? (
+                {view === "channel" && (
+                  <div
+                    className="channel-tabs"
+                    role="tablist"
+                    aria-label="Kanal içeriği"
+                  >
+                    <button
+                      role="tab"
+                      aria-selected={tab === "chat"}
+                      className={tab === "chat" ? "active" : ""}
+                      onClick={() => setTab("chat")}
+                    >
+                      <MessageSquare size={16} />
+                      Sohbet
+                    </button>
+                    <button
+                      role="tab"
+                      aria-selected={tab === "files"}
+                      className={tab === "files" ? "active" : ""}
+                      onClick={() => setTab("files")}
+                    >
+                      <FileText size={16} />
+                      Dosyalar
+                    </button>
+                    <button
+                      role="tab"
+                      aria-selected={tab === "pins"}
+                      className={tab === "pins" ? "active" : ""}
+                      onClick={() => setTab("pins")}
+                    >
+                      <Pin size={15} />
+                      Sabitlenenler
+                    </button>
+                    <div className="channel-tab-end">
+                      <span className="small-status-dot" />
+                      {onlineMembers.length} çevrimiçi
+                    </div>
+                  </div>
+                )}
+                <div className="message-scroll" ref={scrollRef}>
+                  {view === "saved" ? (
+                    <>
+                      {saved.length ? (
+                        <>
+                          <div className="list-intro">
+                            <Bookmark size={20} />
+                            <h2>İyi ki kaydetmişim.</h2>
+                            <p>{saved.length} mesaj seni burada bekliyor.</p>
+                          </div>
+                          {saved.map((message) => (
+                            <div key={message.id}>
+                              <button
+                                className="saved-channel-label"
+                                onClick={() => {
+                                  selectChannel(message.channelId);
+                                }}
+                              >
+                                <Hash size={13} />
+                                {data.channels.find(
+                                  (c) => c.id === message.channelId,
+                                )?.name || "Kanal"}
+                                <ArrowRight size={13} />
+                              </button>
+                              {renderMessage(message)}
+                            </div>
+                          ))}
+                        </>
+                      ) : (
+                        <EmptyState
+                          icon={<Bookmark size={29} />}
+                          title="Aklında kalmasın, burada kalsın."
+                          text="Bir mesajın üzerindeki yer imi simgesine tıkla. Kaydettiklerini burada bulacaksın."
+                        />
+                      )}
+                    </>
+                  ) : view === "inbox" ? (
+                    <>
+                      {totalUnread ? (
+                        <div className="inbox-list">
+                          <h2>Sohbete yetiş.</h2>
+                          {Object.entries(unread)
+                            .filter(([, count]) => count > 0)
+                            .map(([id, count]) => (
+                              <button
+                                key={id}
+                                onClick={() => selectChannel(id)}
+                              >
+                                <span className="channel-title-icon">
+                                  <Hash size={22} />
+                                </span>
+                                <span>
+                                  <strong>
+                                    {
+                                      data.channels.find((c) => c.id === id)
+                                        ?.name
+                                    }
+                                  </strong>
+                                  <small>{count} yeni mesaj</small>
+                                </span>
+                                <ArrowRight size={19} />
+                              </button>
+                            ))}
+                        </div>
+                      ) : (
+                        <EmptyState
+                          icon={<Check size={30} />}
+                          title="Her şeye yetiştin."
+                          text="Diğer kanallara gelen yeni mesajları burada göreceksin. Şimdi küçük bir molanın tam zamanı."
+                          extra={
+                            <button
+                              className="secondary-button"
+                              onClick={() => selectChannel(channelId)}
+                            >
+                              Sohbete dön
+                              <ArrowRight size={15} />
+                            </button>
+                          }
+                        />
+                      )}
+                    </>
+                  ) : messagesLoading || collectionLoading ? (
+                    <div className="messages-loading">
+                      <Spinner label="Sohbet yükleniyor" />
+                      {[1, 2, 3, 4].map((i) => (
+                        <div className="message-skeleton" key={i}>
+                          <span />
+                          <div>
+                            <i />
+                            <i />
+                            <i />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : tab === "files" ? (
                     <>
                       <div className="list-intro">
-                        <Bookmark size={20} />
-                        <h2>İyi ki kaydetmişim.</h2>
-                        <p>{saved.length} mesaj seni burada bekliyor.</p>
+                        <FileText size={21} />
+                        <h2>Fikirlerin dosya hâli.</h2>
+                        <p>Bu kanalda paylaşılan dosyalar.</p>
                       </div>
-                      {saved.map((message) => (
+                      {channelFiles.length ? (
+                        <div className="channel-file-list">
+                          {channelFiles.map((file: Attachment) => (
+                            <a
+                              key={file.id}
+                              href={file.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download={file.name}
+                            >
+                              <span className="file-icon">
+                                <FileText size={23} />
+                              </span>
+                              <span>
+                                <strong>{file.name}</strong>
+                                <small>{fileSize(file.size)}</small>
+                              </span>
+                              <ArrowDown size={18} />
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyState
+                          icon={<FileText size={27} />}
+                          title="İlk dosyaya yer açtık."
+                          text="Mesaj kutusundaki ataş simgesinden dosya paylaşabilirsin."
+                        />
+                      )}
+                    </>
+                  ) : tab === "pins" ? (
+                    <>
+                      <div className="list-intro">
+                        <Pin size={20} />
+                        <h2>Göz önünde dursun.</h2>
+                        <p>Ekibin için önemli mesajlar.</p>
+                      </div>
+                      {pins.length ? (
+                        pins.map((m) => renderMessage(m))
+                      ) : (
+                        <EmptyState
+                          icon={<Pin size={27} />}
+                          title="Henüz sabitlenen mesaj yok."
+                          text="Mesaj menüsünden “Kanala sabitle” seçeneğiyle önemli notları buraya ekle."
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {hasMore ? (
+                        <button
+                          className="load-more"
+                          onClick={() => void loadMore()}
+                        >
+                          Önceki mesajları yükle
+                        </button>
+                      ) : (
+                        <div className="channel-welcome">
+                          <span className="welcome-hash">
+                            {channel?.kind === "dm" ? (
+                              <MessageCircle size={33} />
+                            ) : (
+                              <Hash size={36} />
+                            )}
+                          </span>
+                          <div>
+                            <div className="welcome-eyebrow">
+                              {channel?.kind === "dm"
+                                ? "Sohbet burada başlıyor"
+                                : "Birlikte düşünmek için bir yer"}
+                            </div>
+                            <h2>
+                              {channel?.kind === "dm"
+                                ? `${channelName} ile sohbetin`
+                                : `Merhaba, #${channelName} 👋`}
+                            </h2>
+                            <p>
+                              {channel?.description ||
+                                "Fikirlerini paylaş, bir soru sor ya da sadece merhaba de."}
+                            </p>
+                          </div>
+                          <span className="welcome-doodle" aria-hidden="true">
+                            <Sparkles size={29} />
+                          </span>
+                        </div>
+                      )}
+                      {!messages.length && (
+                        <div className="first-message-note">
+                          Bu kanalın ilk merhabası senden gelsin. 🌱
+                        </div>
+                      )}
+                      {messages.map((message, index) => (
                         <div key={message.id}>
-                          <button
-                            className="saved-channel-label"
-                            onClick={() => {
-                              selectChannel(message.channelId);
-                            }}
-                          >
-                            <Hash size={13} />
-                            {data.channels.find(
-                              (c) => c.id === message.channelId,
-                            )?.name || "Kanal"}
-                            <ArrowRight size={13} />
-                          </button>
+                          {(index === 0 ||
+                            dateLabel(messages[index - 1].createdAt) !==
+                              dateLabel(message.createdAt)) && (
+                            <div className="date-divider">
+                              <span>
+                                {dateLabel(message.createdAt)}
+                                <ChevronDown size={12} />
+                              </span>
+                            </div>
+                          )}
                           {renderMessage(message)}
                         </div>
                       ))}
                     </>
+                  )}
+                </div>
+                {view === "channel" && (
+                  <>
+                    <div className="typing-indicator" aria-live="polite">
+                      {typingNames.length > 0 && (
+                        <>
+                          <span className="typing-dots">•••</span>
+                          {typingNames.join(", ")} yazıyor...
+                        </>
+                      )}
+                    </div>
+                    {channel?.archived || !channel ? (
+                      <p className="archived-channel-note" role="status">
+                        {channel?.archived
+                          ? "Bu kanal arşivde. Mesaj geçmişini okuyabilirsin; yeni mesaj için alan sahibinden kanalı açmasını iste."
+                          : "Mesajlaşmaya başlamak için bir kanal oluştur."}
+                      </p>
+                    ) : (
+                      <Composer
+                        key={`${data.user.id}:${channelId}`}
+                        userId={data.user.id}
+                        channelId={channelId}
+                        channelName={channelName}
+                        members={conversationMembers.map((m) => m.name)}
+                        onSent={onSent}
+                        onError={fail}
+                        onTyping={(active) => {
+                          if (
+                            Date.now() - typingSent.current > 1800 ||
+                            !active
+                          ) {
+                            socket?.emit("typing", {
+                              channelId,
+                              typing: active,
+                            });
+                            typingSent.current = Date.now();
+                          }
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+              </section>
+              {thread ? (
+                <aside className="thread-panel">
+                  <div className="details-heading">
+                    <h2>Mesaj dizisi</h2>
+                    <IconButton
+                      label="Mesaj dizisini kapat"
+                      onClick={() => setThread(null)}
+                    >
+                      <X size={19} />
+                    </IconButton>
+                  </div>
+                  <div className="thread-messages">
+                    {renderMessage(thread, true)}
+                    <div className="thread-divider">
+                      {thread.replyCount} yanıt
+                    </div>
+                    {repliesHasMore && (
+                      <button
+                        className="load-more"
+                        onClick={() => void loadMoreReplies()}
+                      >
+                        Önceki yanıtları yükle
+                      </button>
+                    )}
+                    {threadLoading ? (
+                      <Spinner label="Yanıtlar yükleniyor" />
+                    ) : (
+                      replies.map((m) => renderMessage(m, true))
+                    )}
+                  </div>
+                  {data.channels.find((c) => c.id === thread.channelId)
+                    ?.archived ? (
+                    <p className="archived-channel-note">
+                      Bu kanal arşivde. Yeni yanıt eklenemez.
+                    </p>
                   ) : (
-                    <EmptyState
-                      icon={<Bookmark size={29} />}
-                      title="Aklında kalmasın, burada kalsın."
-                      text="Bir mesajın üzerindeki yer imi simgesine tıkla. Kaydettiklerini burada bulacaksın."
+                    <Composer
+                      key={`${data.user.id}:${thread.id}`}
+                      userId={data.user.id}
+                      channelId={thread.channelId}
+                      channelName={channelName}
+                      parentId={thread.id}
+                      members={conversationMembers.map((m) => m.name)}
+                      onSent={onSent}
+                      onError={fail}
                     />
                   )}
-                </>
-              ) : view === "inbox" ? (
-                <>
-                  {totalUnread ? (
-                    <div className="inbox-list">
-                      <h2>Sohbete yetiş.</h2>
-                      {Object.entries(unread)
-                        .filter(([, count]) => count > 0)
-                        .map(([id, count]) => (
-                          <button key={id} onClick={() => selectChannel(id)}>
-                            <span className="channel-title-icon">
-                              <Hash size={22} />
-                            </span>
+                </aside>
+              ) : (
+                details &&
+                view === "channel" && (
+                  <aside className="details-panel">
+                    <div className="details-heading">
+                      <h2>Kanal hakkında</h2>
+                      <IconButton
+                        label="Kanal bilgisini kapat"
+                        onClick={() => setDetails(false)}
+                      >
+                        <X size={18} />
+                      </IconButton>
+                    </div>
+                    <div className="details-body">
+                      <div className="channel-detail-mark">
+                        <Hash size={29} />
+                        <span className="detail-star">✳</span>
+                      </div>
+                      <h3>{channelName}</h3>
+                      <p className="channel-about">
+                        {channel?.description ||
+                          "Ekibinin fikirlerini ve günlük sohbetini paylaştığı yer."}
+                      </p>
+                      <div className="channel-detail-meta">
+                        <span>
+                          <Users size={14} />
+                          {channel?.kind === "dm" ? 2 : data.members.length} üye
+                        </span>
+                        <span>
+                          <ShieldCheck size={14} />
+                          {channel?.kind === "dm"
+                            ? "Özel sohbet"
+                            : "Ekip kanalı"}
+                        </span>
+                      </div>
+                      <div className="detail-divider" />
+                      <div className="detail-section-title">
+                        <h4>Bir mesajdan fazlası</h4>
+                        <span>✦</span>
+                      </div>
+                      <div className="huddle-card">
+                        <div className="huddle-art" aria-hidden="true">
+                          <div className="orbit orbit-one" />
+                          <div className="orbit orbit-two" />
+                          <span className="huddle-art-avatar one">
+                            <Avatar user={data.members[0]} size="small" />
+                          </span>
+                          <span className="huddle-art-avatar two">
+                            <Avatar
+                              user={data.members[1] || data.user}
+                              size="small"
+                            />
+                          </span>
+                          <span className="huddle-art-avatar three">
+                            <Avatar
+                              user={data.members[2] || data.user}
+                              size="small"
+                            />
+                          </span>
+                          <span className="huddle-art-center">
+                            <AudioLines size={28} />
+                          </span>
+                          <span className="art-spark spark-one">✧</span>
+                          <span className="art-spark spark-two">✦</span>
+                        </div>
+                        <h4>Bazen konuşmak daha kolay.</h4>
+                        <p>
+                          Bir araya gel, ekranını paylaş.
+                          <br />
+                          Fikri birlikte büyütün.
+                        </p>
+                        <button onClick={() => startCall()}>
+                          <Headphones size={16} />
+                          Sesli sohbet başlat
+                          <ArrowRight size={14} />
+                        </button>
+                      </div>
+                      <div className="detail-divider" />
+                      <div className="detail-section-title">
+                        <h4>
+                          Ekip arkadaşları <span>{data.members.length}</span>
+                        </h4>
+                        <button onClick={() => setDialog("members")}>
+                          Tümü
+                        </button>
+                      </div>
+                      <div className="detail-members">
+                        {conversationMembers.slice(0, 5).map((user) => (
+                          <button
+                            key={user.id}
+                            onClick={() => void openDm(user)}
+                          >
+                            <Avatar
+                              user={user}
+                              size="small"
+                              online={data.onlineIds.includes(user.id)}
+                            />
                             <span>
                               <strong>
-                                {data.channels.find((c) => c.id === id)?.name}
+                                {user.name}
+                                {user.id === data.user.id && (
+                                  <small> (sen)</small>
+                                )}
                               </strong>
-                              <small>{count} yeni mesaj</small>
+                              <small>
+                                {user.status ||
+                                  (data.onlineIds.includes(user.id)
+                                    ? "Çevrimiçi"
+                                    : "Çevrimdışı")}
+                              </small>
                             </span>
-                            <ArrowRight size={19} />
+                            {user.role === "owner" && (
+                              <span
+                                className="owner-badge"
+                                title="Çalışma alanı sahibi"
+                              >
+                                ✦
+                              </span>
+                            )}
                           </button>
                         ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      icon={<Check size={30} />}
-                      title="Her şeye yetiştin."
-                      text="Diğer kanallara gelen yeni mesajları burada göreceksin. Şimdi küçük bir molanın tam zamanı."
-                      extra={
-                        <button
-                          className="secondary-button"
-                          onClick={() => selectChannel(channelId)}
-                        >
-                          Sohbete dön
-                          <ArrowRight size={15} />
-                        </button>
-                      }
-                    />
-                  )}
-                </>
-              ) : messagesLoading || collectionLoading ? (
-                <div className="messages-loading">
-                  <Spinner label="Sohbet yükleniyor" />
-                  {[1, 2, 3, 4].map((i) => (
-                    <div className="message-skeleton" key={i}>
-                      <span />
-                      <div>
-                        <i />
-                        <i />
-                        <i />
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : tab === "files" ? (
-                <>
-                  <div className="list-intro">
-                    <FileText size={21} />
-                    <h2>Fikirlerin dosya hâli.</h2>
-                    <p>Bu kanalda paylaşılan dosyalar.</p>
-                  </div>
-                  {channelFiles.length ? (
-                    <div className="channel-file-list">
-                      {channelFiles.map((file: Attachment) => (
-                        <a
-                          key={file.id}
-                          href={file.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download={file.name}
-                        >
-                          <span className="file-icon">
-                            <FileText size={23} />
-                          </span>
-                          <span>
-                            <strong>{file.name}</strong>
-                            <small>{fileSize(file.size)}</small>
-                          </span>
-                          <ArrowDown size={18} />
-                        </a>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      icon={<FileText size={27} />}
-                      title="İlk dosyaya yer açtık."
-                      text="Mesaj kutusundaki ataş simgesinden dosya paylaşabilirsin."
-                    />
-                  )}
-                </>
-              ) : tab === "pins" ? (
-                <>
-                  <div className="list-intro">
-                    <Pin size={20} />
-                    <h2>Göz önünde dursun.</h2>
-                    <p>Ekibin için önemli mesajlar.</p>
-                  </div>
-                  {pins.length ? (
-                    pins.map((m) => renderMessage(m))
-                  ) : (
-                    <EmptyState
-                      icon={<Pin size={27} />}
-                      title="Henüz sabitlenen mesaj yok."
-                      text="Mesaj menüsünden “Kanala sabitle” seçeneğiyle önemli notları buraya ekle."
-                    />
-                  )}
-                </>
-              ) : (
-                <>
-                  {hasMore ? (
-                    <button
-                      className="load-more"
-                      onClick={() => void loadMore()}
-                    >
-                      Önceki mesajları yükle
-                    </button>
-                  ) : (
-                    <div className="channel-welcome">
-                      <span className="welcome-hash">
-                        {channel?.kind === "dm" ? (
-                          <MessageCircle size={33} />
-                        ) : (
-                          <Hash size={36} />
-                        )}
-                      </span>
-                      <div>
-                        <div className="welcome-eyebrow">
-                          {channel?.kind === "dm"
-                            ? "Sohbet burada başlıyor"
-                            : "Birlikte düşünmek için bir yer"}
-                        </div>
-                        <h2>
-                          {channel?.kind === "dm"
-                            ? `${channelName} ile sohbetin`
-                            : `Merhaba, #${channelName} 👋`}
-                        </h2>
+                      <button
+                        className="detail-invite"
+                        onClick={() => setDialog("invite")}
+                      >
+                        <Plus size={15} />
+                        Ekibe birini davet et
+                      </button>
+                      <div className="quiet-note">
+                        <span>🌿</span>
                         <p>
-                          {channel?.description ||
-                            "Fikirlerini paylaş, bir soru sor ya da sadece merhaba de."}
+                          İyi fikirlerin biraz
+                          <br />
+                          nefes almaya ihtiyacı var.
                         </p>
                       </div>
-                      <span className="welcome-doodle" aria-hidden="true">
-                        <Sparkles size={29} />
-                      </span>
                     </div>
-                  )}
-                  {!messages.length && (
-                    <div className="first-message-note">
-                      Bu kanalın ilk merhabası senden gelsin. 🌱
-                    </div>
-                  )}
-                  {messages.map((message, index) => (
-                    <div key={message.id}>
-                      {(index === 0 ||
-                        dateLabel(messages[index - 1].createdAt) !==
-                          dateLabel(message.createdAt)) && (
-                        <div className="date-divider">
-                          <span>
-                            {dateLabel(message.createdAt)}
-                            <ChevronDown size={12} />
-                          </span>
-                        </div>
-                      )}
-                      {renderMessage(message)}
-                    </div>
-                  ))}
-                </>
+                  </aside>
+                )
               )}
-            </div>
-            {view === "channel" && (
-              <>
-                <div className="typing-indicator" aria-live="polite">
-                  {typingNames.length > 0 && (
-                    <>
-                      <span className="typing-dots">•••</span>
-                      {typingNames.join(", ")} yazıyor...
-                    </>
-                  )}
-                </div>
-                {channel?.archived || !channel ? (
-                  <p className="archived-channel-note" role="status">
-                    {channel?.archived
-                      ? "Bu kanal arşivde. Mesaj geçmişini okuyabilirsin; yeni mesaj için alan sahibinden kanalı açmasını iste."
-                      : "Mesajlaşmaya başlamak için bir kanal oluştur."}
-                  </p>
-                ) : (
-                  <Composer
-                    key={channelId}
-                    channelId={channelId}
-                    channelName={channelName}
-                    members={conversationMembers.map((m) => m.name)}
-                    onSent={onSent}
-                    onError={fail}
-                    onTyping={(active) => {
-                      if (Date.now() - typingSent.current > 1800 || !active) {
-                        socket?.emit("typing", { channelId, typing: active });
-                        typingSent.current = Date.now();
-                      }
-                    }}
-                  />
-                )}
-              </>
-            )}
-          </section>
-          {thread ? (
-            <aside className="thread-panel">
-              <div className="details-heading">
-                <h2>Mesaj dizisi</h2>
-                <IconButton
-                  label="Mesaj dizisini kapat"
-                  onClick={() => setThread(null)}
-                >
-                  <X size={19} />
-                </IconButton>
-              </div>
-              <div className="thread-messages">
-                {renderMessage(thread, true)}
-                <div className="thread-divider">{thread.replyCount} yanıt</div>
-                {repliesHasMore && (
-                  <button
-                    className="load-more"
-                    onClick={() => void loadMoreReplies()}
-                  >
-                    Önceki yanıtları yükle
-                  </button>
-                )}
-                {threadLoading ? (
-                  <Spinner label="Yanıtlar yükleniyor" />
-                ) : (
-                  replies.map((m) => renderMessage(m, true))
-                )}
-              </div>
-              {data.channels.find((c) => c.id === thread.channelId)
-                ?.archived ? (
-                <p className="archived-channel-note">
-                  Bu kanal arşivde. Yeni yanıt eklenemez.
-                </p>
-              ) : (
-                <Composer
-                  key={thread.id}
-                  channelId={thread.channelId}
-                  channelName={channelName}
-                  parentId={thread.id}
-                  members={conversationMembers.map((m) => m.name)}
-                  onSent={onSent}
-                  onError={fail}
-                />
-              )}
-            </aside>
-          ) : (
-            details &&
-            view === "channel" && (
-              <aside className="details-panel">
-                <div className="details-heading">
-                  <h2>Kanal hakkında</h2>
-                  <IconButton
-                    label="Kanal bilgisini kapat"
-                    onClick={() => setDetails(false)}
-                  >
-                    <X size={18} />
-                  </IconButton>
-                </div>
-                <div className="details-body">
-                  <div className="channel-detail-mark">
-                    <Hash size={29} />
-                    <span className="detail-star">✳</span>
-                  </div>
-                  <h3>{channelName}</h3>
-                  <p className="channel-about">
-                    {channel?.description ||
-                      "Ekibinin fikirlerini ve günlük sohbetini paylaştığı yer."}
-                  </p>
-                  <div className="channel-detail-meta">
-                    <span>
-                      <Users size={14} />
-                      {channel?.kind === "dm" ? 2 : data.members.length} üye
-                    </span>
-                    <span>
-                      <ShieldCheck size={14} />
-                      {channel?.kind === "dm" ? "Özel sohbet" : "Ekip kanalı"}
-                    </span>
-                  </div>
-                  <div className="detail-divider" />
-                  <div className="detail-section-title">
-                    <h4>Bir mesajdan fazlası</h4>
-                    <span>✦</span>
-                  </div>
-                  <div className="huddle-card">
-                    <div className="huddle-art" aria-hidden="true">
-                      <div className="orbit orbit-one" />
-                      <div className="orbit orbit-two" />
-                      <span className="huddle-art-avatar one">
-                        <Avatar user={data.members[0]} size="small" />
-                      </span>
-                      <span className="huddle-art-avatar two">
-                        <Avatar
-                          user={data.members[1] || data.user}
-                          size="small"
-                        />
-                      </span>
-                      <span className="huddle-art-avatar three">
-                        <Avatar
-                          user={data.members[2] || data.user}
-                          size="small"
-                        />
-                      </span>
-                      <span className="huddle-art-center">
-                        <AudioLines size={28} />
-                      </span>
-                      <span className="art-spark spark-one">✧</span>
-                      <span className="art-spark spark-two">✦</span>
-                    </div>
-                    <h4>Bazen konuşmak daha kolay.</h4>
-                    <p>
-                      Bir araya gel, ekranını paylaş.
-                      <br />
-                      Fikri birlikte büyütün.
-                    </p>
-                    <button onClick={() => startCall()}>
-                      <Headphones size={16} />
-                      Sesli sohbet başlat
-                      <ArrowRight size={14} />
-                    </button>
-                  </div>
-                  <div className="detail-divider" />
-                  <div className="detail-section-title">
-                    <h4>
-                      Ekip arkadaşları <span>{data.members.length}</span>
-                    </h4>
-                    <button onClick={() => setDialog("members")}>Tümü</button>
-                  </div>
-                  <div className="detail-members">
-                    {conversationMembers.slice(0, 5).map((user) => (
-                      <button key={user.id} onClick={() => void openDm(user)}>
-                        <Avatar
-                          user={user}
-                          size="small"
-                          online={data.onlineIds.includes(user.id)}
-                        />
-                        <span>
-                          <strong>
-                            {user.name}
-                            {user.id === data.user.id && <small> (sen)</small>}
-                          </strong>
-                          <small>
-                            {user.status ||
-                              (data.onlineIds.includes(user.id)
-                                ? "Çevrimiçi"
-                                : "Çevrimdışı")}
-                          </small>
-                        </span>
-                        {user.role === "owner" && (
-                          <span
-                            className="owner-badge"
-                            title="Çalışma alanı sahibi"
-                          >
-                            ✦
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    className="detail-invite"
-                    onClick={() => setDialog("invite")}
-                  >
-                    <Plus size={15} />
-                    Ekibe birini davet et
-                  </button>
-                  <div className="quiet-note">
-                    <span>🌿</span>
-                    <p>
-                      İyi fikirlerin biraz
-                      <br />
-                      nefes almaya ihtiyacı var.
-                    </p>
-                  </div>
-                </div>
-              </aside>
-            )
+            </>
           )}
         </main>
       </div>
+      {dialog === "workspaces" && (
+        <WorkspaceSwitcher
+          workspaces={data.workspaces}
+          currentId={data.workspace.id}
+          isDemo={data.workspace.isDemo}
+          inCall={call.joined || call.joining}
+          initialMode={workspaceMode}
+          initialInvite={workspaceInvite}
+          initialTarget={workspaceTarget}
+          busy={workspaceBusy}
+          onAction={changeWorkspace}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {voicePreview && (
+        <VoiceRoomPreview
+          channel={voicePreview}
+          peers={voiceChannels.get(voicePreview.id) || []}
+          currentUserId={data.user.id}
+          isCurrentCall={call.channelId === voicePreview.id}
+          busy={call.joining}
+          connected={connected}
+          onClose={() => setVoicePreviewId(null)}
+          onJoin={() => {
+            setVoicePreviewId(null);
+            startCall(voicePreview);
+          }}
+        />
+      )}
       {dialog === "search" && (
         <SearchDialog
           data={data}
@@ -1781,6 +2053,7 @@ export default function App() {
         <CreateChannel
           onClose={() => setDialog(null)}
           onCreate={(created) => {
+            if (dataRef.current?.workspace.id !== data.workspace.id || dataRef.current?.user.id !== data.user.id) return;
             setData((old) =>
               old
                 ? {
@@ -1807,6 +2080,7 @@ export default function App() {
           isDemo={data.workspace.isDemo}
           onClose={() => setDialog(null)}
           onSave={(user) => {
+            if (dataRef.current?.workspace.id !== data.workspace.id || dataRef.current?.user.id !== data.user.id) return;
             setData((old) =>
               old
                 ? {

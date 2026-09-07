@@ -15,7 +15,7 @@ test('administrative transactions reject a session or global role revoked after 
   try {
     const seed = createWorkspace(runtime.repo, { name: 'Original team', userName: 'Original owner', email: 'owner@race.test', passwordHash: 'existing-password-hash' });
     const token = randomBytes(32).toString('hex'); const tokenHash = createHash('sha256').update(token).digest('hex');
-    const session = () => runtime.repo.run('INSERT INTO sessions VALUES (?,?,?)', tokenHash, seed.userId, Date.now() + 60_000);
+    const session = () => runtime.repo.run('INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,?)', tokenHash, seed.userId, Date.now() + 60_000);
     session(); runtime.repo.run('UPDATE users SET email_verified=1,site_admin=1 WHERE id=?', seed.userId);
     const base = `http://127.0.0.1:${(runtime.server.address() as AddressInfo).port}`;
     const request = (path: string, body: unknown) => fetch(base + '/api' + path, { method: 'PATCH', headers: { Origin: 'http://admin-race.test', Cookie: `mola_session=${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

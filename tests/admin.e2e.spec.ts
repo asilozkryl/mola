@@ -118,7 +118,14 @@ test('member suspension signs out their active browser and preserves existing co
     await expect(row.getByText('Askıda', { exact: true })).toBeVisible();
     await expect(member.page.getByRole('textbox', { name: 'E-posta adresin', exact: true })).toBeVisible();
     const login = await member.page.request.post('/api/auth/login', { headers: { Origin: appOrigin }, data: { email: member.email, password } });
-    expect(login.status()).toBe(403);
+    expect(login.status()).toBe(200);
+    const restricted = await login.json();
+    expect(restricted.user.suspended).toBe(true);
+    expect(restricted.workspace.id).toBe(member.data.workspace.id);
+    expect(restricted.channels).toEqual([]);
+    expect(restricted.members).toEqual([]);
+    expect(restricted.voiceChannels).toEqual([]);
+    expect((await member.page.request.get(`/api/channels/${member.data.channels[0].id}/messages`)).status()).toBe(403);
     await row.getByRole('button', { name: 'Etkinleştir', exact: true }).click();
     await page.getByRole('dialog', { name: 'Üyeyi etkinleştir', exact: true }).getByRole('button', { name: 'Etkinleştir', exact: true }).click();
     await expect(row.getByText('Aktif', { exact: true })).toBeVisible();

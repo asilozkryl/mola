@@ -36,7 +36,13 @@ export function Auth({
         ...(inviteToken ? { inviteToken } : {}),
       });
       sessionStorage.removeItem("mola:logged-out");
-      history.replaceState(null, "", "/");
+      history.replaceState(
+        null,
+        "",
+        mode === "login" && inviteToken
+          ? `/?invite=${encodeURIComponent(inviteToken)}`
+          : "/",
+      );
       onLogin(result);
     } catch (err) {
       setError((err as Error).message);

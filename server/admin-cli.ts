@@ -12,12 +12,12 @@ export function manageSiteAdmin(databasePath: string, operation: 'grant' | 'revo
   const repo = new Repository(openDatabase(databasePath));
   try {
     return repo.transaction(() => {
-      const user = repo.get('SELECT u.*,w.is_demo FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE u.email=?', email.trim().toLowerCase());
-      if (!user || user.is_demo || !user.email_verified || !user.password_hash || user.suspended_at) throw new Error('Mevcut, e-postası doğrulanmış, aktif ve kendi parolası olan gerçek bir hesap gerekli.');
-      if (operation === 'revoke' && user.site_admin && repo.get('SELECT count(*) AS n FROM users u JOIN workspaces w ON w.id=u.workspace_id WHERE u.site_admin=1 AND u.suspended_at IS NULL AND u.email_verified=1 AND u.password_hash IS NOT NULL AND w.is_demo=0')!.n <= 1) throw new Error('Son uygulama yöneticisinin yetkisi kaldırılamaz. Önce başka bir doğrulanmış hesaba grant uygulayın.');
+      const user = repo.get('SELECT u.*,(SELECT wm.workspace_id FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=u.id AND wm.removed_at IS NULL AND wm.suspended_at IS NULL AND w.is_demo=0 ORDER BY wm.joined_at LIMIT 1) AS admin_workspace_id FROM users u WHERE u.email=?', email.trim().toLowerCase());
+      if (!user || !user.admin_workspace_id || !user.email_verified || !user.password_hash || user.suspended_at) throw new Error('Mevcut, e-postası doğrulanmış, aktif ve kendi parolası olan gerçek bir hesap gerekli.');
+      if (operation === 'revoke' && user.site_admin && repo.get('SELECT count(*) AS n FROM users u WHERE u.site_admin=1 AND u.suspended_at IS NULL AND u.email_verified=1 AND u.password_hash IS NOT NULL AND EXISTS (SELECT 1 FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=u.id AND wm.removed_at IS NULL AND wm.suspended_at IS NULL AND w.is_demo=0)')!.n <= 1) throw new Error('Son uygulama yöneticisinin yetkisi kaldırılamaz. Önce başka bir doğrulanmış hesaba grant uygulayın.');
       repo.run('UPDATE users SET site_admin=? WHERE id=?', operation === 'grant' ? 1 : 0, user.id);
       repo.run('DELETE FROM sessions WHERE user_id=?', user.id);
-      recordAudit(repo, null, user.workspace_id, `site_admin.${operation === 'grant' ? 'granted' : 'revoked'}`, 'user', user.id);
+      recordAudit(repo, null, user.admin_workspace_id, `site_admin.${operation === 'grant' ? 'granted' : 'revoked'}`, 'user', user.id);
       return { userId: user.id, granted: operation === 'grant' };
     });
   } finally { repo.close(); }
