@@ -18,6 +18,9 @@ test.use({
   // endpoints on a two-core runner. Keep action/source traces and RTC evidence;
   // full visual traces remain enabled for the ordinary two-person call tests.
   trace: { mode: 'retain-on-failure', screenshots: false, snapshots: false, sources: true },
+  // Seven full clients share two CI CPUs; this transport/recovery scenario is
+  // not a single-client interaction-latency benchmark. Ordinary UI stays at 10s.
+  actionTimeout: process.env.CI ? 30_000 : 10_000,
   launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', ...(forceRelay ? ['--allow-loopback-in-peer-connection'] : [])] },
 });
 
@@ -62,13 +65,23 @@ const connected = (page: Page, count: number) => expect.poll(() => page.evaluate
 const allMediaStopped = (page: Page) => page.evaluate(() => window.__resilience.tracks.every(track => track.readyState === 'ended') && window.__resilience.peers.every(peer => peer.connectionState === 'closed'));
 
 test('six distinct members sustain a full mesh, enforce capacity, and recover after leave and transport loss', async ({ browser, baseURL }) => {
-  test.setTimeout(150000);
+  test.setTimeout(process.env.CI ? 300000 : 150000);
   const contexts: BrowserContext[] = [];
   const pages: Page[] = [];
   const errors: string[] = [];
   const origin = new URL(baseURL!).origin;
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const started = Date.now();
+  const mediaActionTimings: { action: string; elapsedMs: number }[] = [];
+  const measureAction = async (action: string, perform: () => Promise<void>) => {
+    const began = performance.now();
+    try { await perform(); }
+    finally {
+      const elapsedMs = Math.round(performance.now() - began);
+      mediaActionTimings.push({ action, elapsedMs });
+      console.info(`[mesh action] ${action}: ${elapsedMs} ms`);
+    }
+  };
   let inviteToken = '';
   try {
     for (let index = 0; index < 7; index++) {
@@ -118,11 +131,11 @@ test('six distinct members sustain a full mesh, enforce capacity, and recover af
     await pages[6].getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
     await expect(pages[6].getByRole('alert')).toContainText('görüşme dolu');
     expect(await allMediaStopped(pages[6])).toBe(true);
-    await pages[6].getByRole('dialog').getByRole('button', { name: 'Kapat', exact: true }).click();
+    await measureAction('close capacity notice', () => pages[6].getByRole('dialog').getByRole('button', { name: 'Kapat', exact: true }).click());
 
     const presenter = members[0];
-    await presenter.getByRole('button', { name: 'Kamerayı aç', exact: true }).click();
-    await presenter.getByRole('button', { name: 'Ekranı paylaş', exact: true }).click();
+    await measureAction('enable camera', () => presenter.getByRole('button', { name: 'Kamerayı aç', exact: true }).click());
+    await measureAction('share screen', () => presenter.getByRole('button', { name: 'Ekranı paylaş', exact: true }).click());
     await Promise.all(members.slice(1).map(page => expect.poll(() => page.evaluate(async () => {
       const states = await Promise.all(window.__resilience.peers.map(async peer => {
         let camera = 0; let screen = 0; const stats = await peer.getStats();
@@ -162,11 +175,13 @@ test('six distinct members sustain a full mesh, enforce capacity, and recover af
     const report = { generatedAt: new Date().toISOString(), passed: true, forceRelay, members: 6, independentBrowserContexts: 7, connectedEndpoints: 30, bidirectionalPeerPairs: 15, elapsedSeconds: (Date.now() - started) / 1000, repeatedLeaveJoinCycles: 3, verified: ['audio RTP from all five peers at every member', 'camera and screen decoded by five peers simultaneously', 'seventh member rejected and microphone released', 'browser screen-ended preserves camera', 'offline transport cleanup and online rejoin', 'all media and peer connections closed at completion'], transports, inputDevices: 'Chromium fake microphone/camera and moving canvas screen source', syntheticVideoProfile: videoProfile, network: 'one local machine; production HTTPS/WAN and physical-device behavior require separate acceptance' };
     await mkdir('artifacts', { recursive: true });
     await writeFile(`artifacts/media-mesh-${forceRelay ? 'relay' : 'direct'}.json`, JSON.stringify(report, null, 2));
+    await writeFile('artifacts/media-mesh-actions.json', JSON.stringify(mediaActionTimings, null, 2));
     await test.info().attach('mesh-resilience', { body: JSON.stringify(report), contentType: 'application/json' });
   } catch (error) {
     const diagnostics = await Promise.all(pages.map(page => page.evaluate(async () => ({ iceErrors: window.__resilience.iceErrors, peers: await Promise.all(window.__resilience.peers.map(async peer => { const stats = await peer.getStats(); const candidateTypes: string[] = []; stats.forEach(stat => { if (stat.type === 'local-candidate') candidateTypes.push(stat.candidateType); }); return { state: peer.connectionState, ice: peer.iceConnectionState, gathering: peer.iceGatheringState, candidateTypes }; })) })).catch(() => ({ unavailable: true }))));
     await mkdir('artifacts', { recursive: true });
     await writeFile('artifacts/media-mesh-failure.json', JSON.stringify(diagnostics, null, 2));
+    await writeFile('artifacts/media-mesh-actions.json', JSON.stringify(mediaActionTimings, null, 2));
     await test.info().attach('media-failure-diagnostics', { body: JSON.stringify(diagnostics, null, 2), contentType: 'application/json' });
     throw error;
   } finally { await Promise.all(contexts.map(context => context.close())); }
