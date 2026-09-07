@@ -75,6 +75,8 @@ Kendi relay'iniz için `TURN_REALM`, `TURN_PUBLIC_IP`, `TURN_SECRET` ve sunucuda
 
 Coolify'nin uygulama HTTPS sertifikası TURN sertifikası yerine geçmez. Yalnızca TCP443 çıkışına izin veren ağlar için ayrı IP üzerinde TURN/TLS443 gerekebilir. Ayrıntılar [DEPLOYMENT.md](DEPLOYMENT.md#paketlenmiş-turn) içindedir.
 
+Hostinger VPS ve Cloudflare DNS kullanan bu kurulum için [SMTP, DNS-01 sertifikası ve otomatik TURN yenileme rehberi](HOSTINGER.md) hazırdır. `ops/turn-cert-deploy.sh` yalnız belirlenmiş TURN kaynağının doğrulanmış sertifika çiftini yayınlar; Coolify proxy'sini değiştirmez.
+
 ## 4. İlk açılış ve yönetici
 
 Deploy sonrasında uygulama ve yedek servisi sağlıklı olmalı. Tarayıcıda `/api/health` için `{"status":"ok"}`, `/internal/metrics` için **404** beklenir. Prometheus dahili `app:9100` adresinden yetkili veri toplar. Normal ağda operations portuna yetkisiz istek **401** döner.
