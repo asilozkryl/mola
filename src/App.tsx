@@ -74,6 +74,7 @@ import {
 import { Composer } from "./components/Composer";
 import { MessageItem } from "./components/MessageItem";
 import { useCall } from "./lib/useCall";
+import { usePushSubscription } from "./lib/usePushSubscription";
 import { CallPanel } from "./components/CallPanel";
 import { CallSetup } from "./components/CallSetup";
 import ChannelAccessDialog from "./components/ChannelAccessDialog";
@@ -115,6 +116,7 @@ const uniqueMessages = (list: Message[]) =>
 
 export default function App() {
   const [data, setData] = useState<Bootstrap | null>(null);
+  const [bootstrapRevision, setBootstrapRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState("");
   const [demoEnabled, setDemoEnabled] = useState(false);
@@ -124,6 +126,12 @@ export default function App() {
   const [authLink, setAuthLink] = useState(readAuthLink);
   const verificationPending = Boolean(
     data?.emailVerificationRequired && !data.user.emailVerified,
+  );
+  usePushSubscription(
+    data?.user.id,
+    data?.workspace.id,
+    bootstrapRevision,
+    Boolean(data && !verificationPending && !authLink && !data.user.suspended && !data.workspace.suspended),
   );
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -284,6 +292,7 @@ export default function App() {
     channelRef.current = selected;
     dataRef.current = next;
     setData(next);
+    setBootstrapRevision((revision) => revision + 1);
     setChannelId(selected);
     const invite = new URLSearchParams(location.search).get("invite");
     if (invite && !next.workspace.isDemo) {
@@ -2376,6 +2385,7 @@ export default function App() {
       {dialog === "notifications" && (
         <NotificationSettings
           key={`${data.user.id}:${data.workspace.id}`}
+          userId={data.user.id}
           onClose={() => setDialog(null)}
         />
       )}

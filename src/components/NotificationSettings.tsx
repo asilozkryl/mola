@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { Bell, BellOff, Check, Download, Smartphone } from "lucide-react";
-import { api, post } from "../lib/api";
+import { api } from "../lib/api";
+import {
+  loadPushPreferences,
+  pushContextHeaders,
+  savePushSubscription,
+  type PushPreferences,
+} from "../lib/pushSubscription";
 import {
   applicationKey,
   canInstallPwa,
@@ -12,23 +18,11 @@ import {
 import { Modal } from "./ui";
 import "./notification-settings.css";
 
-type Preferences = { pushEnabled: boolean; publicKey: string };
 const permission = () =>
   "Notification" in window ? Notification.permission : "denied";
-async function saveSubscription(subscription: PushSubscription) {
-  const value = subscription.toJSON();
-  if (!value.endpoint || !value.keys?.p256dh || !value.keys?.auth)
-    throw new Error(
-      "Tarayıcı bildirim bilgilerini hazırlayamadı. Yeniden deneyin.",
-    );
-  await post("/notifications/subscriptions", {
-    endpoint: value.endpoint,
-    keys: value.keys,
-  });
-}
 
-export function NotificationSettings({ onClose }: { onClose: () => void }) {
-  const [preferences, setPreferences] = useState<Preferences | null>(null);
+export function NotificationSettings({ userId, onClose }: { userId: string; onClose: () => void }) {
+  const [preferences, setPreferences] = useState<PushPreferences | null>(null);
   const [registered, setRegistered] = useState(false);
   const [browserPermission, setBrowserPermission] = useState(permission);
   const [busy, setBusy] = useState(false);
@@ -41,10 +35,11 @@ export function NotificationSettings({ onClose }: { onClose: () => void }) {
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     void (async () => {
       try {
-        const next = await api<Preferences>("/notifications/preferences");
-        if (!active) return;
+        const next = await loadPushPreferences(userId, controller.signal);
+        if (!active || next.userId !== userId) return;
         setPreferences(next);
         if (!supportsPush() || permission() !== "granted") return;
         const service = await pwaRegistration();
@@ -52,7 +47,7 @@ export function NotificationSettings({ onClose }: { onClose: () => void }) {
         if (!active || !subscription || !next.pushEnabled) return;
         // Rebind an already permitted browser subscription to this authenticated
         // session. A fresh subscription always requires the explicit button.
-        await saveSubscription(subscription);
+        await savePushSubscription(subscription, next, { signal: controller.signal, restore: true });
         if (active) setRegistered(true);
       } catch (err) {
         if (active)
@@ -72,10 +67,11 @@ export function NotificationSettings({ onClose }: { onClose: () => void }) {
     window.addEventListener("focus", refresh);
     return () => {
       active = false;
+      controller.abort();
       window.removeEventListener("mola:install-state", refresh);
       window.removeEventListener("focus", refresh);
     };
-  }, []);
+  }, [userId]);
   const enable = async () => {
     if (!preferences || busy) return;
     setBusy(true);
@@ -100,9 +96,10 @@ export function NotificationSettings({ onClose }: { onClose: () => void }) {
           userVisibleOnly: true,
           applicationServerKey: applicationKey(preferences.publicKey),
         }));
-      await saveSubscription(subscription);
+      await savePushSubscription(subscription, preferences);
       await api("/notifications/preferences", {
         method: "PATCH",
+        headers: pushContextHeaders(preferences),
         body: JSON.stringify({ pushEnabled: true }),
       });
       setPreferences({ ...preferences, pushEnabled: true });
@@ -112,9 +109,11 @@ export function NotificationSettings({ onClose }: { onClose: () => void }) {
       if (created) {
         await api("/notifications/subscriptions", {
           method: "DELETE",
+          headers: pushContextHeaders(preferences),
           body: JSON.stringify({ endpoint: created.endpoint }),
         }).catch(() => {});
-        await created.unsubscribe().catch(() => {});
+        // The origin-wide browser subscription may already belong to a newer
+        // login. Only remove our session-bound server record on failure.
       }
       setError(
         err instanceof Error
@@ -133,6 +132,7 @@ export function NotificationSettings({ onClose }: { onClose: () => void }) {
     try {
       await api("/notifications/preferences", {
         method: "PATCH",
+        headers: pushContextHeaders(preferences),
         body: JSON.stringify({ pushEnabled: false }),
       });
       setPreferences({ ...preferences, pushEnabled: false });
@@ -143,9 +143,11 @@ export function NotificationSettings({ onClose }: { onClose: () => void }) {
         if (subscription) {
           await api("/notifications/subscriptions", {
             method: "DELETE",
+            headers: pushContextHeaders(preferences),
             body: JSON.stringify({ endpoint: subscription.endpoint }),
           });
-          await subscription.unsubscribe();
+          // Retain browser consent. Unsubscribing here could revoke an endpoint
+          // that another tab has rebound to a newer authenticated session.
         }
       }
       setNotice("Hesabının tarayıcı bildirimleri tüm cihazlarda kapatıldı.");

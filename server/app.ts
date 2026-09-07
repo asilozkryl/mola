@@ -591,7 +591,16 @@ export function createApp(options: AppOptions = {}) {
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Bu işlem bulunamadı.')));
   const distDir = resolve('dist');
   if ((production || process.env.SERVE_STATIC === 'true') && existsSync(join(distDir, 'index.html'))) {
-    app.use(express.static(distDir, { index: false, maxAge: '1h',setHeaders:(res,path)=>{if(path.endsWith('sw.js')||path.endsWith('manifest.webmanifest'))res.setHeader('Cache-Control','no-cache');} }));
+    app.use(express.static(distDir, {
+      index: false,
+      maxAge: '1h',
+      setHeaders: (res, path) => {
+        // The worker must bypass CDN storage as well as the browser HTTP cache.
+        // Cloudflare can rewrite a revalidated no-cache script's browser TTL.
+        if (basename(path) === 'sw.js') res.setHeader('Cache-Control', 'no-store');
+        else if (basename(path) === 'manifest.webmanifest') res.setHeader('Cache-Control', 'no-cache');
+      },
+    }));
     app.get('/{*path}', (_req, res) => res.sendFile(join(distDir, 'index.html')));
   }
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {

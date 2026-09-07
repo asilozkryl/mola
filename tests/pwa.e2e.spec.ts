@@ -47,7 +47,9 @@ test('push permission requires a click, subscription rebinds on reopen and disab
   expect((await revoked).status()).toBe(204);
   await expect(page.getByText('Hesabının tarayıcı bildirimleri tüm cihazlarda kapatıldı.', { exact: true })).toBeVisible();
   expect((await (await page.request.get('/api/notifications/preferences')).json()).pushEnabled).toBe(false);
-  expect(await page.evaluate(() => window.__pushUi.unsubscriptions)).toBe(1);
+  // The subscription is shared by the origin, so another tab's new session must
+  // not be unsubscribed by this delayed settings action. Delivery is disabled in DB.
+  expect(await page.evaluate(() => window.__pushUi.unsubscriptions)).toBe(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: test.info().outputPath('notifications-mobile.png') });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

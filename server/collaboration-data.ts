@@ -97,6 +97,26 @@ export function installCollaborationData(
     publicKey: curve.getPublicKey().toString("base64url"),
     privateKey: curve.getPrivateKey().toString("base64url"),
   };
+  // An optimistic request context, never an authentication credential or cookie.
+  const pushSessionBinding = (sessionHash: string) =>
+    createHmac("sha256", key)
+      .update(`mola/push-session/v1:${sessionHash}`)
+      .digest("base64url");
+  const requirePushContext = (req: Request, required = false) => {
+    const expectedUser = req.get("X-User-Id");
+    const expectedSession = req.get("X-Push-Session");
+    // Preserve older explicit clients; automatic restoration always requires context.
+    if (!required && !expectedUser && !expectedSession) return;
+    if (
+      expectedUser !== req.auth!.id ||
+      expectedSession !== pushSessionBinding(req.sessionHash!)
+    )
+      throw new HttpError(
+        409,
+        "Bu tarayıcıdaki oturum değişti. Bildirim ayarlarını yeniden açın.",
+        "PUSH_SESSION_CHANGED",
+      );
+  };
   const requireChannel = (req: Request, channelId: string, write = false) => {
     const actor = repo.session(req.sessionHash!);
     if (!actor || actor.id !== req.auth!.id)
@@ -343,9 +363,12 @@ export function installCollaborationData(
         )?.push_enabled,
       ),
       publicKey: vapidDetails.publicKey,
+      userId: req.auth!.id,
+      sessionBinding: pushSessionBinding(req.sessionHash!),
     }),
   );
   app.patch("/api/notifications/preferences", (req, res) => {
+    requirePushContext(req);
     const { pushEnabled } = parse(
       z.object({ pushEnabled: z.boolean() }).strict(),
       req.body,
@@ -371,9 +394,19 @@ export function installCollaborationData(
           p256dh: z.string().regex(/^[\w-]{87}$/),
           auth: z.string().regex(/^[\w-]{22}$/),
         }),
+        restore: z.boolean().optional(),
       }),
       req.body,
     );
+    requirePushContext(req, input.restore === true);
+    if (
+      input.restore &&
+      !repo.get(
+        "SELECT 1 FROM notification_preferences WHERE user_id=? AND push_enabled=1",
+        req.auth!.id,
+      )
+    )
+      throw new HttpError(409, "Bildirim tercihiniz kapalı.", "PUSH_DISABLED");
     if (
       Buffer.from(input.keys.p256dh, "base64url").length !== 65 ||
       Buffer.from(input.keys.p256dh, "base64url")[0] !== 4 ||
@@ -425,14 +458,16 @@ export function installCollaborationData(
     res.status(201).json({ ok: true });
   });
   app.delete("/api/notifications/subscriptions", (req, res) => {
+    requirePushContext(req);
     const input = parse(
       z.object({ endpoint: z.string().max(2048) }).strict(),
       req.body,
     );
     repo.run(
-      "DELETE FROM push_subscriptions WHERE endpoint=? AND user_id=?",
+      "DELETE FROM push_subscriptions WHERE endpoint=? AND user_id=? AND session_hash=?",
       input.endpoint,
       req.auth!.id,
+      req.sessionHash!,
     );
     res.status(204).end();
   });

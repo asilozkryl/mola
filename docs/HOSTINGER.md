@@ -142,3 +142,9 @@ openssl s_client -connect turn.psychodry.cloud:5349 \
 ```
 
 Uygulamanın kısa süreli TURN kimliklerini kullanarak üç URL'yi ayrı ayrı sınayın; tarayıcıya ortak `TURN_SECRET` verilmez. Bir relay adayı oluşması yalnız allocation adımını gösterir. İki farklı ağdaki fiziksel cihaz arasında zorunlu relay kullanarak iki yönlü ses, kamera ve ekran paylaşımını deneyin; seçilmiş ICE adayının `relay` olduğunu ve medya byte sayaçlarının arttığını doğrulayın. Mobil veri, paylaşımı tarayıcıdan durdurma ve ağ değişimini de deneyin. [WebRTC Trickle ICE örneği](https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/).
+
+## Cloudflare ve uygulama güncellemeleri
+
+Canlı kabulde `/sw.js` yanıtının `Cache-Control: no-store`, `/manifest.webmanifest` yanıtının `Cache-Control: no-cache` olduğunu doğrulayın. Mola bu başlıkları üretim sunucusunda ayarlar; worker kaydı ayrıca `updateViaCache: 'none'` kullanır. Cloudflare, `no-cache` yanıtlarını saklayıp her istekte yeniden doğrulayabilir ve tarayıcıya farklı bir TTL iletebilir. Worker için `no-store` seçilmesi CDN saklamasını da engeller. [Cloudflare önbellek davranışı](https://developers.cloudflare.com/cache/concepts/cache-control/).
+
+Özel bir Cache Rule kullanılıyorsa Mola'nın `/api/*`, `/socket.io/*` ve `/sw.js` yollarındaki origin başlıklarını yok sayan bir saklama kuralı uygulanmamalıdır. Uygulamanın `/api/*` yanıtları `no-store` taşır. Yalnız dosya adında sürüm özeti olan statik paketlerin uzun süre saklanması güvenlidir. Genel alan adı ayarını değiştirirken aynı alandaki diğer uygulamaları etkilemeyin.

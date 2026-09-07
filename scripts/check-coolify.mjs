@@ -194,6 +194,14 @@ try {
   assert.equal((await eventually('HTTPS readiness', async () => { const response = await https('/api/health'); return response.status === 200 && response; })).json().status, 'ok');
   const index = await https('/');
   assert.equal(index.status, 200); assert.match(index.text, /<html/);
+  const worker = await https('/sw.js');
+  assert.equal(worker.status, 200);
+  assert.equal(worker.headers['cache-control'], 'no-store', 'The service worker must bypass HTTP/CDN storage');
+  assert.match(worker.headers['content-type'], /javascript/);
+  const manifest = await https('/manifest.webmanifest');
+  assert.equal(manifest.status, 200);
+  assert.equal(manifest.headers['cache-control'], 'no-cache');
+  assert.equal(manifest.json().scope, '/');
   const publicConfig = (await https('/api/config')).json();
   assert.equal(publicConfig.demoEnabled, false); assert.equal(publicConfig.emailVerificationRequired, true);
   assert.equal(publicConfig.emailDeliveryAvailable, !deferred);

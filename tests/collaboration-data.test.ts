@@ -79,6 +79,7 @@ async function fixture(
         path: string,
         method?: string,
         body?: unknown,
+        headers?: Record<string, string>,
       ) => Promise<Response>;
       socket: (user: UserSession) => Promise<Socket>;
     },
@@ -103,6 +104,7 @@ async function fixture(
     path: string,
     method = "GET",
     body?: unknown,
+    headers?: Record<string, string>,
   ) =>
     fetch(base + "/api" + path, {
       method,
@@ -110,6 +112,7 @@ async function fixture(
         Origin: origin,
         Cookie: user.cookie,
         ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...headers,
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
@@ -676,4 +679,60 @@ test("reassigning a push endpoint cancels the previous account queue instead of 
     )!;
     assert.equal(fresh.user_id, other.id);
     assert.notEqual(fresh.id, job.subscriptionId);
+  }));
+
+test("push restoration is bound to its user, cookie session and latest opt-in", async () =>
+  fixture(async ({ runtime, request, member, other, workspaceId }) => {
+    const curve = createECDH("prime256v1");
+    curve.generateKeys();
+    const input = {
+      endpoint: `https://fcm.googleapis.com/fcm/send/${randomUUID()}`,
+      keys: {
+        p256dh: curve.getPublicKey().toString("base64url"),
+        auth: randomBytes(16).toString("base64url"),
+      },
+      restore: true,
+    };
+    const context = async (user: UserSession) => {
+      const response = await request(user, "/notifications/preferences");
+      assert.equal(response.status, 200);
+      const preferences = await response.json();
+      assert.equal(preferences.userId, user.id);
+      return { "X-User-Id": preferences.userId, "X-Push-Session": preferences.sessionBinding };
+    };
+    await request(member, "/notifications/preferences", "PATCH", { pushEnabled: true });
+    await request(other, "/notifications/preferences", "PATCH", { pushEnabled: true });
+    const original = await context(member);
+    assert.equal((await request(member, "/notifications/subscriptions", "POST", input, original)).status, 201);
+
+    // A new cookie for the same person must not accept work from the old login.
+    const nextSession = session(runtime.repo, member.id, workspaceId);
+    const fresh = await context(nextSession);
+    assert.notEqual(fresh["X-Push-Session"], original["X-Push-Session"]);
+    const stale = await request(nextSession, "/notifications/subscriptions", "POST", input, original);
+    assert.equal(stale.status, 409);
+    assert.equal((await stale.json()).code, "PUSH_SESSION_CHANGED");
+    assert.equal(runtime.repo.get("SELECT session_hash FROM push_subscriptions WHERE endpoint=?", input.endpoint)!.session_hash, member.tokenHash);
+    assert.equal((await request(nextSession, "/notifications/subscriptions", "POST", input, fresh)).status, 201);
+
+    // Even an otherwise valid old session may only delete its own registration.
+    assert.equal((await request(member, "/notifications/subscriptions", "DELETE", { endpoint: input.endpoint }, original)).status, 204);
+    assert.equal(runtime.repo.get("SELECT session_hash FROM push_subscriptions WHERE endpoint=?", input.endpoint)!.session_hash, nextSession.tokenHash);
+
+    // A stale tab cannot reassign the browser endpoint or change the new account's preference.
+    assert.equal((await request(other, "/notifications/subscriptions", "POST", input, fresh)).status, 409);
+    assert.equal((await request(other, "/notifications/preferences", "PATCH", { pushEnabled: false }, fresh)).status, 409);
+    assert.equal((await request(nextSession, "/notifications/preferences", "PATCH", { pushEnabled: false }, original)).status, 409);
+    assert.equal((await request(nextSession, "/notifications/subscriptions", "DELETE", { endpoint: input.endpoint }, original)).status, 409);
+    assert.equal((await (await request(other, "/notifications/preferences")).json()).pushEnabled, true);
+    assert.equal(runtime.repo.get("SELECT session_hash FROM push_subscriptions WHERE endpoint=?", input.endpoint)!.session_hash, nextSession.tokenHash);
+
+    // Turning push off after GET won the race: no delayed automatic registration survives.
+    await request(nextSession, "/notifications/preferences", "PATCH", { pushEnabled: false }, fresh);
+    await request(nextSession, "/notifications/subscriptions", "DELETE", { endpoint: input.endpoint }, fresh);
+    const disabled = await request(nextSession, "/notifications/subscriptions", "POST", input, fresh);
+    assert.equal(disabled.status, 409);
+    assert.equal((await disabled.json()).code, "PUSH_DISABLED");
+    assert.equal(runtime.repo.get("SELECT id FROM push_subscriptions WHERE endpoint=?", input.endpoint), undefined);
+    assert.equal((await request(nextSession, "/notifications/subscriptions", "POST", input)).status, 409);
   }));

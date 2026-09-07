@@ -1,4 +1,14 @@
-# Doğrulama — 7 Eylül 2026
+# Doğrulama — 8 Eylül 2026
+
+## Canlı kabul ve bildirim oturumu düzeltmesi — 8 Eylül
+
+Canlı Mola ve TURN kaynakları sağlıklı. Dış makineden DNS, UDP 3478 STUN Binding ve TLS 5349 sertifika/hostname doğrulaması başarılı; TURN sertifikası 6 Aralık 2026'ya kadar geçerli. Bu kontrol kimlik doğrulamalı allocation veya fiziksel cihaz görüşmesi değildir. Kanıt: `artifacts/live-turn-readiness-20260908.json`.
+
+Canlı HTTP kontrolü `/sw.js` için Cloudflare'ın `no-cache` başlığını `max-age=14400` olarak ilettiğini yakaladı. Edge yanıtı `REVALIDATED` idi ve uygulama zaten `updateViaCache: 'none'` kullanıyordu; eski worker kodunun sunulduğu gözlenmedi. Worker yanıtı CDN saklamasını da engellemek üzere `no-store` yapıldı. Yerel üretim HTTP kontrolü worker/manifest başlıklarını doğruladı; aynı beklentiler Docker/Coolify kabul paketine eklendi. Canlı öncesi/sonrası kayıtlar `artifacts/live-web-readiness-before-20260908.json` ve `artifacts/live-web-readiness-20260908.json` içinde tutulur.
+
+Çıkışta sunucudan silinen push aboneliği, yeniden girişte ayarlar açılmadan geri bağlanmıyordu. Artık başarılı bootstrap, odaklanma ve ağın geri gelmesi, yalnız önceden izin verilmiş mevcut aboneliği yeniden bağlar. Yeni izin veya abonelik oluşturulmaz. Kullanıcı kimliği, oturuma bağlı MAC ve son bildirim tercihi doğrulanır; eski hesap/oturum istekleri POST/PATCH/DELETE işlemlerini başka hesaba taşıyamaz. Abonelik silme oturuma bağlıdır; origin genelindeki tarayıcı aboneliği, başka sekmenin yeni oturumunu iptal etmemek için bu akışlarda sonlandırılmaz.
+
+**110/110 sunucu testi**, **6/6 odaklı tarayıcı testi** (2 yeni yeniden bağlama ve 4 mevcut PWA senaryosu), üretim derlemesi ve TypeScript kontrolü geçti. Altı tarayıcı senaryosu ilk denemede başarılı. İki yeni senaryo ana tarayıcı paketini 62'ye çıkarır; CI altılı medya testini ayrı, kalan 61 senaryoyu birlikte çalıştırır. Bağımsız kaynak incelemesinde engelleyici bulgu yok. Şema v5 korunur, veri geçişi gerekmez. Gerçek cihaz/push sağlayıcısına teslimat kabulü henüz yapılmadı; aşağıdaki 7 Eylül sonuçları önceki sürümün kaydıdır.
 
 ## İşbirliği, görüşme ve hesap geliştirmeleri — şema v5
 

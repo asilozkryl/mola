@@ -47,6 +47,8 @@ Bildirim yalnızca o kanala erişebilen kişilere oluşturulur. Kendi mesajını
 
 Tarayıcı bildirimlerini açmak için sol menüden **Bildirimler ve uygulama → Bu cihazda bildirimleri aç** seçeneğini kullanın ve tarayıcı iznini verin. Her cihaz ayrıca izin ve abonelik ister. **Tüm cihazlarda kapat**, hesabın push tercihini kapatır; uygulama içindeki okunmamış işaretleri devam eder. Oturum kapatıldığında o oturuma bağlı bildirim aboneliği de sunucuda silinir.
 
+Aynı cihazda yeniden giriş yaptığınızda hesabın bildirim tercihi açık, tarayıcı izni verilmiş ve mevcut cihaz aboneliği duruyorsa abonelik yeni oturuma otomatik bağlanır. Ayar ekranını tekrar açmanız gerekmez. Bu işlem yeni bir tarayıcı izni istemez veya cihaz aboneliği oluşturmaz; bunlar yine **Bu cihazda bildirimleri aç** düğmesiyle yapılır. Hesap/oturum değişimi veya bildirimleri kapatma sırasında geciken bir bağlama isteği geçersiz sayılır.
+
 Push bildirimi mesaj metnini taşımaz; yalnız yeni bildirim olduğunu söyler. Bildirime basınca hedef çalışma alanı ve mesaj açılır; uygulama erişimi yeniden kontrol eder. HTTPS ve tarayıcının Web Push desteği gerekir. Engellenmiş izin tarayıcının site ayarlarından yeniden açılır.
 
 ## Taslaklar
