@@ -42,5 +42,6 @@ jobs:
             playwright-report/
             test-results/
             artifacts/coolify-smoke.json
+            artifacts/media-mesh-*.json
           retention-days: 3
           if-no-files-found: ignore

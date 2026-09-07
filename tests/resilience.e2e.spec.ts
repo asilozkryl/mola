@@ -2,6 +2,11 @@ import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 const forceRelay = process.env.MOLA_TEST_FORCE_RELAY === 'true';
+// All seven browsers share one CI machine. Bound the synthetic sources so the
+// full-mesh test measures transport/recovery rather than software video codecs
+// competing with Playwright for CPU. The two-browser call test retains the app's
+// normal 720p camera constraints; these tracks still use real encoded video RTP.
+const videoProfile = { width: 640, height: 360, frameRate: 10 };
 
 declare global {
   interface Window {
@@ -11,7 +16,7 @@ declare global {
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', ...(forceRelay ? ['--allow-loopback-in-peer-connection'] : [])] } });
 
 async function instrument(page: Page) {
-  await page.addInitScript(({ forceRelay }) => {
+  await page.addInitScript(({ forceRelay, videoProfile }) => {
     window.__resilience = { peers: [], tracks: [], sockets: [], screen: null, iceErrors: [] };
     const OriginalPeer = window.RTCPeerConnection;
     window.RTCPeerConnection = class extends OriginalPeer {
@@ -26,19 +31,26 @@ async function instrument(page: Page) {
     };
     const acquire = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async constraints => {
-      const stream = await acquire(constraints); window.__resilience.tracks.push(...stream.getTracks()); return stream;
+      const stream = await acquire(constraints?.video ? { ...constraints, video: {
+        width: { exact: videoProfile.width }, height: { exact: videoProfile.height }, frameRate: { exact: videoProfile.frameRate },
+      } } : constraints);
+      window.__resilience.tracks.push(...stream.getTracks()); return stream;
     };
     navigator.mediaDevices.getDisplayMedia = async () => {
-      const canvas = document.createElement('canvas'); canvas.width = 640; canvas.height = 360;
+      const canvas = document.createElement('canvas'); canvas.width = videoProfile.width; canvas.height = videoProfile.height;
       const drawing = canvas.getContext('2d')!; let frame = 0;
-      const draw = () => { drawing.fillStyle = '#153d36'; drawing.fillRect(0, 0, 640, 360); drawing.fillStyle = '#c0e1ad'; drawing.fillRect(frame++ * 8 % 580, 70, 60, 100); };
-      draw(); const timer = setInterval(draw, 66);
-      const stream = canvas.captureStream(15); const track = stream.getVideoTracks()[0];
+      const draw = () => { drawing.fillStyle = '#153d36'; drawing.fillRect(0, 0, canvas.width, canvas.height); drawing.fillStyle = '#c0e1ad'; drawing.fillRect(frame++ * 8 % (canvas.width - 60), 70, 60, 100); };
+      draw(); const timer = setInterval(draw, 1000 / videoProfile.frameRate);
+      const stream = canvas.captureStream(videoProfile.frameRate); const track = stream.getVideoTracks()[0];
+      // Calling stop() does not dispatch ended. Clean up on either app teardown
+      // or a browser-style screen-ended event so the fixture cannot keep drawing.
+      const stop = track.stop.bind(track);
+      track.stop = () => { clearInterval(timer); stop(); };
       track.addEventListener('ended', () => clearInterval(timer));
       window.__resilience.tracks.push(track); window.__resilience.screen = track;
       return stream;
     };
-  }, { forceRelay });
+  }, { forceRelay, videoProfile });
 }
 const connected = (page: Page, count: number) => expect.poll(() => page.evaluate(() => window.__resilience.peers.filter(peer => peer.connectionState === 'connected').length), { timeout: 30000 }).toBe(count);
 const allMediaStopped = (page: Page) => page.evaluate(() => window.__resilience.tracks.every(track => track.readyState === 'ended') && window.__resilience.peers.every(peer => peer.connectionState === 'closed'));
@@ -138,7 +150,7 @@ test('six distinct members sustain a full mesh, enforce capacity, and recover af
     await Promise.all(members.map(page => page.getByRole('button', { name: 'Görüşmeden ayrıl', exact: true }).click()));
     for (const page of members) expect(await allMediaStopped(page)).toBe(true);
     expect(errors).toEqual([]);
-    const report = { generatedAt: new Date().toISOString(), passed: true, forceRelay, members: 6, independentBrowserContexts: 7, connectedEndpoints: 30, bidirectionalPeerPairs: 15, elapsedSeconds: (Date.now() - started) / 1000, repeatedLeaveJoinCycles: 3, verified: ['audio RTP from all five peers at every member', 'camera and screen decoded by five peers simultaneously', 'seventh member rejected and microphone released', 'browser screen-ended preserves camera', 'offline transport cleanup and online rejoin', 'all media and peer connections closed at completion'], transports, inputDevices: 'Chromium fake microphone/camera and moving canvas screen source', network: 'one local machine; production HTTPS/WAN and physical-device behavior require separate acceptance' };
+    const report = { generatedAt: new Date().toISOString(), passed: true, forceRelay, members: 6, independentBrowserContexts: 7, connectedEndpoints: 30, bidirectionalPeerPairs: 15, elapsedSeconds: (Date.now() - started) / 1000, repeatedLeaveJoinCycles: 3, verified: ['audio RTP from all five peers at every member', 'camera and screen decoded by five peers simultaneously', 'seventh member rejected and microphone released', 'browser screen-ended preserves camera', 'offline transport cleanup and online rejoin', 'all media and peer connections closed at completion'], transports, inputDevices: 'Chromium fake microphone/camera and moving canvas screen source', syntheticVideoProfile: videoProfile, network: 'one local machine; production HTTPS/WAN and physical-device behavior require separate acceptance' };
     await mkdir('artifacts', { recursive: true });
     await writeFile(`artifacts/media-mesh-${forceRelay ? 'relay' : 'direct'}.json`, JSON.stringify(report, null, 2));
     await test.info().attach('mesh-resilience', { body: JSON.stringify(report), contentType: 'application/json' });

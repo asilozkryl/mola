@@ -122,6 +122,8 @@ Test başarılı olduğunda seçilmiş ICE aday türleri, gecikme ve bayt sayaç
 
 Tarayıcılar Chromium'un yapay mikrofon/kamera aygıtlarını ve hareketli bir canvas ekran kaynağını kullanır. Paketleme, WebRTC bağlantısı, kodlama, aktarım ve çözümleme gerçektir; fiziksel mikrofon, kamera ve işletim sistemi ekran seçicisi otomasyonu değildir.
 
+GitHub CI'da yedi tarayıcı aynı makineyi paylaştığı için güncel altı kişilik senaryonun yapay kamera ve ekran kaynakları **640×360 / 10 fps** ile sınırlıdır. Tüm bağlantı, ses/video aktarımı ve yeniden katılma kontrolleri korunur; test bir görüntü kalitesi veya sunucu kapasitesi ölçümü değildir. İki tarayıcılı görüşme testi uygulamanın normal 720p kamera isteğini kullanmaya devam eder. Sonuç JSON'unda `syntheticVideoProfile` bulunur. Yukarıdaki ilk koşu süreleri bu profil değişikliğinden önceki ölçümlerdir.
+
 ## TURN üzerinden zorunlu aktarım
 
 Test ortamında TURN sunucusu ve en az 30 eşzamanlı ayırmaya yetecek relay port aralığı gerekir. Gerçek uygulamanın `/api/rtc/config` uç noktası normal kimlik doğrulamasıyla kısa süreli TURN kimlik bilgilerini üretir.
