@@ -13,7 +13,13 @@ declare global {
     __resilience: { peers: RTCPeerConnection[]; tracks: MediaStreamTrack[]; sockets: WebSocket[]; screen: MediaStreamTrack | null; iceErrors: { code: number; text: string; url: string }[] };
   }
 }
-test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', ...(forceRelay ? ['--allow-loopback-in-peer-connection'] : [])] } });
+test.use({
+  // Recording seven continuously changing pages competes with thirty real RTP
+  // endpoints on a two-core runner. Keep action/source traces and RTC evidence;
+  // full visual traces remain enabled for the ordinary two-person call tests.
+  trace: { mode: 'retain-on-failure', screenshots: false, snapshots: false, sources: true },
+  launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', ...(forceRelay ? ['--allow-loopback-in-peer-connection'] : [])] },
+});
 
 async function instrument(page: Page) {
   await page.addInitScript(({ forceRelay, videoProfile }) => {

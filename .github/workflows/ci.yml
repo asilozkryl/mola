@@ -30,7 +30,19 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
       - run: npx playwright install --with-deps chromium
       - name: Validate six-member media and recovery
-        run: npm run test:e2e -- tests/resilience.e2e.spec.ts
+        run: |
+          mkdir -p artifacts
+          (
+            node -e 'const os = require("node:os"); console.log(JSON.stringify({parallelism:os.availableParallelism(),logicalCpus:os.cpus().length,totalMemory:os.totalmem()}))'
+            while true; do
+              date -u +%FT%TZ
+              ps -eo pid,ppid,comm,pcpu,pmem,rss,nlwp --sort=-pcpu | head -20 || true
+              sleep 5
+            done
+          ) > artifacts/media-processes.log &
+          media_sampler=$!
+          trap 'kill "$media_sampler" 2>/dev/null || true' EXIT
+          npm run test:e2e -- tests/resilience.e2e.spec.ts
       - name: Validate remaining browser workflows
         run: npm run test:e2e -- --grep-invert 'six distinct members sustain a full mesh'
       - run: npm run test:auth
@@ -54,5 +66,6 @@ jobs:
             artifacts/coolify-smoke.json
             artifacts/coolify-deferred-smoke.json
             artifacts/media-mesh-*.json
+            artifacts/media-processes.log
           retention-days: 3
           if-no-files-found: ignore
