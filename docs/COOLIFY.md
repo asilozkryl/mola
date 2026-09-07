@@ -71,7 +71,7 @@ node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'
 
 Hazır bir relay kullanabilir veya **ayrı bir Coolify kaynağı** olarak `/compose.coolify-turn.yaml` dosyasını çalıştırabilirsiniz. Bu kaynak HTTP alan adı yönlendirmesi kullanmaz; TURN portları doğrudan sunucuya açılır.
 
-Kendi relay'iniz için `TURN_REALM`, `TURN_PUBLIC_IP`, `TURN_SECRET` ve sunucudaki mutlak sertifika dizini `TURN_CERTS_PATH` gerekir. Dizin `fullchain.pem` ve `privkey.pem` içermeli; coturn kullanıcısı okuyabilmelidir. Ana uygulamayla aynı TURN sırrını kullanın. DNS, NAT/güvenlik duvarı ve sertifika yenilemesini sağlayıcıda ayarlayın. Portlar TCP/UDP **3478**, TCP **5349**, UDP **49160–49259**. Sertifika yenilendiğinde TURN servisini yeniden başlatın.
+Kendi relay'iniz için `TURN_REALM`, `TURN_PUBLIC_IP` ve `TURN_SECRET` gerekir. Sunucudaki `/data/mola-turn/certs` dizini önceden oluşturulmalı, `fullchain.pem` ve `privkey.pem` içermeli ve coturn kullanıcısı tarafından okunabilmelidir. Coolify 4.3.17 bind kaynaklarında ortam değişkeni interpolasyonunu reddettiği için bu yol Compose dosyasında ve sertifika hook'unda sabittir; ayrı bir `TURN_CERTS_PATH` değişkeni kullanılmaz. Ana uygulamayla aynı TURN sırrını kullanın. DNS, NAT/güvenlik duvarı ve sertifika yenilemesini sağlayıcıda ayarlayın. Portlar TCP/UDP **3478**, TCP **5349**, UDP **49160–49259**. Sertifika yenilendiğinde TURN servisini yeniden başlatın.
 
 Coolify'nin uygulama HTTPS sertifikası TURN sertifikası yerine geçmez. Yalnızca TCP443 çıkışına izin veren ağlar için ayrı IP üzerinde TURN/TLS443 gerekebilir. Ayrıntılar [DEPLOYMENT.md](DEPLOYMENT.md#paketlenmiş-turn) içindedir.
 

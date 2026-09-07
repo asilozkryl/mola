@@ -96,9 +96,10 @@ Hook yalnız `/etc/letsencrypt/live/turn.psychodry.cloud` lineage'ını kabul ed
 ```dotenv
 TURN_REALM=turn.psychodry.cloud
 TURN_PUBLIC_IP=72.62.234.232
-TURN_CERTS_PATH=/data/mola-turn/certs
 TURN_SECRET=<ana Mola kaynağıyla aynı güçlü sır>
 ```
+
+Sertifika bind kaynağı Compose dosyasında `/data/mola-turn/certs` olarak sabittir ve hook'un hedefiyle aynıdır. Coolify 4.3.17 bu kaynakta `${...}` değişken ifadesini reddettiği için `TURN_CERTS_PATH` tanımlamayın. Dizin hook tarafından dağıtımdan önce hazırlanmış olmalıdır.
 
 Sırrı örneğin 48 rastgele byte base64url veya 32 rastgele byte hex olarak üretin ve doğrudan iki kaynağın sır alanlarına aktarın. TURN kaynağını dağıtın. Host terminalinde yalnız bu kaynağın konteynerini belirleyip proje etiketini config ile karşılaştırın:
 

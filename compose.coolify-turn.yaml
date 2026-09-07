@@ -3,9 +3,10 @@
 # Coolify HTTP proxy. DNS for TURN_REALM must resolve to TURN_PUBLIC_IP without
 # an HTTP/CDN proxy. Permit the same ports in the host/provider firewalls.
 # Enable Preserve Repository During Deployment for ops/turn-entrypoint.sh.
-# TURN_CERTS_PATH must be an existing absolute path on the deployment server,
-# containing fullchain.pem and privkey.pem readable by UID/GID 65534. Keep the
-# key private; renew certificates and restart this service after renewal.
+# /data/mola-turn/certs must already exist on the deployment server, containing
+# fullchain.pem and privkey.pem readable by UID/GID 65534. Coolify 4.3.17 rejects
+# environment interpolation in bind sources, so this matches the hook's fixed
+# directory. Keep the key private; restart this service after renewal.
 services:
   turn:
     image: coturn/coturn:4.17.2-r0@sha256:aa68aab64a3b929d57fc2924c98ea447bf996cf8dade2508e7b71eaf23f1f14e
@@ -28,7 +29,7 @@ services:
         read_only: true
         bind: {create_host_path: false}
       - type: bind
-        source: ${TURN_CERTS_PATH:?Set the existing absolute TLS certificate directory on the server}
+        source: /data/mola-turn/certs
         target: /etc/coturn/certs
         read_only: true
         bind: {create_host_path: false}
