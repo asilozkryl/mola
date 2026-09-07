@@ -1,0 +1,200 @@
+# Git-based Coolify Docker Compose application; Compose is the source of truth.
+# Assign ONLY app the domain https://mola.psychodry.cloud:3001 in Coolify.
+# APP_ORIGIN is https://mola.psychodry.cloud (no :3001).
+# Enable Preserve Repository During Deployment for the read-only ops file mounts.
+# No host ports: Coolify's proxy supplies HTTPS. Leave every support service's
+# domain empty, including the private operations listener on app:9100.
+# Run one app replica on one host: SQLite, uploads, and calls are process-local.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      OPS_PORT: 9100
+      DATA_DIR: /app/data
+      APP_ORIGIN: ${APP_ORIGIN:?Set the public HTTPS origin without a trailing slash or internal port}
+      TRUST_PROXY: 1
+      ENABLE_DEMO: "false"
+      REQUIRE_EMAIL_VERIFICATION: "true"
+      TURN_URLS: ${TURN_URLS:?Set reachable TURN URLs}
+      TURN_SECRET: ${TURN_SECRET:?Set the shared TURN authentication secret}
+      OPS_TOKEN_FILE: /run/mola-secrets/ops-token
+      SMTP_HOST: ${SMTP_HOST:?Set the production SMTP host}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:?Set the SMTP user}
+      SMTP_PASS: ${SMTP_PASS:?Set the SMTP password}
+      MAIL_FROM: ${MAIL_FROM:?Set a verified sender address}
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:?Set a stable 32-byte hex mail encryption key}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:?Set an Alertmanager-compatible HTTPS receiver}
+    expose: ["3001"]
+    volumes:
+      - mola_data:/app/data
+      - mola_ops_secrets:/run/mola-secrets
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  backups:
+    # Build independently so another Coolify resource cannot replace a shared tag.
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    command: [node, scripts/backup-runner.mjs]
+    environment:
+      APP_URL: http://app:9100
+      SOURCE_DATA_DIR: /source
+      BACKUP_DIR: /backups
+      BACKUP_STATUS_DIR: /status
+      OPS_TOKEN_FILE: /run/mola-secrets/ops-token
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      OFFSITE_ENABLED: ${OFFSITE_ENABLED:-false}
+    volumes:
+      - mola_data:/source:ro
+      - mola_backups:/backups
+      - mola_backup_status:/status
+      - mola_ops_secrets:/run/mola-secrets:ro
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 130s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:9101/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 150s
+    depends_on:
+      app: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  prometheus:
+    image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+    restart: unless-stopped
+    group_add: ["1000"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=30d"]
+    volumes:
+      - type: bind
+        source: ./ops/coolify-prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ./ops/alerts.yml
+        target: /etc/prometheus/alerts.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - mola_prometheus:/prometheus
+      - mola_ops_secrets:/run/mola-secrets:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:9090/-/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      app: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  alertmanager:
+    image: prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d
+    restart: unless-stopped
+    group_add: ["1000"]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager", "--cluster.listen-address="]
+    volumes:
+      - type: bind
+        source: ./ops/alertmanager.yml
+        target: /etc/alertmanager/alertmanager.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - mola_alertmanager:/alertmanager
+      - mola_ops_secrets:/run/mola-secrets:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:9093/-/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      app: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  restic:
+    # Always present: Coolify need not pass a Compose profile. Disabled mode is
+    # idle and healthy. To enable, set OFFSITE_ENABLED=true and the credentials.
+    image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+    restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    entrypoint: [/bin/sh, /ops/restic-runner.sh]
+    environment:
+      OFFSITE_ENABLED: ${OFFSITE_ENABLED:-false}
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      RESTIC_CACHE_DIR: /tmp/restic
+      RESTIC_INTERVAL_SECONDS: ${RESTIC_INTERVAL_SECONDS:-86400}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+    volumes:
+      - type: bind
+        source: ./ops/restic-runner.sh
+        target: /ops/restic-runner.sh
+        read_only: true
+        bind: {create_host_path: false}
+      - mola_backups:/backups:ro
+      - mola_backup_status:/status
+    read_only: true
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 130s
+    healthcheck:
+      test: [CMD-SHELL, 'test "$${OFFSITE_ENABLED:-true}" = false || { test -s /status/restic-success && test $$(($$(date +%s)-$$(cat /status/restic-success))) -lt $$(($${RESTIC_INTERVAL_SECONDS:-86400}*2+300)); }']
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 300s
+    depends_on:
+      backups: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+# Leave names unqualified: Coolify scopes them to this resource. Never use the
+# same data volume for a preview resource or a second concurrently running app.
+volumes:
+  mola_data:
+  mola_ops_secrets:
+  mola_backups:
+  mola_backup_status:
+  mola_prometheus:
+  mola_alertmanager:

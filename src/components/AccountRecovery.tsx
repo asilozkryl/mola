@@ -1,0 +1,370 @@
+import { useEffect, useState, type FormEvent } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Eye,
+  EyeOff,
+  Mail,
+  ShieldCheck,
+} from "lucide-react";
+import type { Bootstrap } from "../../shared/types";
+import { api, post } from "../lib/api";
+import { clearAuthLink, type AuthLink } from "../lib/auth-links";
+import { AuthLayout } from "./AuthLayout";
+import { IconButton, Spinner } from "./ui";
+
+function LocalMailbox({ url }: { url?: string }) {
+  if (!url) return null;
+  return (
+    <p className="local-mail-note">
+      Yerel deneme ortamı ·{" "}
+      <a href={url} target="_blank" rel="noreferrer">
+        E-posta kutusunu aç
+      </a>
+    </p>
+  );
+}
+
+export function ForgotPassword({ onBack }: { onBack: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
+  const [mailbox, setMailbox] = useState<string>();
+  useEffect(() => {
+    void api<{ localMailboxUrl?: string }>("/config")
+      .then((c) => setMailbox(c.localMailboxUrl))
+      .catch(() => {});
+  }, []);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    const email = new FormData(event.currentTarget).get("email");
+    try {
+      await post("/auth/forgot-password", { email });
+      setSent(true);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <AuthLayout>
+      <span className="recovery-symbol">
+        <Mail size={28} />
+      </span>
+      <span className="auth-greeting">Yeniden buluşalım</span>
+      <h2>{sent ? "E-postanı kontrol et." : "Parolanı yenileyelim."}</h2>
+      <p>
+        {sent
+          ? "Bu adresle bir hesabın varsa parola yenileme bağlantısı yola çıktı. Gelen kutuna ve istenmeyen postalara göz at."
+          : "Hesabına bağlı e-posta adresini yaz. Sana parolanı yenileyebileceğin bir bağlantı gönderelim."}
+      </p>
+      {!sent && (
+        <form onSubmit={submit}>
+          <label>
+            E-posta adresin
+            <input
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="sen@ekibin.com"
+              maxLength={254}
+              required
+            />
+          </label>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="primary-button full-width" disabled={busy}>
+            {busy ? (
+              <Spinner label="Bağlantı hazırlanıyor" />
+            ) : (
+              <>
+                Yenileme bağlantısı gönder
+                <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+        </form>
+      )}
+      {sent && (
+        <p className="recovery-detail" role="status">
+          Bağlantı 15 dakika geçerli. Bu süre dolarsa yeni bir bağlantı
+          isteyebilirsin.
+        </p>
+      )}
+      <button className="auth-text-button recovery-back" onClick={onBack}>
+        <ArrowLeft size={16} /> Girişe dön
+      </button>
+      <LocalMailbox url={mailbox} />
+    </AuthLayout>
+  );
+}
+
+export function AccountRecovery({
+  link,
+  onDone,
+}: {
+  link: AuthLink;
+  onDone: (action: AuthLink["action"]) => void;
+}) {
+  const verify = link.action === "verify-email";
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+  const [show, setShow] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const values = new FormData(event.currentTarget);
+    if (!verify && values.get("password") !== values.get("confirmation")) {
+      setError("Parolalar aynı olmalı. İkinci parolayı kontrol et.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await post(`/auth/${link.action}`, {
+        token: link.token,
+        ...(!verify ? { newPassword: values.get("password") } : {}),
+      });
+      clearAuthLink();
+      setDone(true);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (forgot) return <ForgotPassword onBack={() => onDone("reset-password")} />;
+  return (
+    <AuthLayout>
+      <span className="recovery-symbol">
+        {done ? <Check size={28} /> : <ShieldCheck size={28} />}
+      </span>
+      <span className="auth-greeting">Hesabın güvende</span>
+      <h2>
+        {done
+          ? verify
+            ? "E-postan doğrulandı."
+            : "Yeni parolan hazır."
+          : verify
+            ? "Son bir küçük adım."
+            : "Yeni bir başlangıç."}
+      </h2>
+      <p>
+        {done
+          ? verify
+            ? "Artık ekibinle buluşmaya hazırsın."
+            : "Güvenliğin için açık oturumların kapatıldı. Yeni parolanla giriş yapabilirsin."
+          : verify
+            ? "E-posta adresinin sana ait olduğunu onayla; ardından sohbete katıl."
+            : "En az 12 karakterden oluşan, bu hesaba özel bir parola seç."}
+      </p>
+      {done ? (
+        <button
+          className="primary-button full-width"
+          onClick={() => onDone(link.action)}
+        >
+          Devam et
+          <ArrowRight size={18} />
+        </button>
+      ) : (
+        <form onSubmit={submit}>
+          {!verify && (
+            <>
+              <label>
+                Yeni parola
+                <div className="password-field">
+                  <input
+                    name="password"
+                    type={show ? "text" : "password"}
+                    autoComplete="new-password"
+                    minLength={12}
+                    maxLength={128}
+                    required
+                    placeholder="En az 12 karakter"
+                  />
+                  <IconButton
+                    label={show ? "Parolayı gizle" : "Parolayı göster"}
+                    onClick={() => setShow(!show)}
+                  >
+                    {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </IconButton>
+                </div>
+              </label>
+              <label>
+                Yeni parola tekrar
+                <input
+                  name="confirmation"
+                  type={show ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={12}
+                  maxLength={128}
+                  required
+                  placeholder="Aynı parolayı tekrar yaz"
+                />
+              </label>
+            </>
+          )}
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          {!link.token && (
+            <p className="form-error" role="alert">
+              Bağlantı eksik görünüyor. E-postandaki bağlantının tamamını aç.
+            </p>
+          )}
+          <button
+            className="primary-button full-width"
+            disabled={busy || !link.token}
+          >
+            {busy ? (
+              <Spinner label="İşlem tamamlanıyor" />
+            ) : (
+              <>
+                {verify ? "E-posta adresimi doğrula" : "Parolamı yenile"}
+                <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+        </form>
+      )}
+      {!done && (
+        <button
+          className="auth-text-button recovery-back"
+          onClick={() => (verify ? onDone(link.action) : setForgot(true))}
+        >
+          {verify ? "Hesabıma dön" : "Yeni bağlantı iste"}
+        </button>
+      )}
+    </AuthLayout>
+  );
+}
+
+export function VerificationGate({
+  data,
+  mailbox,
+  onVerified,
+  onLogout,
+}: {
+  data: Bootstrap;
+  mailbox?: string;
+  onVerified: (data: Bootstrap) => void;
+  onLogout: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [cooldown, setCooldown] = useState(0);
+  useEffect(() => {
+    if (!cooldown) return;
+    const timer = window.setTimeout(() => setCooldown((n) => n - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
+  async function perform(action: "check" | "resend" | "logout") {
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      if (action === "logout") await onLogout();
+      else if (action === "resend") {
+        const result = await post<{ message: string }>(
+          "/auth/resend-verification",
+        );
+        setMessage(result.message);
+        setCooldown(60);
+      } else {
+        const result = await api<Bootstrap>("/auth/me");
+        if (result.user.emailVerified) onVerified(result);
+        else
+          setMessage(
+            "Henüz doğrulama gelmedi. E-postandaki bağlantıyı açıp doğrulama düğmesine bas.",
+          );
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <AuthLayout>
+      <span className="recovery-symbol">
+        <Mail size={28} />
+      </span>
+      <span className="auth-greeting">
+        Az kaldı, {data.user.name.split(" ")[0]}
+      </span>
+      <h2>Gelen kutunda buluşalım.</h2>
+      <p>
+        <strong className="verification-email">{data.user.email}</strong>{" "}
+        adresine bir doğrulama bağlantısı gönderdik. Çalışma alanına girmek için
+        e-postandaki adımı tamamla.
+      </p>
+      <div className="verification-steps">
+        <span>
+          <b>1</b>E-postandaki bağlantıyı aç.
+        </span>
+        <span>
+          <b>2</b>E-posta adresini doğrula.
+        </span>
+        <span>
+          <b>3</b>Buraya dön ve sohbete katıl.
+        </span>
+      </div>
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+      {message && (
+        <p className="form-success" role="status">
+          {message}
+        </p>
+      )}
+      <button
+        className="primary-button full-width"
+        disabled={busy}
+        onClick={() => void perform("check")}
+      >
+        {busy ? (
+          <Spinner label="Kontrol ediliyor" />
+        ) : (
+          <>
+            Doğrulamayı tamamladım
+            <ArrowRight size={18} />
+          </>
+        )}
+      </button>
+      <button
+        className="secondary-button full-width recovery-secondary"
+        disabled={busy || cooldown > 0}
+        onClick={() => void perform("resend")}
+      >
+        {cooldown
+          ? `Tekrar gönder (${cooldown} sn)`
+          : "E-postayı tekrar gönder"}
+      </button>
+      <p className="recovery-detail">
+        E-posta ulaşmadıysa istenmeyen posta klasörünü de kontrol et. Bağlantı
+        24 saat geçerli.
+      </p>
+      <button
+        className="auth-text-button recovery-back"
+        disabled={busy}
+        onClick={() => void perform("logout")}
+      >
+        <ArrowLeft size={16} /> Farklı bir hesapla giriş yap
+      </button>
+      <LocalMailbox url={mailbox} />
+    </AuthLayout>
+  );
+}

@@ -1,0 +1,72 @@
+name: mola-local
+services:
+  app:
+    build: .
+    image: mola:local
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: development
+      SERVE_STATIC: "true"
+      PORT: 3001
+      APP_ORIGIN: http://localhost:3000
+      DATA_DIR: /app/data
+      TRUST_PROXY: 0
+      OPS_TOKEN_FILE: /run/mola-secrets/ops-token
+      REQUIRE_EMAIL_VERIFICATION: "true"
+      LOCAL_MAILBOX_URL: http://localhost:8025
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+      SMTP_ALLOW_INSECURE: "true"
+      MAIL_FROM: Mola <noreply@mola.local>
+    ports:
+      - "127.0.0.1:3000:3001"
+    volumes:
+      - mola_local_data:/app/data
+      - mola_ops_secrets:/run/mola-secrets
+    depends_on:
+      mailpit: {condition: service_started}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+  mailpit:
+    image: axllent/mailpit:v1.31.1@sha256:98b916bd3c8d61f7633a52d3ea2f58d00620cb01ca57ab59edde68c347a95365
+    restart: unless-stopped
+    user: "1000:1000"
+    ports: ["127.0.0.1:8025:8025", "127.0.0.1:1025:1025"]
+    environment:
+      MP_MAX_MESSAGES: 500
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  backups:
+    extends: {file: ops/compose.services.yaml, service: backups}
+    volumes:
+      - mola_local_data:/source:ro
+  prometheus:
+    extends: {file: ops/compose.services.yaml, service: prometheus}
+  alertmanager:
+    extends: {file: ops/compose.services.yaml, service: alertmanager}
+    volumes:
+      - ./ops/alertmanager.local.yml:/etc/alertmanager/alertmanager.yml:ro
+  restic:
+    extends: {file: ops/compose.services.yaml, service: restic}
+volumes:
+  mola_local_data:
+  mola_ops_secrets:
+  mola_backups:
+  mola_backup_status:
+  mola_prometheus:
+  mola_alertmanager:

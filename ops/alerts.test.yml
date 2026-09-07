@@ -1,0 +1,61 @@
+rule_files:
+  - /etc/prometheus/alerts.yml
+evaluation_interval: 1m
+tests:
+  - name: backup-staleness-waits-for-two-intervals-and-grace
+    interval: 1m
+    input_series:
+      - series: 'mola_backup_last_success_timestamp_seconds{job="mola-backups",instance="backups:9101"}'
+        values: '0x40'
+      - series: 'mola_backup_interval_seconds{job="mola-backups",instance="backups:9101"}'
+        values: '600x40'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="MolaBackupStale",alertstate="firing"}'
+        eval_time: 20m
+        exp_samples: []
+      - expr: 'ALERTS{alertname="MolaBackupStale",alertstate="firing"}'
+        eval_time: 32m
+        exp_samples:
+          - labels: 'ALERTS{alertname="MolaBackupStale",alertstate="firing",job="mola-backups",instance="backups:9101",severity="critical"}'
+            value: 1
+  - name: failed-backup-does-not-alert-on-brief-startup
+    interval: 1m
+    input_series:
+      - series: 'mola_backup_last_run_success{job="mola-backups",instance="backups:9101"}'
+        values: '0x10'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="MolaBackupFailed",alertstate="firing"}'
+        eval_time: 4m
+        exp_samples: []
+      - expr: 'ALERTS{alertname="MolaBackupFailed",alertstate="firing"}'
+        eval_time: 6m
+        exp_samples:
+          - labels: 'ALERTS{alertname="MolaBackupFailed",alertstate="firing",job="mola-backups",instance="backups:9101",severity="critical"}'
+            value: 1
+  - name: smtp-queue-delay-is-actionable-after-grace
+    interval: 1m
+    input_series:
+      - series: 'mola_mail_pending{job="mola",instance="app:3001"}'
+        values: '1x15'
+      - series: 'mola_mail_oldest_pending_age_seconds{job="mola",instance="app:3001"}'
+        values: '0+60x15'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="MolaMailQueueDelayed",alertstate="firing"}'
+        eval_time: 5m
+        exp_samples: []
+      - expr: 'ALERTS{alertname="MolaMailQueueDelayed",alertstate="firing"}'
+        eval_time: 10m
+        exp_samples:
+          - labels: 'ALERTS{alertname="MolaMailQueueDelayed",alertstate="firing",job="mola",instance="app:3001",severity="warning"}'
+            value: 1
+  - name: disabled-offsite-does-not-alert
+    interval: 1m
+    input_series:
+      - series: 'mola_offsite_enabled{job="mola-backups",instance="backups:9101"}'
+        values: '0x4000'
+      - series: 'mola_offsite_last_success_timestamp_seconds{job="mola-backups",instance="backups:9101"}'
+        values: '0x4000'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="MolaOffsiteBackupStale",alertstate="firing"}'
+        eval_time: 60h
+        exp_samples: []

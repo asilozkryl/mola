@@ -1,0 +1,93 @@
+groups:
+  - name: mola-availability
+    rules:
+      - alert: MolaServiceDown
+        expr: up{job=~"mola|mola-backups|alertmanager"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Mola servisine erişilemiyor: {{ $labels.job }}"
+          description: "İki dakikadır metrik alınamıyor. Konteyner durumunu, ağı ve operations anahtarını kontrol edin."
+      - alert: MolaDatabaseUnavailable
+        expr: mola_database_ready == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Mola veritabanı yanıt vermiyor"
+          description: "Uygulama günlüklerini ve veri diskinin sağlığını kontrol edin."
+      - alert: MolaServerErrors
+        expr: sum(rate(mola_http_requests_total{job="mola",status="5xx"}[5m])) / clamp_min(sum(rate(mola_http_requests_total{job="mola"}[5m])), 0.01) > 0.05 and sum(increase(mola_http_requests_total{job="mola",status="5xx"}[5m])) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mola sunucu hata oranı yükseldi"
+          description: "Son beş dakikada en az altı sunucu hatası ve %5 üzerinde hata oranı görüldü."
+      - alert: MolaDataDiskLow
+        expr: mola_data_disk_available_bytes / mola_data_disk_total_bytes < 0.10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mola veri diskinde boş alan azalıyor"
+          description: "Veri volume'unun bulunduğu dosya sisteminde on dakikadır %10'dan az kullanılabilir alan var. Yedekleri ve disk kapasitesini kontrol edin."
+      - alert: MolaSlowRequests
+        expr: histogram_quantile(0.95, sum by (le) (rate(mola_http_request_duration_seconds_bucket{job="mola"}[5m]))) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mola yanıtları yavaşladı"
+          description: "İsteklerin p95 gecikmesi beş dakikadır bir saniyenin üzerinde. Yükü ve disk işlemlerini inceleyin."
+      - alert: MolaAlertDeliveryFailed
+        expr: sum(increase(alertmanager_notifications_failed_total[10m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alarm bildirimi teslim edilemedi"
+          description: "Alertmanager günlüklerini ve alıcı yapılandırmasını kontrol edin. Bu alarmın kendisi de aynı teslimat kanalına bağlıdır."
+  - name: mola-backups-and-mail
+    rules:
+      - alert: MolaBackupFailed
+        expr: mola_backup_last_run_success == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Mola yedekleme başarısız"
+          description: "Son yedekleme tamamlanamadı. Yedek konteynerinin günlüklerini ve boş disk alanını kontrol edin."
+      - alert: MolaBackupStale
+        expr: time() - mola_backup_last_success_timestamp_seconds > mola_backup_interval_seconds * 2 + 300
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Mola yedeği güncel değil"
+          description: "İki yedekleme aralığı ve beş dakika boyunca doğrulanmış yedek oluşmadı."
+      - alert: MolaOffsiteBackupStale
+        expr: mola_offsite_enabled == 1 and time() - mola_offsite_last_success_timestamp_seconds > 172800
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Harici Mola yedeği güncel değil"
+          description: "Harici yedek etkin fakat son 48 saatte başarılı aktarım yok. Restic konteynerini ve depo erişimini kontrol edin."
+      - alert: MolaMailDeliveryFailed
+        expr: mola_mail_failed > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mola hesap e-postaları teslim edilemedi"
+          description: "Tekrar deneme sınırına ulaşan e-postalar var. SMTP erişimini kontrol edin; kullanıcı yeni bağlantı isteyebilir."
+      - alert: MolaMailQueueDelayed
+        expr: mola_mail_pending > 0 and mola_mail_oldest_pending_age_seconds > 300
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mola e-posta kuyruğu gecikiyor"
+          description: "Hesap e-postası beş dakikadan uzun süredir bekliyor. SMTP bağlantısını ve sağlayıcı sınırlarını kontrol edin."

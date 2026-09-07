@@ -1,0 +1,19 @@
+global:
+  resolve_timeout: 5m
+route:
+  receiver: local-mailbox
+  group_by: [alertname, job]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 4h
+receivers:
+  - name: local-mailbox
+    email_configs:
+      - to: ops@mola.local
+        from: Mola İzleme <monitor@mola.local>
+        smarthost: mailpit:1025
+        require_tls: false
+        send_resolved: true
+inhibit_rules:
+  - source_matchers: ['alertname="MolaServiceDown"', 'job="mola"']
+    target_matchers: ['alertname=~"MolaDatabaseUnavailable|MolaServerErrors|MolaSlowRequests|MolaMailDeliveryFailed|MolaMailQueueDelayed"']

@@ -1,0 +1,97 @@
+services:
+  backups:
+    image: mola:local
+    restart: unless-stopped
+    init: true
+    command: ["node", "scripts/backup-runner.mjs"]
+    environment:
+      APP_URL: http://app:3001
+      SOURCE_DATA_DIR: /source
+      BACKUP_DIR: /backups
+      BACKUP_STATUS_DIR: /status
+      OPS_TOKEN_FILE: /run/mola-secrets/ops-token
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+      OFFSITE_ENABLED: ${OFFSITE_ENABLED:-false}
+    volumes:
+      - mola_data:/source:ro
+      - mola_backups:/backups
+      - mola_backup_status:/status
+      - mola_ops_secrets:/run/mola-secrets:ro
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 130s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:9101/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 150s
+    depends_on:
+      app: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  prometheus:
+    image: prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0
+    restart: unless-stopped
+    group_add: ["1000"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=30d"]
+    ports: ["127.0.0.1:9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+      - mola_prometheus:/prometheus
+      - mola_ops_secrets:/run/mola-secrets:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      app: {condition: service_healthy}
+  alertmanager:
+    image: prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d
+    restart: unless-stopped
+    group_add: ["1000"]
+    ports: ["127.0.0.1:9093:9093"]
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - mola_alertmanager:/alertmanager
+      - mola_ops_secrets:/run/mola-secrets:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      app: {condition: service_healthy}
+  restic:
+    image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+    profiles: [offsite]
+    restart: unless-stopped
+    user: "1000:1000"
+    entrypoint: [/bin/sh, /ops/restic-runner.sh]
+    environment:
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD_FILE: /run/secrets/restic-password
+      RESTIC_CACHE_DIR: /tmp/restic
+      RESTIC_INTERVAL_SECONDS: ${RESTIC_INTERVAL_SECONDS:-86400}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+    volumes:
+      - ./restic-runner.sh:/ops/restic-runner.sh:ro
+      - ${RESTIC_PASSWORD_PATH:-../secrets/restic-password}:/run/secrets/restic-password:ro
+      - mola_backups:/backups:ro
+      - mola_backup_status:/status
+    read_only: true
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      backups: {condition: service_healthy}
+    healthcheck:
+      test: [CMD-SHELL, 'test -s /status/restic-success && test $$(($$(date +%s)-$$(cat /status/restic-success))) -lt $$(($${RESTIC_INTERVAL_SECONDS:-86400}*2+300))']
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 300s

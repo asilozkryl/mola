@@ -1,0 +1,50 @@
+# OPTIONAL separate Coolify Docker Compose resource for self-hosted TURN.
+# Set no HTTP domain: TURN is served directly through the ports below, not the
+# Coolify HTTP proxy. DNS for TURN_REALM must resolve to TURN_PUBLIC_IP without
+# an HTTP/CDN proxy. Permit the same ports in the host/provider firewalls.
+# Enable Preserve Repository During Deployment for ops/turn-entrypoint.sh.
+# TURN_CERTS_PATH must be an existing absolute path on the deployment server,
+# containing fullchain.pem and privkey.pem readable by UID/GID 65534. Keep the
+# key private; renew certificates and restart this service after renewal.
+services:
+  turn:
+    image: coturn/coturn:4.17.2-r0@sha256:aa68aab64a3b929d57fc2924c98ea447bf996cf8dade2508e7b71eaf23f1f14e
+    restart: unless-stopped
+    init: true
+    entrypoint: [/bin/sh, /ops/turn-entrypoint.sh]
+    environment:
+      TURN_REALM: ${TURN_REALM:?Set the relay DNS hostname}
+      TURN_PUBLIC_IP: ${TURN_PUBLIC_IP:?Set the relay server public IPv4 address}
+      TURN_SECRET: ${TURN_SECRET:?Use the same strong TURN secret as the app}
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "5349:5349/tcp"
+      - "49160-49259:49160-49259/udp"
+    volumes:
+      - type: bind
+        source: ./ops/turn-entrypoint.sh
+        target: /ops/turn-entrypoint.sh
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${TURN_CERTS_PATH:?Set the existing absolute TLS certificate directory on the server}
+        target: /etc/coturn/certs
+        read_only: true
+        bind: {create_host_path: false}
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    cap_drop: [ALL]
+    # Required by this image's turnserver file capability even on high ports.
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD-SHELL, 'test -s /tmp/turn.pid && kill -0 "$$(cat /tmp/turn.pid)"']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}

@@ -1,0 +1,21 @@
+global:
+  resolve_timeout: 5m
+route:
+  receiver: operations-webhook
+  group_by: [alertname, job]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+receivers:
+  - name: operations-webhook
+    webhook_configs:
+      - url_file: /run/mola-secrets/alert-webhook-url
+        send_resolved: true
+        max_alerts: 20
+        http_config:
+          follow_redirects: false
+          tls_config:
+            min_version: TLS12
+inhibit_rules:
+  - source_matchers: ['alertname="MolaServiceDown"', 'job="mola"']
+    target_matchers: ['alertname=~"MolaDatabaseUnavailable|MolaServerErrors|MolaSlowRequests|MolaMailDeliveryFailed|MolaMailQueueDelayed"']

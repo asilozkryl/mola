@@ -1,0 +1,6 @@
+{$APP_DOMAIN} {
+	encode zstd gzip
+	@internal path /internal /internal/*
+	respond @internal 404
+	reverse_proxy app:3001
+}
