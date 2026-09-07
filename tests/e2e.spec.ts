@@ -109,13 +109,13 @@ test('a real account can register, send a message, log out and sign in again', a
   await expect(composer).toBeVisible();
   await composer.fill('Hesabımla geri geldiğimde bu mesaj burada olmalı.');
   await page.getByRole('button', { name: 'Mesaj gönder', exact: true }).click();
-  await expect(page.getByText('Hesabımla geri geldiğimde bu mesaj burada olmalı.', { exact: true })).toBeVisible();
+  await expect(page.locator('.message-text').filter({ hasText: /^Hesabımla geri geldiğimde bu mesaj burada olmalı\.$/ })).toBeVisible();
   await page.getByTitle('Profil ve ayarlar', { exact: true }).click();
   await page.getByRole('button', { name: 'Çıkış yap', exact: true }).click();
   await page.getByLabel('E-posta adresin', { exact: true }).fill(email);
   await page.getByLabel('Parola', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Giriş yap', exact: true }).last().click();
-  await expect(page.getByText('Hesabımla geri geldiğimde bu mesaj burada olmalı.', { exact: true })).toBeVisible();
+  await expect(page.locator('.message-text').filter({ hasText: /^Hesabımla geri geldiğimde bu mesaj burada olmalı\.$/ })).toBeVisible();
 });
 
 test('mobile messaging stays within the viewport, including long unbroken text', async ({ page }) => {

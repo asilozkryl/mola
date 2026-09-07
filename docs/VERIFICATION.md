@@ -2,13 +2,17 @@
 
 ## İşbirliği, görüşme ve hesap geliştirmeleri — şema v5
 
-Bu sürümde **104 sunucu testi**, **58 farklı ana tarayıcı senaryosu**, **3 hesap kurtarma** ve **2 genel yönetim** senaryosu doğrulandı: toplam **167 uygulama testi**. TypeScript/Vite üretim derlemesi ve üretim bağımlılık denetimi başarılı; bildirilen açık yok. Aşağıdaki v4 ve daha eski sonuçlar tarihsel kayıttır.
+Bu sürümde **106 sunucu/birim testi**, **59 farklı ana tarayıcı senaryosu**, **3 hesap kurtarma** ve **2 genel yönetim** senaryosu doğrulandı: toplam **170 uygulama testi**. TypeScript/Vite üretim derlemesi ve üretim bağımlılık denetimi başarılı; bildirilen açık yok. Aşağıdaki v4 ve daha eski sonuçlar tarihsel kayıttır.
 
 İlk 57 senaryolu ana koşuda 53 senaryo geçti. Kalıcı okunmamış sayaçları yüzünden değişen üç eski kanal seçicisi ve cihaz listesinin yüklenmesini beklemeyen bir görüşme testi düzeltildi; ilgili 7 görüşme ve 15 mesaj/kanal/işbirliği senaryosu yeniden geçti. Bu son gruba, ilk sayfadan daha eski bir yanıta verilen bağlantının tam yanıtı göstermesi de eklendi. Dört ek gizlilik testi açık arama ve entegrasyon ekranlarına geciken yanıtların iptal edilen erişimi geri getirmediğini doğrular.
+
+İlk Linux CI koşusu altı kişilik görüşmede düğme etkileşimlerinin geciktiğini yakaladı. Katılımcı güncellemelerinin yerel ses analizini yeniden kurması kaldırıldı; destekleyen tarayıcılarda uzak ses seviyesi WebRTC alıcısından okunur. Chromium zaman damgası farkı ve eski tarayıcılar için Web Audio alternatifi ayrıca doğrulandı. Son odaklı koşuda 8 görüşme, değişmeden kalan altı kişilik medya/dayanıklılık ve gerçek hesap senaryosu birlikte **10/10** geçti; altı kişilik senaryo 21,0 saniyede tamamlandı. İki yeni birim testi eski ses ölçümünün konuşma göstergesini açık bırakmasını denetler. Hesap senaryosunun mesaj seçicisi de gönderilmiş mesajı yazma kutusundan ayıracak şekilde sınırlandırıldı.
 
 30 kullanıcı, 600 mesaj ve 1.320 HTTP isteği içeren 30 saniyelik yerel yük kontrolünde hata, mesaj veya socket teslimatı kaybı görülmedi; veritabanı yeniden açıldığında 600 mesaj korundu. HTTP p95 yazma 41,76 ms, listeleme 38,36 ms, arama 91,24 ms; socket mesaj teslimatı p95 41,04 ms. Bu kısa kontrol kapasite garantisi değildir; ölçüm kapsamı ve donanım `artifacts/collaboration-load.json` içindedir.
 
 Canlı geçişten önce **2026-09-07 18:40:04 UTC** tam yedeği alındı: `backup-20260907T184004Z-6023951e`. Doğrulanan paket ayrıca `/root/mola-verification/pre-collaboration-20260907/` dizinine korumalı olarak kopyalandı. Geçiş öncesi SQLite bütünlüğü `ok`, kayıtlar 1 kullanıcı, 1 çalışma alanı, 4 kanal; mesaj ve dosya yok. Geçiş öncesi/sonrası hash, commit ve dağıtım kanıtları Git dışında `artifacts/collaboration-release-proof.json` içinde tutulur.
+
+İlk canlı v5 dağıtımı **19:01:58 UTC** tamamlandı. Korumalı yedekle salt okunur karşılaştırmada kullanıcılar, çalışma alanları, kanallar, mesajlar, dosyalar, üyelikler ve oturumlardaki eski kayıtların hiçbiri kaybolmadı veya değişmedi; yabancı anahtar hatası yok. Yedek sonrası kullanıcı tarafından oluşturulan `deneme` kanalıyla toplam 5 kanal var. Önceden açılmış kullanıcı oturumu ve sona erme zamanı korundu; güvenlik, bildirim, entegrasyon ve görüşme hazırlık ekranları canlı hesapla açıldı.
 
 Bu Windows turunda Docker motoru yanıt vermediği için yerel Docker kabul paketi tekrarlanmadı. Linux Docker derlemesi ve Coolify kabul paketleri CI iş akışının parçasıdır. Web Push tarayıcı testleri kontrollü push hizmeti, görüşme testleri gerçek WebRTC üzerinde yapay medya kullanır; bu tur fiziksel cihaz veya gerçek push sağlayıcısına teslimat testi değildir.
 

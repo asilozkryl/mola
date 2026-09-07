@@ -18,14 +18,18 @@ writeFileSync(audioFixture, wave);
 
 declare global {
   interface Window {
-    __callTest: { peers: RTCPeerConnection[]; tracks: MediaStreamTrack[]; screen: MediaStreamTrack | null };
+    __callTest: { peers: RTCPeerConnection[]; tracks: MediaStreamTrack[]; screen: MediaStreamTrack | null; audioContexts: AudioContext[] };
   }
 }
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-audio-capture=${audioFixture}`] } });
 
 async function instrumentMedia(page: Page) {
   await page.addInitScript(() => {
-    window.__callTest = { peers: [], tracks: [], screen: null };
+    window.__callTest = { peers: [], tracks: [], screen: null, audioContexts: [] };
+    const OriginalAudioContext = window.AudioContext;
+    window.AudioContext = class extends OriginalAudioContext {
+      constructor(options?: AudioContextOptions) { super(options); window.__callTest.audioContexts.push(this); }
+    };
     Object.defineProperty(window, 'documentPictureInPicture', { configurable: true, value: undefined });
     const OriginalConnection = window.RTCPeerConnection;
     window.RTCPeerConnection = class extends OriginalConnection {
@@ -99,12 +103,17 @@ test('two browsers exchange audio, camera and screen, keep audio when minimized,
     await expect.poll(() => inboundBytes(a, '0')).toBeGreaterThan(0);
     await expect.poll(() => inboundBytes(b, '0')).toBeGreaterThan(0);
     for (const page of [a, b]) {
+      await expect(page.locator('.call-person').nth(1)).toHaveClass(/call-person-speaking/);
+      await expect.poll(() => page.evaluate(() => window.__callTest.audioContexts.filter(context => context.state !== 'closed').length)).toBe(1);
+    }
+    for (const page of [a, b]) {
       const audioPrompt = page.getByRole('button', { name: 'Sesi etkinleştir', exact: true });
       if (await audioPrompt.isVisible()) await audioPrompt.click();
       await expect.poll(() => page.locator('audio').evaluateAll(elements => (elements as HTMLAudioElement[]).every(element => !element.paused && !element.muted && element.readyState >= 2))).toBe(true);
     }
 
     await a.getByRole('button', { name: 'Mikrofonu kapat', exact: true }).click();
+    await expect(b.locator('.call-person').nth(1)).not.toHaveClass(/call-person-speaking/);
     expect(await a.evaluate(() => window.__callTest.tracks.filter(t => t.kind === 'audio').every(t => !t.enabled))).toBe(true);
     await a.getByRole('button', { name: 'Mikrofonu aç', exact: true }).click();
     await a.getByRole('button', { name: 'Kamerayı aç', exact: true }).click();
@@ -199,6 +208,28 @@ test('cancelling preflight releases microphone acquired after permission returns
   await page.evaluate(() => window.dispatchEvent(new Event('qa:release-media')));
   await expect.poll(() => page.evaluate(() => window.__callTest.tracks.length > 0 && window.__callTest.tracks.every(track => track.readyState === 'ended'))).toBe(true);
   expect(await page.evaluate(() => window.__callTest.peers.length)).toBe(0);
+});
+
+test('remote speaking falls back to Web Audio when receiver levels are unsupported and releases both graphs', async ({ browser }) => {
+  const contexts = await Promise.all([browser.newContext({ permissions: ['microphone'] }), browser.newContext({ permissions: ['microphone'] })]);
+  try {
+    const a = await contexts[0].newPage(), b = await contexts[1].newPage();
+    await instrumentMedia(a); await instrumentMedia(b);
+    await b.addInitScript(() => { RTCRtpReceiver.prototype.getSynchronizationSources = () => [{ source: 1, rtpTimestamp: 0, timestamp: performance.now() }]; });
+    await a.goto('/');
+    await expect(a.getByText('Her şey güncel', { exact: true })).toBeVisible();
+    await contexts[1].addCookies(await contexts[0].cookies());
+    await b.goto('/');
+    await expect(b.getByText('Her şey güncel', { exact: true })).toBeVisible();
+    await startCall(a); await startCall(b);
+    await Promise.all([waitForConnected(a), waitForConnected(b)]);
+    await expect(b.locator('.call-person').nth(1)).toHaveClass(/call-person-speaking/);
+    await expect.poll(() => b.evaluate(() => window.__callTest.audioContexts.filter(context => context.state !== 'closed').length)).toBe(2);
+    await a.getByRole('button', { name: 'Mikrofonu kapat', exact: true }).click();
+    await expect(b.locator('.call-person').nth(1)).not.toHaveClass(/call-person-speaking/);
+    await b.getByRole('button', { name: 'Görüşmeden ayrıl', exact: true }).click();
+    await expect.poll(() => b.evaluate(() => window.__callTest.audioContexts.every(context => context.state === 'closed'))).toBe(true);
+  } finally { await Promise.all(contexts.map(context => context.close())); }
 });
 
 test('microphone permission denial gives a clear retry state without joining', async ({ page }) => {

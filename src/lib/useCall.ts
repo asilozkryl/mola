@@ -8,6 +8,7 @@ import type {
 } from "../../shared/call-types";
 import { sampleConnectionQuality, type PacketSample } from "./callQuality";
 import { monitorAudio } from "./audioMeter";
+import { receiverAudioLevel } from "./rtcAudioLevel";
 
 export interface CallParticipant extends CallPeer {
   stream: MediaStream | null;
@@ -118,32 +119,96 @@ export function useCall({
   }, []);
 
   useEffect(() => {
-    if (!joined) {
-      setSpeaking({});
-      return;
-    }
-    const streams = peers
-      .filter((p) => p.stream && p.mic)
-      .map((p) => ({ id: p.socketId, stream: p.stream! }));
-    if (localStream && mic) streams.push({ id: "local", stream: localStream });
-    const lastActive: Record<string, number> = {};
-    return monitorAudio(streams, (levels) => {
-      const next: Record<string, boolean> = {};
-      for (const [id, level] of Object.entries(levels)) {
-        if (level >= 0.018) lastActive[id] = performance.now();
-        next[id] = Boolean(
-          lastActive[id] && performance.now() - lastActive[id] < 400,
-        );
-      }
+    setSpeaking((current) =>
+      current.local ? { ...current, local: false } : current,
+    );
+    if (!joined || !localStream || !mic) return;
+    let lastActive = -Infinity;
+    // The microphone graph is independent of remote joins, mute/camera changes
+    // and negotiation events. Recreating it for every peer update is expensive.
+    return monitorAudio([{ id: "local", stream: localStream }], (levels) => {
+      if (levels.local >= 0.018) lastActive = performance.now();
+      const active = performance.now() - lastActive < 400;
       setSpeaking((current) =>
-        Object.keys({ ...current, ...next }).every(
-          (id) => current[id] === next[id],
-        )
-          ? current
-          : next,
+        current.local === active ? current : { ...current, local: active },
       );
     });
-  }, [joined, localStream, peers, mic]);
+  }, [joined, localStream, mic]);
+
+  useEffect(() => {
+    setSpeaking((current) =>
+      Object.keys(current).some((id) => id !== "local")
+        ? { local: current.local }
+        : current,
+    );
+    if (!joined) return;
+    const lastActive: Record<string, number> = {};
+    let fallbackLevels: Record<string, number> = {};
+    let fallbackIds = "";
+    let stopFallback: (() => void) | undefined;
+    const sample = () => {
+      const now = performance.now();
+      const next: Record<string, boolean> = {};
+      const fallback: { id: string; stream: MediaStream }[] = [];
+      for (const [id, peer] of connections.current) {
+        let level = 0;
+        if (peer.user.mic && peer.pc.connectionState === "connected") {
+          const receiver =
+            peer.audio?.receiver ??
+            peer.pc
+              .getReceivers()
+              .find((value) => value.track.kind === "audio");
+          let measured: number | null = null;
+          try {
+            measured = receiverAudioLevel(
+              receiver?.getSynchronizationSources?.(),
+              now,
+              performance.timeOrigin,
+            );
+          } catch {
+            /* A closing receiver can lose its source list. */
+          }
+          if (measured === null) {
+            fallback.push({ id, stream: peer.stream });
+            level = fallbackLevels[id] ?? 0;
+          } else level = measured;
+        } else delete lastActive[id];
+        if (level >= 0.018) lastActive[id] = now;
+        next[id] = lastActive[id] !== undefined && now - lastActive[id] < 400;
+      }
+      const ids = fallback
+        .map((value) => value.id)
+        .sort()
+        .join(",");
+      if (ids !== fallbackIds) {
+        stopFallback?.();
+        fallbackLevels = {};
+        fallbackIds = ids;
+        stopFallback = fallback.length
+          ? monitorAudio(fallback, (levels) => {
+              fallbackLevels = levels;
+            })
+          : undefined;
+      }
+      setSpeaking((current) => {
+        const value: Record<string, boolean> = {
+          ...next,
+          local: current.local,
+        };
+        return Object.keys({ ...current, ...value }).every(
+          (id) => current[id] === value[id],
+        )
+          ? current
+          : value;
+      });
+    };
+    sample();
+    const timer = window.setInterval(sample, 100);
+    return () => {
+      window.clearInterval(timer);
+      stopFallback?.();
+    };
+  }, [joined, peers]);
 
   useEffect(() => {
     if (!joined) {
