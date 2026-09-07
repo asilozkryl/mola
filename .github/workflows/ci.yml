@@ -29,7 +29,10 @@ jobs:
           node --test scripts/check-turn-wan.test.mjs
       - run: npm audit --omit=dev --audit-level=high
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Validate six-member media and recovery
+        run: npm run test:e2e -- tests/resilience.e2e.spec.ts
+      - name: Validate remaining browser workflows
+        run: npm run test:e2e -- --grep-invert 'six distinct members sustain a full mesh'
       - run: npm run test:auth
       - run: npm run test:admin
       - name: Validate monitoring rules

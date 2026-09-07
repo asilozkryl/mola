@@ -10,8 +10,7 @@ export function receiverAudioLevel(
     Number.isFinite(source.audioLevel),
   );
   if (!measured.length) return null;
-  // getSynchronizationSources retains entries for ten seconds. Old packets must
-  // not make a departed or stalled sender appear to keep speaking.
+  // Old measurements must not make a stalled sender appear to keep speaking.
   return Math.max(
     0,
     ...measured
@@ -27,4 +26,42 @@ export function receiverAudioLevel(
       })
       .map((source) => Math.max(0, Math.min(1, source.audioLevel!))),
   );
+}
+
+/** Reads a real, advancing audio measurement. Missing support needs an analyser. */
+export function sampleAudioStats(
+  stats: RTCStatsReport,
+  direction: "local" | "remote",
+  trackId: string | undefined,
+  previous: Map<string, number>,
+  now: number,
+  timeOrigin: number,
+): number | null {
+  let result: number | null = null;
+  stats.forEach((stat) => {
+    if (
+      stat.kind !== "audio" ||
+      stat.type !== (direction === "local" ? "media-source" : "inbound-rtp")
+    )
+      return;
+    if (direction === "local" && stat.trackIdentifier !== trackId) return;
+    const counter =
+      direction === "local"
+        ? (stat.totalSamplesDuration ?? stat.totalAudioEnergy)
+        : (stat.packetsReceived ??
+          stat.totalSamplesReceived ??
+          stat.totalAudioEnergy);
+    if (!Number.isFinite(stat.audioLevel) || !Number.isFinite(counter)) return;
+    const key = `${direction}:${stat.id}`;
+    const last = previous.get(key);
+    previous.set(key, counter);
+    // Stats timestamps advance even when RTP has stalled. Packet/sample progress
+    // is necessary before reusing an audioLevel that may be the last old value.
+    const level =
+      last !== undefined && counter <= last
+        ? 0
+        : receiverAudioLevel([stat], now, timeOrigin);
+    if (level !== null) result = Math.max(result ?? 0, level);
+  });
+  return result;
 }

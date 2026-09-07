@@ -18,14 +18,17 @@ writeFileSync(audioFixture, wave);
 
 declare global {
   interface Window {
-    __callTest: { peers: RTCPeerConnection[]; tracks: MediaStreamTrack[]; screen: MediaStreamTrack | null; audioContexts: AudioContext[] };
+    __delayedCallStats?: { count: number; release: () => void };
+    __callTest: { peers: RTCPeerConnection[]; tracks: MediaStreamTrack[]; screen: MediaStreamTrack | null; audioContexts: AudioContext[]; synchronousSourceReads: number };
   }
 }
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-audio-capture=${audioFixture}`] } });
 
 async function instrumentMedia(page: Page) {
   await page.addInitScript(() => {
-    window.__callTest = { peers: [], tracks: [], screen: null, audioContexts: [] };
+    window.__callTest = { peers: [], tracks: [], screen: null, audioContexts: [], synchronousSourceReads: 0 };
+    const getSources = RTCRtpReceiver.prototype.getSynchronizationSources;
+    RTCRtpReceiver.prototype.getSynchronizationSources = function () { window.__callTest.synchronousSourceReads++; return getSources.call(this); };
     const OriginalAudioContext = window.AudioContext;
     window.AudioContext = class extends OriginalAudioContext {
       constructor(options?: AudioContextOptions) { super(options); window.__callTest.audioContexts.push(this); }
@@ -104,7 +107,9 @@ test('two browsers exchange audio, camera and screen, keep audio when minimized,
     await expect.poll(() => inboundBytes(b, '0')).toBeGreaterThan(0);
     for (const page of [a, b]) {
       await expect(page.locator('.call-person').nth(1)).toHaveClass(/call-person-speaking/);
-      await expect.poll(() => page.evaluate(() => window.__callTest.audioContexts.filter(context => context.state !== 'closed').length)).toBe(1);
+      await expect(page.locator('.call-person').first()).toHaveClass(/call-person-speaking/);
+      await expect.poll(() => page.evaluate(() => window.__callTest.audioContexts.filter(context => context.state !== 'closed').length)).toBe(0);
+      expect(await page.evaluate(() => window.__callTest.synchronousSourceReads)).toBe(0);
     }
     for (const page of [a, b]) {
       const audioPrompt = page.getByRole('button', { name: 'Sesi etkinleştir', exact: true });
@@ -192,6 +197,45 @@ test('preflight tests microphone only on request, releases test capture and join
   expect(await page.evaluate(() => window.__callTest.tracks.every(track => track.readyState === 'ended'))).toBe(true);
 });
 
+test('one stalled stats request leaves other peers and call controls responsive and is ignored after leaving', async ({ browser }) => {
+  const contexts = await Promise.all(Array.from({ length: 3 }, () => browser.newContext({ permissions: ['microphone'] })));
+  try {
+    const pages = await Promise.all(contexts.map(context => context.newPage()));
+    for (const page of pages) await instrumentMedia(page);
+    await pages[0].goto('/');
+    await expect(pages[0].getByText('Her şey güncel', { exact: true })).toBeVisible();
+    for (let index = 1; index < pages.length; index++) {
+      await contexts[index].addCookies(await contexts[0].cookies());
+      await pages[index].goto('/');
+      await expect(pages[index].getByText('Her şey güncel', { exact: true })).toBeVisible();
+    }
+    for (const page of pages) await startCall(page);
+    for (const page of pages) await expect.poll(() => page.evaluate(() => window.__callTest.peers.filter(peer => peer.connectionState === 'connected').length)).toBe(2);
+    const observer = pages[0];
+    await observer.evaluate(async () => {
+      const peer = window.__callTest.peers[0];
+      const report = await peer.getStats();
+      const delayed = window.__delayedCallStats = { count: 0, release: () => {} };
+      peer.getStats = () => new Promise(resolve => {
+        delayed.count++;
+        delayed.release = () => resolve(report);
+      });
+    });
+    await expect.poll(() => observer.evaluate(() => window.__delayedCallStats!.count)).toBe(1);
+    await pages[2].getByRole('button', { name: 'Mikrofonu kapat', exact: true }).click();
+    await expect(observer.locator('.call-person').nth(2)).not.toHaveClass(/call-person-speaking/);
+    await pages[2].getByRole('button', { name: 'Mikrofonu aç', exact: true }).click();
+    await expect(observer.locator('.call-person').nth(2)).toHaveClass(/call-person-speaking/);
+    expect(await observer.evaluate(() => window.__delayedCallStats!.count)).toBe(1);
+    await observer.getByRole('button', { name: 'Mikrofonu kapat', exact: true }).click();
+    await observer.getByRole('button', { name: 'Görüşmeden ayrıl', exact: true }).click();
+    await observer.evaluate(() => window.__delayedCallStats!.release());
+    await expect(observer.locator('.call-person')).toHaveCount(0);
+    expect(await observer.evaluate(() => window.__callTest.tracks.every(track => track.readyState === 'ended') && window.__callTest.peers.every(peer => peer.connectionState === 'closed'))).toBe(true);
+    await expect.poll(() => observer.evaluate(() => window.__callTest.audioContexts.every(context => context.state === 'closed'))).toBe(true);
+  } finally { await Promise.all(contexts.map(context => context.close())); }
+});
+
 test('cancelling preflight releases microphone acquired after permission returns', async ({ page }) => {
   await instrumentMedia(page);
   await page.addInitScript(() => {
@@ -210,12 +254,20 @@ test('cancelling preflight releases microphone acquired after permission returns
   expect(await page.evaluate(() => window.__callTest.peers.length)).toBe(0);
 });
 
-test('remote speaking falls back to Web Audio when receiver levels are unsupported and releases both graphs', async ({ browser }) => {
+test('local and remote speaking fall back to a shared Web Audio graph when audio stats are unsupported and release it', async ({ browser }) => {
   const contexts = await Promise.all([browser.newContext({ permissions: ['microphone'] }), browser.newContext({ permissions: ['microphone'] })]);
   try {
     const a = await contexts[0].newPage(), b = await contexts[1].newPage();
     await instrumentMedia(a); await instrumentMedia(b);
-    await b.addInitScript(() => { RTCRtpReceiver.prototype.getSynchronizationSources = () => [{ source: 1, rtpTimestamp: 0, timestamp: performance.now() }]; });
+    await b.addInitScript(() => {
+      const getStats = RTCPeerConnection.prototype.getStats;
+      RTCPeerConnection.prototype.getStats = async function (...args) {
+        const stats = await getStats.apply(this, args);
+        const filtered = new Map();
+        stats.forEach(stat => { filtered.set(stat.id, stat.kind === 'audio' ? { ...stat, audioLevel: undefined } : stat); });
+        return filtered as RTCStatsReport;
+      };
+    });
     await a.goto('/');
     await expect(a.getByText('Her şey güncel', { exact: true })).toBeVisible();
     await contexts[1].addCookies(await contexts[0].cookies());
@@ -224,7 +276,8 @@ test('remote speaking falls back to Web Audio when receiver levels are unsupport
     await startCall(a); await startCall(b);
     await Promise.all([waitForConnected(a), waitForConnected(b)]);
     await expect(b.locator('.call-person').nth(1)).toHaveClass(/call-person-speaking/);
-    await expect.poll(() => b.evaluate(() => window.__callTest.audioContexts.filter(context => context.state !== 'closed').length)).toBe(2);
+    await expect(b.locator('.call-person').first()).toHaveClass(/call-person-speaking/);
+    await expect.poll(() => b.evaluate(() => window.__callTest.audioContexts.filter(context => context.state !== 'closed').length)).toBe(1);
     await a.getByRole('button', { name: 'Mikrofonu kapat', exact: true }).click();
     await expect(b.locator('.call-person').nth(1)).not.toHaveClass(/call-person-speaking/);
     await b.getByRole('button', { name: 'Görüşmeden ayrıl', exact: true }).click();

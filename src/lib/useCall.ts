@@ -6,9 +6,7 @@ import type {
   CallPreferences,
   ConnectionQuality,
 } from "../../shared/call-types";
-import { sampleConnectionQuality, type PacketSample } from "./callQuality";
-import { monitorAudio } from "./audioMeter";
-import { receiverAudioLevel } from "./rtcAudioLevel";
+import { useCallActivity } from "./useCallActivity";
 
 export interface CallParticipant extends CallPeer {
   stream: MediaStream | null;
@@ -98,8 +96,6 @@ export function useCall({
     startMuted: false,
   });
   const preferencesRef = useRef(preferences);
-  const [speaking, setSpeaking] = useState<Record<string, boolean>>({});
-  const [quality, setQuality] = useState<Record<string, ConnectionQuality>>({});
   const currentChannel = useRef<string | null>(null);
   const joinTarget = useRef<{ id: string; name: string } | null>(null);
   const sessionVersion = useRef(0);
@@ -118,134 +114,12 @@ export function useCall({
     updatePreferences(preferencesRef.current);
   }, []);
 
-  useEffect(() => {
-    setSpeaking((current) =>
-      current.local ? { ...current, local: false } : current,
-    );
-    if (!joined || !localStream || !mic) return;
-    let lastActive = -Infinity;
-    // The microphone graph is independent of remote joins, mute/camera changes
-    // and negotiation events. Recreating it for every peer update is expensive.
-    return monitorAudio([{ id: "local", stream: localStream }], (levels) => {
-      if (levels.local >= 0.018) lastActive = performance.now();
-      const active = performance.now() - lastActive < 400;
-      setSpeaking((current) =>
-        current.local === active ? current : { ...current, local: active },
-      );
-    });
-  }, [joined, localStream, mic]);
-
-  useEffect(() => {
-    setSpeaking((current) =>
-      Object.keys(current).some((id) => id !== "local")
-        ? { local: current.local }
-        : current,
-    );
-    if (!joined) return;
-    const lastActive: Record<string, number> = {};
-    let fallbackLevels: Record<string, number> = {};
-    let fallbackIds = "";
-    let stopFallback: (() => void) | undefined;
-    const sample = () => {
-      const now = performance.now();
-      const next: Record<string, boolean> = {};
-      const fallback: { id: string; stream: MediaStream }[] = [];
-      for (const [id, peer] of connections.current) {
-        let level = 0;
-        if (peer.user.mic && peer.pc.connectionState === "connected") {
-          const receiver =
-            peer.audio?.receiver ??
-            peer.pc
-              .getReceivers()
-              .find((value) => value.track.kind === "audio");
-          let measured: number | null = null;
-          try {
-            measured = receiverAudioLevel(
-              receiver?.getSynchronizationSources?.(),
-              now,
-              performance.timeOrigin,
-            );
-          } catch {
-            /* A closing receiver can lose its source list. */
-          }
-          if (measured === null) {
-            fallback.push({ id, stream: peer.stream });
-            level = fallbackLevels[id] ?? 0;
-          } else level = measured;
-        } else delete lastActive[id];
-        if (level >= 0.018) lastActive[id] = now;
-        next[id] = lastActive[id] !== undefined && now - lastActive[id] < 400;
-      }
-      const ids = fallback
-        .map((value) => value.id)
-        .sort()
-        .join(",");
-      if (ids !== fallbackIds) {
-        stopFallback?.();
-        fallbackLevels = {};
-        fallbackIds = ids;
-        stopFallback = fallback.length
-          ? monitorAudio(fallback, (levels) => {
-              fallbackLevels = levels;
-            })
-          : undefined;
-      }
-      setSpeaking((current) => {
-        const value: Record<string, boolean> = {
-          ...next,
-          local: current.local,
-        };
-        return Object.keys({ ...current, ...value }).every(
-          (id) => current[id] === value[id],
-        )
-          ? current
-          : value;
-      });
-    };
-    sample();
-    const timer = window.setInterval(sample, 100);
-    return () => {
-      window.clearInterval(timer);
-      stopFallback?.();
-    };
-  }, [joined, peers]);
-
-  useEffect(() => {
-    if (!joined) {
-      setQuality({});
-      return;
-    }
-    let cancelled = false,
-      sampling = false;
-    const samples = new Map<string, Map<string, PacketSample>>();
-    const sample = async () => {
-      if (sampling) return;
-      sampling = true;
-      const next: Record<string, ConnectionQuality> = {};
-      await Promise.all(
-        [...connections.current.entries()].map(async ([id, { pc }]) => {
-          if (pc.connectionState !== "connected") return;
-          try {
-            const previous = samples.get(id) ?? new Map<string, PacketSample>();
-            samples.set(id, previous);
-            next[id] = sampleConnectionQuality(await pc.getStats(), previous);
-          } catch {
-            /* The peer may have left while its statistics were pending. */
-          }
-        }),
-      );
-      for (const id of samples.keys())
-        if (!connections.current.has(id)) samples.delete(id);
-      if (!cancelled) setQuality(next);
-      sampling = false;
-    };
-    void sample();
-    const timer = window.setInterval(() => void sample(), 2500);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [joined]);
+  const { speaking, quality } = useCallActivity({
+    joined,
+    localStream,
+    connections,
+    stateRef,
+  });
 
   useEffect(() => {
     setVoiceRoster({ workspaceId, channels: initialVoiceChannels ?? [] });
@@ -296,8 +170,6 @@ export function useCall({
     setLocalStream(null);
     setLocalScreen(null);
     setPeers([]);
-    setSpeaking({});
-    setQuality({});
     setMic(true);
     setCamera(false);
     setSharing(false);
