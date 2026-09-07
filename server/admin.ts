@@ -7,6 +7,7 @@ import { Repository, type Row } from './db.js';
 import { HttpError } from './errors.js';
 import { closeCallRoom, updateCallUser } from './calls.js';
 import type { AuditEvent, SystemAdminData, WorkspaceAdminData } from '../shared/types.js';
+import { canManageWorkspace, canManageChannel, reconcileWorkspaceAccess } from './permissions.js';
 
 const uuid = z.string().uuid();
 const name = z.string().trim().min(2).max(60);
@@ -39,7 +40,7 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
   };
   const teamAdmin = (req: Request) => {
     const actor = currentActor(req);
-    if (actor.suspended_at || actor.membership_suspended_at || actor.membership_removed_at || (actor.role !== 'owner' && !actor.site_admin)) throw new HttpError(403, 'Ekip yönetimine yalnızca çalışma alanı sahibi erişebilir.');
+    if (actor.suspended_at || actor.membership_suspended_at || actor.membership_removed_at || !canManageWorkspace({ role: actor.role, site_admin: actor.site_admin })) throw new HttpError(403, 'Ekip yönetimine yalnızca alan sahibi veya yönetici erişebilir.');
     if (repo.workspace(actor.workspace_id).suspended) throw new HttpError(403, 'Bu çalışma alanı askıya alındı.', 'WORKSPACE_SUSPENDED');
     return actor;
   };
@@ -61,6 +62,7 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
       // The CLI runs outside this event loop. Read authorization under the write lock.
       const actor = system ? siteAdmin(req) : teamAdmin(req);
       target = member(target.id, system ? undefined : actor.workspace_id);
+      if (!system && actor.role !== 'owner' && !actor.site_admin && (target.role === 'admin' || target.role === 'owner')) throw new HttpError(403, 'Yöneticileri yalnızca alan sahibi yönetebilir.');
       if (suspended && (actor.id === target.id || target.site_admin)) throw new HttpError(409, 'Kendi hesabınız veya uygulama yöneticisi askıya alınamaz.');
       if (suspended && (system ? repo.get("SELECT 1 FROM workspace_members WHERE user_id=? AND role='owner' AND removed_at IS NULL", target.id) : target.role === 'owner')) throw new HttpError(409, 'Önce çalışma alanının sahipliğini başka bir aktif üyeye devredin.');
       if (system) repo.run('UPDATE users SET suspended_at=? WHERE id=?', suspended ? new Date().toISOString() : null, target.id);
@@ -97,6 +99,7 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
   app.delete('/api/admin/workspace/members/:id', (req, res) => {
     const removed = repo.transaction(() => {
       const actor = teamAdmin(req); const target = member(req.params.id, actor.workspace_id);
+      if (actor.role !== 'owner' && !actor.site_admin && target.role === 'admin') throw new HttpError(403, 'Yöneticileri yalnızca alan sahibi ekipten çıkarabilir.');
       if (target.id === actor.id || target.site_admin || target.role === 'owner') throw new HttpError(409, 'Alan sahibi, kendi hesabınız veya uygulama yöneticisi ekipten çıkarılamaz.');
       repo.run('UPDATE workspace_members SET removed_at=? WHERE workspace_id=? AND user_id=?', new Date().toISOString(), actor.workspace_id, target.id);
       repo.run('DELETE FROM sessions WHERE user_id=? AND workspace_id=?', target.id, actor.workspace_id);
@@ -125,18 +128,28 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
     // Refresh authorization carried in socket presence; HTTP reads roles per request.
     for (const socket of io.sockets.sockets.values()) if (socket.data.workspaceId === actor.workspace_id) socket.data.user = repo.user(repo.member(socket.data.user.id, actor.workspace_id)!);
     for (const id of [actor.id, input.userId]) updateCallUser(io, actor.workspace_id, repo.user(repo.member(id, actor.workspace_id)!));
+    reconcileWorkspaceAccess(repo, io, actor.workspace_id, input.userId);
     refresh(actor.workspace_id); res.json({ ok: true });
   });
   app.patch('/api/admin/workspace/channels/:id', (req, res) => {
-    const actor = teamAdmin(req);
+    const actor = currentActor(req);
     const input = parse(z.object({ name: channelName.optional(), description: z.string().trim().max(300).optional(), archived: z.boolean().optional() }).strict().refine(value => Object.keys(value).length > 0), req.body);
-    const channel = uuid.safeParse(req.params.id).success ? repo.get("SELECT * FROM channels WHERE id=? AND workspace_id=? AND kind!='dm'", String(req.params.id), actor.workspace_id) : undefined;
+    let channel = uuid.safeParse(req.params.id).success ? repo.get("SELECT * FROM channels WHERE id=? AND workspace_id=? AND kind!='dm'", String(req.params.id), actor.workspace_id) : undefined;
     if (!channel) throw new HttpError(404, 'Kanal bulunamadı.');
+    const channelAdmin = () => {
+      const fresh = currentActor(req);
+      channel = repo.get("SELECT * FROM channels WHERE id=? AND workspace_id=? AND kind!='dm'", String(req.params.id), fresh.workspace_id);
+      if (!channel) throw new HttpError(404, 'Kanal bulunamadı.');
+      if (fresh.membership_suspended_at || fresh.membership_removed_at || repo.workspace(fresh.workspace_id).suspended || !canManageChannel(repo, fresh, channel)) throw new HttpError(403, 'Bu kanalı yönetme yetkiniz yok.');
+      return fresh;
+    };
+    channelAdmin();
     if (input.name && repo.get("SELECT id FROM channels WHERE workspace_id=? AND name=? COLLATE NOCASE AND kind!='dm' AND id!=?", actor.workspace_id, input.name, channel.id)) throw new HttpError(409, 'Bu isimde bir kanal var.');
     repo.transaction(() => {
-      const fresh = teamAdmin(req);
-      repo.run('UPDATE channels SET name=?,description=?,archived_at=? WHERE id=?', input.name ?? channel.name, input.description ?? channel.description, input.archived === undefined ? channel.archived_at : input.archived ? new Date().toISOString() : null, channel.id);
-      recordAudit(repo, fresh, fresh.workspace_id, input.archived === undefined ? 'channel.updated' : input.archived ? 'channel.archived' : 'channel.restored', 'channel', channel.id);
+      const fresh = channelAdmin();
+      const currentChannel = channel!;
+      repo.run('UPDATE channels SET name=?,description=?,archived_at=? WHERE id=?', input.name ?? currentChannel.name, input.description ?? currentChannel.description, input.archived === undefined ? currentChannel.archived_at : input.archived ? new Date().toISOString() : null, currentChannel.id);
+      recordAudit(repo, fresh, fresh.workspace_id, input.archived === undefined ? 'channel.updated' : input.archived ? 'channel.archived' : 'channel.restored', 'channel', currentChannel.id);
     });
     if (input.archived) closeCallRoom(io, channel.id, 'Bu kanal arşivlendi. Görüşme kapatıldı.');
     refresh(actor.workspace_id); res.json({ ok: true });

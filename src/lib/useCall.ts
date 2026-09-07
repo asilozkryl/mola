@@ -2,11 +2,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import type { CallPeer, User, VoiceChannelRoster } from "../../shared/types";
 import { subscribeVoiceRoster } from "./voiceRoster";
+import type {
+  CallPreferences,
+  ConnectionQuality,
+} from "../../shared/call-types";
+import { sampleConnectionQuality, type PacketSample } from "./callQuality";
+import { monitorAudio } from "./audioMeter";
 
 export interface CallParticipant extends CallPeer {
   stream: MediaStream | null;
   screen: MediaStream | null;
   connectionState: RTCPeerConnectionState;
+  speaking?: boolean;
+  quality?: ConnectionQuality;
 }
 interface PeerSession {
   pc: RTCPeerConnection;
@@ -83,6 +91,14 @@ export function useCall({
   const [error, setError] = useState<string | null>(null);
   const [relayConfigured, setRelayConfigured] = useState(true);
   const [mediaBusy, setMediaBusy] = useState(false);
+  const [preferences, updatePreferences] = useState<CallPreferences>({
+    inputDeviceId: "",
+    outputDeviceId: "",
+    startMuted: false,
+  });
+  const preferencesRef = useRef(preferences);
+  const [speaking, setSpeaking] = useState<Record<string, boolean>>({});
+  const [quality, setQuality] = useState<Record<string, ConnectionQuality>>({});
   const currentChannel = useRef<string | null>(null);
   const joinTarget = useRef<{ id: string; name: string } | null>(null);
   const sessionVersion = useRef(0);
@@ -95,6 +111,76 @@ export function useCall({
   const joinedRef = useRef(false);
   const pendingSignals = useRef<CallSignal[]>([]);
   const stateRef = useRef({ mic: true, camera: false, sharing: false });
+
+  const setPreferences = useCallback((patch: Partial<CallPreferences>) => {
+    preferencesRef.current = { ...preferencesRef.current, ...patch };
+    updatePreferences(preferencesRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!joined) {
+      setSpeaking({});
+      return;
+    }
+    const streams = peers
+      .filter((p) => p.stream && p.mic)
+      .map((p) => ({ id: p.socketId, stream: p.stream! }));
+    if (localStream && mic) streams.push({ id: "local", stream: localStream });
+    const lastActive: Record<string, number> = {};
+    return monitorAudio(streams, (levels) => {
+      const next: Record<string, boolean> = {};
+      for (const [id, level] of Object.entries(levels)) {
+        if (level >= 0.018) lastActive[id] = performance.now();
+        next[id] = Boolean(
+          lastActive[id] && performance.now() - lastActive[id] < 400,
+        );
+      }
+      setSpeaking((current) =>
+        Object.keys({ ...current, ...next }).every(
+          (id) => current[id] === next[id],
+        )
+          ? current
+          : next,
+      );
+    });
+  }, [joined, localStream, peers, mic]);
+
+  useEffect(() => {
+    if (!joined) {
+      setQuality({});
+      return;
+    }
+    let cancelled = false,
+      sampling = false;
+    const samples = new Map<string, Map<string, PacketSample>>();
+    const sample = async () => {
+      if (sampling) return;
+      sampling = true;
+      const next: Record<string, ConnectionQuality> = {};
+      await Promise.all(
+        [...connections.current.entries()].map(async ([id, { pc }]) => {
+          if (pc.connectionState !== "connected") return;
+          try {
+            const previous = samples.get(id) ?? new Map<string, PacketSample>();
+            samples.set(id, previous);
+            next[id] = sampleConnectionQuality(await pc.getStats(), previous);
+          } catch {
+            /* The peer may have left while its statistics were pending. */
+          }
+        }),
+      );
+      for (const id of samples.keys())
+        if (!connections.current.has(id)) samples.delete(id);
+      if (!cancelled) setQuality(next);
+      sampling = false;
+    };
+    void sample();
+    const timer = window.setInterval(() => void sample(), 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [joined]);
 
   useEffect(() => {
     setVoiceRoster({ workspaceId, channels: initialVoiceChannels ?? [] });
@@ -145,6 +231,8 @@ export function useCall({
     setLocalStream(null);
     setLocalScreen(null);
     setPeers([]);
+    setSpeaking({});
+    setQuality({});
     setMic(true);
     setCamera(false);
     setSharing(false);
@@ -469,6 +557,9 @@ export function useCall({
         try {
           acquired = await navigator.mediaDevices.getUserMedia({
             audio: {
+              ...(preferencesRef.current.inputDeviceId
+                ? { deviceId: { exact: preferencesRef.current.inputDeviceId } }
+                : {}),
               echoCancellation: true,
               noiseSuppression: true,
               autoGainControl: true,
@@ -485,6 +576,9 @@ export function useCall({
         // Make capture immediately reachable by leave(), including while the RTC
         // configuration request is still in flight.
         local.current = acquired;
+        acquired.getAudioTracks().forEach((track) => {
+          track.enabled = !preferencesRef.current.startMuted;
+        });
         let config: { iceServers: RTCIceServer[]; relayConfigured?: boolean };
         try {
           const response = await fetch("/api/rtc/config", {
@@ -545,6 +639,8 @@ export function useCall({
         setJoined(true);
         setJoining(false);
         joiningRef.current = false;
+        setMic(!preferencesRef.current.startMuted);
+        publishState({ mic: !preferencesRef.current.startMuted });
         updatePeers(ack.peers ?? []);
       } catch (err) {
         stopStream(acquired);
@@ -581,6 +677,81 @@ export function useCall({
     setMic(enabled);
     publishState({ mic: enabled });
   }, [publishState]);
+
+  const selectInputDevice = useCallback(
+    async (deviceId: string) => {
+      if (!joinedRef.current) {
+        setPreferences({ inputDeviceId: deviceId });
+        return;
+      }
+      if (mediaOperation.current)
+        throw new Error("Devam eden cihaz işlemini bekleyin.");
+      mediaOperation.current = true;
+      setMediaBusy(true);
+      const version = sessionVersion.current;
+      let acquired: MediaStream | null = null;
+      const oldTrack = local.current?.getAudioTracks()[0] ?? null;
+      try {
+        acquired = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        });
+        if (version !== sessionVersion.current) {
+          stopStream(acquired);
+          return;
+        }
+        const track = acquired.getAudioTracks()[0];
+        if (!track) throw new Error("Mikrofon bulunamadı.");
+        track.enabled = stateRef.current.mic;
+        const results = await Promise.allSettled(
+          [...connections.current.values()].map((p) =>
+            p.audio?.sender.replaceTrack(track),
+          ),
+        );
+        if (version !== sessionVersion.current) {
+          stopStream(acquired);
+          return;
+        }
+        if (results.some((result) => result.status === "rejected")) {
+          await Promise.allSettled(
+            [...connections.current.values()].map((p) =>
+              p.audio?.sender.replaceTrack(oldTrack),
+            ),
+          );
+          throw new Error("Mikrofon değiştirilemedi. Yeniden deneyin.");
+        }
+        if (oldTrack) {
+          oldTrack.onended = null;
+          local.current?.removeTrack(oldTrack);
+          oldTrack.stop();
+        }
+        local.current?.addTrack(track);
+        track.onended = () => {
+          if (version !== sessionVersion.current) return;
+          setMic(false);
+          publishState({ mic: false });
+          setError(
+            "Mikrofon bağlantısı kesildi. Ses ayarlarından başka bir mikrofon seçin.",
+          );
+        };
+        setLocalStream(new MediaStream(local.current?.getTracks() ?? [track]));
+        setPreferences({ inputDeviceId: deviceId });
+      } catch (err) {
+        stopStream(acquired);
+        if (version === sessionVersion.current)
+          throw new Error(mediaError(err, "microphone"));
+      } finally {
+        mediaOperation.current = false;
+        setMediaBusy(false);
+      }
+    },
+    [setPreferences, publishState],
+  );
 
   const toggleCamera = useCallback(async () => {
     if (!joinedRef.current || mediaOperation.current) return;
@@ -756,7 +927,15 @@ export function useCall({
     joined,
     localStream,
     localScreen,
-    peers,
+    peers: peers.map((peer) => ({
+      ...peer,
+      speaking: Boolean(speaking[peer.socketId]) && peer.mic,
+      quality: quality[peer.socketId],
+    })),
+    localSpeaking: Boolean(speaking.local) && mic,
+    preferences,
+    setPreferences,
+    selectInputDevice,
     mic,
     camera,
     sharing,

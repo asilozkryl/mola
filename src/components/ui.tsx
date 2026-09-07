@@ -44,7 +44,7 @@ export function Avatar({
           .join("")
           .toLocaleUpperCase("tr")}
       </span>
-      {online && <i className="presence-dot" aria-label="Çevrimiçi" />}
+      {online && <i className="presence-dot" role="img" aria-label="Çevrimiçi" />}
     </span>
   );
 }

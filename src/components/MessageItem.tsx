@@ -6,6 +6,7 @@ import {
   FileText,
   MessageSquare,
   MoreHorizontal,
+  Link,
   Pencil,
   Pin,
   SmilePlus,
@@ -28,6 +29,8 @@ export function MessageItem({
   onEdit,
   compact = false,
   readOnly = false,
+  canModerate = false,
+  onCopyLink,
 }: {
   message: Message;
   author?: User;
@@ -41,6 +44,8 @@ export function MessageItem({
   onEdit: (content: string) => Promise<void>;
   compact?: boolean;
   readOnly?: boolean;
+  canModerate?: boolean;
+  onCopyLink: () => void;
 }) {
   const [menu, setMenu] = useState(false);
   const [reacting, setReacting] = useState(false);
@@ -66,6 +71,7 @@ export function MessageItem({
         <div className="message-meta">
           <strong>{author?.name || "Eski üye"}</strong>
           {authorIsSelf && <span className="self-label">sen</span>}
+          {author?.isBot && <span className="bot-label">bot</span>}
           <time
             dateTime={message.createdAt}
             title={new Date(message.createdAt).toLocaleString("tr-TR")}
@@ -176,6 +182,9 @@ export function MessageItem({
         )}
       </div>
       <div className="message-actions">
+        <IconButton label="Mesaj bağlantısını kopyala" onClick={onCopyLink}>
+          <Link size={16} />
+        </IconButton>
         <IconButton
           label="Tepki ekle"
           disabled={readOnly}
@@ -254,17 +263,19 @@ export function MessageItem({
                   <Pencil size={15} />
                   Mesajı düzenle
                 </button>
-                <button
-                  className="danger-text"
-                  onClick={() => {
-                    setDeleting(true);
-                    setMenu(false);
-                  }}
-                >
-                  <Trash2 size={15} />
-                  Mesajı sil
-                </button>
               </>
+            )}
+            {(authorIsSelf || canModerate) && (
+              <button
+                className="danger-text"
+                onClick={() => {
+                  setDeleting(true);
+                  setMenu(false);
+                }}
+              >
+                <Trash2 size={15} />
+                Mesajı sil
+              </button>
             )}
           </div>
         </>

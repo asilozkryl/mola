@@ -1,5 +1,53 @@
 # Doğrulama — 7 Eylül 2026
 
+## İşbirliği, görüşme ve hesap geliştirmeleri — şema v5
+
+Bu sürümde **104 sunucu testi**, **58 farklı ana tarayıcı senaryosu**, **3 hesap kurtarma** ve **2 genel yönetim** senaryosu doğrulandı: toplam **167 uygulama testi**. TypeScript/Vite üretim derlemesi ve üretim bağımlılık denetimi başarılı; bildirilen açık yok. Aşağıdaki v4 ve daha eski sonuçlar tarihsel kayıttır.
+
+İlk 57 senaryolu ana koşuda 53 senaryo geçti. Kalıcı okunmamış sayaçları yüzünden değişen üç eski kanal seçicisi ve cihaz listesinin yüklenmesini beklemeyen bir görüşme testi düzeltildi; ilgili 7 görüşme ve 15 mesaj/kanal/işbirliği senaryosu yeniden geçti. Bu son gruba, ilk sayfadan daha eski bir yanıta verilen bağlantının tam yanıtı göstermesi de eklendi. Dört ek gizlilik testi açık arama ve entegrasyon ekranlarına geciken yanıtların iptal edilen erişimi geri getirmediğini doğrular.
+
+30 kullanıcı, 600 mesaj ve 1.320 HTTP isteği içeren 30 saniyelik yerel yük kontrolünde hata, mesaj veya socket teslimatı kaybı görülmedi; veritabanı yeniden açıldığında 600 mesaj korundu. HTTP p95 yazma 41,76 ms, listeleme 38,36 ms, arama 91,24 ms; socket mesaj teslimatı p95 41,04 ms. Bu kısa kontrol kapasite garantisi değildir; ölçüm kapsamı ve donanım `artifacts/collaboration-load.json` içindedir.
+
+Canlı geçişten önce **2026-09-07 18:40:04 UTC** tam yedeği alındı: `backup-20260907T184004Z-6023951e`. Doğrulanan paket ayrıca `/root/mola-verification/pre-collaboration-20260907/` dizinine korumalı olarak kopyalandı. Geçiş öncesi SQLite bütünlüğü `ok`, kayıtlar 1 kullanıcı, 1 çalışma alanı, 4 kanal; mesaj ve dosya yok. Geçiş öncesi/sonrası hash, commit ve dağıtım kanıtları Git dışında `artifacts/collaboration-release-proof.json` içinde tutulur.
+
+Bu Windows turunda Docker motoru yanıt vermediği için yerel Docker kabul paketi tekrarlanmadı. Linux Docker derlemesi ve Coolify kabul paketleri CI iş akışının parçasıdır. Web Push tarayıcı testleri kontrollü push hizmeti, görüşme testleri gerçek WebRTC üzerinde yapay medya kullanır; bu tur fiziksel cihaz veya gerçek push sağlayıcısına teslimat testi değildir.
+
+| Özellik | Kabul kapsamı | İlgili testler |
+| --- | --- | --- |
+| Özel kanallar ve roller | Alan sahibi/yönetici/moderatör/üye/misafir sınırları; özel içerik için açık üyelik; misafir ataması; erişim iptalinde socket, görüşme, açık arama ve bekleyen entegrasyon sonucu temizliği | `channel-permissions.test.ts`, `channel-permissions.e2e.spec.ts`, `privacy-refresh.e2e.spec.ts` |
+| Veri geçişi | v4 üyelik, oturum, mesaj, DM üyeliği korunur; yeni roller ve özellik tabloları tek transaction içinde oluşur; hata halinde rollback | `permissions-migration.test.ts`, `admin-migration.test.ts` |
+| Bildirim ve okunmamışlar | Kullanıcı/workspace kapsamı, kalıcı okuma işaretleri, silinen mesaj sırası, erişim iptali ve push kuyruğunun tekrar yetkilendirilmesi | `collaboration-data.test.ts`, `collaboration.e2e.spec.ts` |
+| Taslak, arama, bağlantı | Cihazlar arasında taslak sürümü ve çakışma seçimi; filtreli arama; mesaja kalıcı bağlantı | `collaboration-data.test.ts`, `collaboration.e2e.spec.ts`, `draft-isolation.e2e.spec.ts` |
+| Görüşme deneyimi | İsteğe bağlı mikrofon testi, cihaz değişimi, konuşma seviyesi, bağlantı ölçümü, ekran büyütme ve ayrı pencere; özel oda roster izolasyonu | `call-quality.test.ts`, `voice-presence.test.ts`, `calls.e2e.spec.ts` |
+| PWA ve cihaz bildirimi | Yükleme akışı; özel API/sohbetin service worker önbelleğine girmemesi; bildirimlerde içerik ve dış bağlantı izolasyonu | `pwa.test.ts`, `pwa.e2e.spec.ts` |
+| Entegrasyonlar | Kanal kapsamlı ekip botu, GitHub kurulum bilgileri, webhook teslimatı/yineleme/anahtar değişimi/kapatma | `integrations.e2e.spec.ts`, ilgili sunucu testleri |
+| Hesap güvenliği | TOTP kurulumu ve tekrar kullanım reddi, kurtarma kodları, oturum listesi ve oturum iptali | `account-security.test.ts`, `account-security.e2e.spec.ts` |
+
+Yerel doğrulama komutları:
+
+```sh
+npm run typecheck
+npm run build
+npm test
+npm run test:e2e
+npm run test:auth
+npm run test:admin
+npm audit --omit=dev --audit-level=high
+```
+
+Odaklı erişim ve entegrasyon kontrolleri:
+
+```sh
+node --import tsx --test tests/channel-permissions.test.ts tests/permissions-migration.test.ts tests/admin-migration.test.ts
+npx playwright test tests/channel-permissions.e2e.spec.ts tests/integrations.e2e.spec.ts tests/privacy-refresh.e2e.spec.ts
+```
+
+Tarayıcı testleri ayrı geçici veritabanı kullanır. Varsayılan Playwright sunucuları `127.0.0.1:3101` ve `127.0.0.1:5174` portlarını ayırır; aynı yapılandırmayı kullanan test komutlarını eşzamanlı başlatmayın. Ekran kanıtları Git dışında `artifacts/channel-access-{desktop,mobile}.png` ve `artifacts/integration-setup-{desktop,mobile}.png` konumlarına yazılır. Entegrasyon ekranındaki anahtar görüntü kanıtlarında maskelenir.
+
+Üretim kabulünden önce SQLite ve dosyalarla birlikte anahtar materyalinin yedeği alınır. `MAIL_ENCRYPTION_KEY` kullanılıyorsa aynı değer korunur; yerelde oluşturulan `.account-security-key` dosyası yedek paketine dahildir. v5 veritabanına geçtikten sonra eski uygulama imajını tek başına geri açmak desteklenmez; geri dönüş eşleşen uygulama sürümü ve tutarlı yedekle yapılır. Kullanım: [COLLABORATION.md](COLLABORATION.md), [INTEGRATIONS.md](INTEGRATIONS.md), [call-experience.md](call-experience.md).
+
+Google ile giriş bu sürümün kapsamına alınmadı; kullanıcı isteğiyle ertelenmiş durumda.
+
 ## Çoklu çalışma alanı ve sesli oda katılımcıları
 
 Yeni sürüm aynı kimlikle birden fazla ekip üyeliği, davetle katılma, oturuma bağlı workspace geçişi ve sesli odalarda canlı katılımcı listesi ekler. Google ile giriş kullanıcı isteğiyle ertelendi. Kullanım ve şema v4 geçişi: [WORKSPACES.md](WORKSPACES.md).

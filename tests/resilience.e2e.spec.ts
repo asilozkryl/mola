@@ -86,6 +86,7 @@ test('six distinct members sustain a full mesh, enforce capacity, and recover af
     }
     const members = pages.slice(0, 6);
     await Promise.all(members.map(page => page.getByRole('button', { name: 'Bir araya gel', exact: true }).click()));
+    await Promise.all(members.map(page => page.getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click()));
     await Promise.all(members.map(page => connected(page, 5)));
     // Six clients hold thirty RTCPeerConnection endpoints: fifteen bidirectional pairs.
     expect((await Promise.all(members.map(page => page.evaluate(() => window.__resilience.peers.length)))).reduce((sum, count) => sum + count, 0)).toBe(30);
@@ -108,6 +109,7 @@ test('six distinct members sustain a full mesh, enforce capacity, and recover af
     expect(transports.every(member => member.endpoints.length === 5 && member.endpoints.every(endpoint => endpoint.localType && endpoint.remoteType))).toBe(true);
     if (forceRelay) expect(transports.every(member => member.endpoints.every(endpoint => endpoint.localType === 'relay' && endpoint.remoteType === 'relay'))).toBe(true);
     await pages[6].getByRole('button', { name: 'Bir araya gel', exact: true }).click();
+    await pages[6].getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
     await expect(pages[6].getByRole('alert')).toContainText('görüşme dolu');
     expect(await allMediaStopped(pages[6])).toBe(true);
     await pages[6].getByRole('dialog').getByRole('button', { name: 'Kapat', exact: true }).click();
@@ -132,6 +134,7 @@ test('six distinct members sustain a full mesh, enforce capacity, and recover af
       expect(await allMediaStopped(returning)).toBe(true);
       await Promise.all(members.slice(0, 5).map(page => connected(page, 4)));
       await returning.getByRole('button', { name: 'Bir araya gel', exact: true }).click();
+      await returning.getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
       await Promise.all(members.map(page => connected(page, 5)));
     }
 

@@ -9,6 +9,7 @@ export class ApiError extends Error {
     message: string,
     public status: number,
     public code?: string,
+    public details?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -38,6 +39,7 @@ export async function api<T>(
         : body.message || "İşlem tamamlanamadı. Lütfen tekrar deneyin.",
       response.status,
       body.code,
+      body,
     );
   return body as T;
 }

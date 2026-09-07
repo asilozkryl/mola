@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { Server } from 'socket.io';
 import { io as connect, type Socket } from 'socket.io-client';
 import type { User, VoiceRoster } from '../shared/types.js';
-import { closeCallRoom, getVoiceRoster, registerCallHandlers, updateCallUser } from '../server/calls.js';
+import { closeCallRoom, getVoiceRoster, registerCallHandlers, updateCallUser, refreshVoiceAccess } from '../server/calls.js';
 import { subscribeVoiceRoster } from '../src/lib/voiceRoster.js';
 
 function event<T>(socket: Socket, name: string, predicate: (value: T) => boolean = () => true) {
@@ -25,10 +25,12 @@ async function fixture(run: (context: {
   socket: (name: string) => Promise<Socket>;
   voiceIds: Map<string, Set<string>>;
   access: Map<string, Set<string>>;
+  memberAccess: Map<string, Set<string>>;
 }) => Promise<void>) {
   const server = createServer();
   const io = new Server(server);
   const clients: Socket[] = [];
+  const memberAccess = new Map<string, Set<string>>();
   const access = new Map([
     ['alpha', new Set(['voice-a', 'voice-a2', 'text-a', 'dm-a'])],
     ['beta', new Set(['voice-b'])],
@@ -46,8 +48,8 @@ async function fixture(run: (context: {
     void socket.join(`workspace:${workspaceId}`);
     registerCallHandlers(io, socket, {
       user, workspaceId,
-      getVoiceChannelIds: () => [...voiceIds.get(workspaceId)!],
-      canAccessChannel: channelId => access.get(workspaceId)!.has(channelId),
+      getVoiceChannelIds: () => [...voiceIds.get(workspaceId)!].filter(id => !memberAccess.has(name) || memberAccess.get(name)!.has(id)),
+      canAccessChannel: channelId => access.get(workspaceId)!.has(channelId) && (!memberAccess.has(name) || memberAccess.get(name)!.has(channelId)),
     });
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -60,7 +62,7 @@ async function fixture(run: (context: {
     await ready;
     return client;
   };
-  try { await run({ io, socket, voiceIds, access }); }
+  try { await run({ io, socket, voiceIds, access, memberAccess }); }
   finally {
     for (const client of clients) client.disconnect();
     await new Promise<void>(resolve => io.close(() => resolve()));
@@ -72,6 +74,30 @@ async function snapshot(socket: Socket) {
   socket.emit('voice:roster:request');
   return result;
 }
+
+test('private voice presence is filtered on every broadcast and access revocation evicts callers', async () => fixture(async ({ io, socket, memberAccess }) => {
+  memberAccess.set('outsider', new Set(['voice-a2']));
+  const outsider = await socket('outsider');
+  const member = await socket('member');
+  const alice = await socket('alice');
+  const roster = event<VoiceRoster>(outsider, 'voice:roster');
+  assert.equal((await alice.timeout(2500).emitWithAck('call:join', { channelId: 'voice-a' })).ok, true);
+  assert.deepEqual((await roster).channels, [], 'join broadcast must not expose private participants');
+  assert.equal((await snapshot(member)).channels[0].peers[0].user.name, 'alice');
+  const media = event<VoiceRoster>(outsider, 'voice:roster');
+  alice.emit('call:state', { sharing: true });
+  assert.deepEqual((await media).channels, [], 'media broadcasts preserve privacy');
+  memberAccess.set('member', new Set(['voice-a2']));
+  const revoked = event<VoiceRoster>(member, 'voice:roster');
+  await refreshVoiceAccess(io, 'alpha');
+  assert.deepEqual((await revoked).channels, [], 'revoked observers immediately receive an empty replacement');
+  memberAccess.set('alice', new Set(['voice-a2']));
+  const closed = event<{ channelId: string }>(alice, 'call:closed');
+  await refreshVoiceAccess(io, 'alpha');
+  assert.equal((await closed).channelId, 'voice-a');
+  assert.deepEqual(getVoiceRoster(io, 'alpha'), []);
+  assert.equal((await alice.timeout(2500).emitWithAck('call:join', { channelId: 'voice-a' })).ok, false);
+}));
 
 test('voice observers see initial participants, media changes, moves and the last departure without joining a call', async () => fixture(async ({ io, socket }) => {
   const observer = await socket('observer');

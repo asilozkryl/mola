@@ -50,6 +50,7 @@ test('call permission error has no serious or critical accessibility violations'
   });
   await openWorkspace(page);
   await page.getByRole('button', { name: 'Bir araya gel', exact: true }).click();
+  await page.getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Mikrofon izni verilmedi');
   await audit(page, 'dialog, [role="dialog"]');
 });
@@ -57,6 +58,7 @@ test('call permission error has no serious or critical accessibility violations'
 test('active call controls and waiting state have no serious or critical accessibility violations', async ({ page }) => {
   await openWorkspace(page);
   await page.getByRole('button', { name: 'Bir araya gel', exact: true }).click();
+  await page.getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Mikrofonu kapat', exact: true })).toBeVisible();
   await audit(page, '.call-dialog');
   await page.setViewportSize({ width: 390, height: 844 });

@@ -8,12 +8,13 @@ interface CallRegistry {
   channels: Map<string, string>;
   workspaces: Map<string, string>;
   voiceChannels: Set<string>;
+  subscribers: Map<string, { workspaceId: string; sendRoster: () => void; canAccessChannel: (channelId: string) => boolean | Promise<boolean>; leave: () => void }>;
 }
 const registries = new WeakMap<Server, CallRegistry>();
 const MAX_PARTICIPANTS = 6;
 const roomName = (channelId: string) => `call:${channelId}`;
 
-/** Only public voice channels appear in workspace presence. DMs and text calls stay private. */
+/** Filter voice presence by the recipient's current channel access. DMs and text calls stay private. */
 export function getVoiceRoster(io: Server, workspaceId: string, channelIds?: readonly string[]): VoiceChannelRoster[] {
   const registry = registries.get(io);
   if (!registry) return [];
@@ -25,8 +26,27 @@ export function getVoiceRoster(io: Server, workspaceId: string, channelIds?: rea
 }
 
 function publishVoiceRoster(io: Server, workspaceId: string) {
-  const payload: VoiceRoster = { workspaceId, channels: getVoiceRoster(io, workspaceId) };
-  io.to(`workspace:${workspaceId}`).emit('voice:roster', payload);
+  for (const subscriber of registries.get(io)?.subscribers.values() ?? []) {
+    if (subscriber.workspaceId === workspaceId) subscriber.sendRoster();
+  }
+}
+
+/** Recheck call access and replace observers' complete roster after permission changes. */
+export async function refreshVoiceAccess(io: Server, workspaceId: string) {
+  const registry = registries.get(io);
+  if (!registry) return;
+  await Promise.all([...registry.subscribers.entries()].map(async ([socketId, subscriber]) => {
+    if (subscriber.workspaceId !== workspaceId) return;
+    const channelId = registry.channels.get(socketId);
+    if (!channelId) return;
+    let allowed = false;
+    try { allowed = await subscriber.canAccessChannel(channelId); } catch { /* Revoked identities have no access. */ }
+    if (!allowed && registry.channels.get(socketId) === channelId) {
+      io.sockets.sockets.get(socketId)?.emit('call:closed', { channelId, error: 'Bu görüşmeye erişiminiz kaldırıldı.' });
+      subscriber.leave();
+    }
+  }));
+  publishVoiceRoster(io, workspaceId);
 }
 
 /** Keep identity and workspace role changes visible without interrupting media. */
@@ -90,7 +110,7 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
   canAccessChannel: (channelId: string) => boolean | Promise<boolean>;
 }) {
   let registry = registries.get(io);
-  if (!registry) { registry = { rooms: new Map(), channels: new Map(), workspaces: new Map(), voiceChannels: new Set() }; registries.set(io, registry); }
+  if (!registry) { registry = { rooms: new Map(), channels: new Map(), workspaces: new Map(), voiceChannels: new Set(), subscribers: new Map() }; registries.set(io, registry); }
   const { rooms, channels, workspaces, voiceChannels } = registry;
   let joining = false;
   let joinVersion = 0;
@@ -108,9 +128,11 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
     if (voiceChannels.has(channelId) && workspaceId) publishVoiceRoster(io, workspaceId);
   };
   const sendRoster = () => {
+    if (!socket.connected) return;
     const payload: VoiceRoster = { workspaceId: options.workspaceId, channels: getVoiceRoster(io, options.workspaceId, options.getVoiceChannelIds()) };
     socket.emit('voice:roster', payload);
   };
+  registry.subscribers.set(socket.id, { workspaceId: options.workspaceId, sendRoster, canAccessChannel: options.canAccessChannel, leave: () => { joinVersion++; leave(); } });
   socket.on('voice:roster:request', () => {
     if (Date.now() - rosterWindowStart > 10_000) { rosterRequests = 0; rosterWindowStart = Date.now(); }
     if (++rosterRequests <= 20) sendRoster();
@@ -170,7 +192,7 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
   });
 
   socket.on('call:leave', () => { joinVersion++; leave(); });
-  socket.on('disconnect', () => { joinVersion++; leave(); });
+  socket.on('disconnect', () => { registry.subscribers.delete(socket.id); joinVersion++; leave(); });
   socket.on('call:state', (payload: unknown) => {
     if (!payload || typeof payload !== 'object') return;
     if (Date.now() - stateWindowStart > 10_000) { stateChanges = 0; stateWindowStart = Date.now(); }

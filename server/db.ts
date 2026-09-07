@@ -2,7 +2,10 @@ import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { Attachment, Channel, Message, User, Workspace } from '../shared/types.js';
+import type { Attachment, Channel, Message, User, Workspace, WorkspaceRole } from '../shared/types.js';
+import { migrateAccountSecurity } from './account-security.js';
+import { migrateCollaborationData } from './collaboration-data.js';
+import { migrateIntegrations } from './integrations.js';
 
 export type Row = Record<string, any>;
 
@@ -10,7 +13,7 @@ export function openDatabase(path: string) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
-  if (version > 4) { db.close(); throw new Error('This database was created by a newer Mola release. Restore the matching application version.'); }
+  if (version > 5) { db.close(); throw new Error('This database was created by a newer Mola release. Restore the matching application version.'); }
   db.function('fold_text', { deterministic: true }, value => String(value ?? '').normalize('NFKC').toLocaleLowerCase('tr-TR'));
   db.exec(`PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, is_demo INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
@@ -86,6 +89,28 @@ export function openDatabase(path: string) {
     } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
     finally { if (db.isOpen) db.exec('PRAGMA foreign_keys=ON'); }
   }
+  if (version < 5) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      // No table references workspace_members. Rebuild its CHECK constraint while
+      // retaining every active, suspended and removed membership and join date.
+      db.exec(`DROP TRIGGER initial_user_membership;
+        CREATE TABLE workspace_members_v5 (workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL CHECK(role IN ('owner','admin','moderator','member','guest')), joined_at TEXT NOT NULL, suspended_at TEXT, removed_at TEXT, PRIMARY KEY(workspace_id,user_id));
+        INSERT INTO workspace_members_v5 SELECT workspace_id,user_id,role,joined_at,suspended_at,removed_at FROM workspace_members;
+        DROP TABLE workspace_members;
+        ALTER TABLE workspace_members_v5 RENAME TO workspace_members;
+        CREATE INDEX idx_workspace_members_user ON workspace_members(user_id,removed_at);
+        CREATE TRIGGER initial_user_membership AFTER INSERT ON users BEGIN INSERT INTO workspace_members(workspace_id,user_id,role,joined_at) VALUES(NEW.workspace_id,NEW.id,NEW.role,NEW.created_at); END;
+        ALTER TABLE channels ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public','private'));
+        UPDATE channels SET visibility='private' WHERE kind='dm';
+        CREATE INDEX idx_channel_members_user ON channel_members(user_id,channel_id);`);
+      migrateAccountSecurity(db);
+      migrateCollaborationData(db);
+      migrateIntegrations(db);
+      if (db.prepare('PRAGMA foreign_key_check').all().length > 0) throw new Error('Permissions migration found invalid references. Restore a consistent database backup.');
+      db.exec('PRAGMA user_version=5; COMMIT;');
+    } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
+  }
   return db;
 }
 
@@ -119,21 +144,21 @@ export class Repository {
     try { const result = fn(); this.db.exec('COMMIT'); return result; }
     catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
-  user(row: Row): User { return { id: row.id, name: row.name, email: row.email, color: row.color, role: row.role, status: row.status || '', emailVerified: Boolean(row.email_verified), siteAdmin: Boolean(row.site_admin), suspended: Boolean(row.suspended_at || row.membership_suspended_at || row.membership_removed_at) }; }
+  user(row: Row): User { return { id: row.id, name: row.name, email: row.email, color: row.color, role: row.role, status: row.status || '', emailVerified: Boolean(row.email_verified), siteAdmin: Boolean(row.site_admin), suspended: Boolean(row.suspended_at || row.membership_suspended_at || row.membership_removed_at), ...(this.get('SELECT 1 FROM bot_accounts WHERE user_id=?', row.id) ? { isBot: true } : {}) }; }
   member(userId: string, workspaceId: string): Row | undefined { return this.get('SELECT u.*,wm.workspace_id,wm.role,wm.joined_at,wm.suspended_at AS membership_suspended_at,wm.removed_at AS membership_removed_at FROM users u JOIN workspace_members wm ON wm.user_id=u.id WHERE u.id=? AND wm.workspace_id=?', userId, workspaceId); }
   members(workspaceId: string): Row[] { return this.all('SELECT u.*,wm.workspace_id,wm.role,wm.joined_at,wm.suspended_at AS membership_suspended_at,wm.removed_at AS membership_removed_at FROM users u JOIN workspace_members wm ON wm.user_id=u.id WHERE wm.workspace_id=? ORDER BY wm.joined_at,u.id', workspaceId); }
   session(hash: string): Row | undefined { return this.get('SELECT u.*,s.workspace_id,wm.role,wm.suspended_at AS membership_suspended_at,wm.removed_at AS membership_removed_at,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id AND wm.workspace_id=s.workspace_id WHERE s.token_hash=? AND s.expires_at>?', hash, Date.now()); }
-  workspaces(userId: string) { return this.all('SELECT w.*,wm.role,wm.suspended_at AS membership_suspended_at FROM workspaces w JOIN workspace_members wm ON wm.workspace_id=w.id WHERE wm.user_id=? AND wm.removed_at IS NULL ORDER BY wm.joined_at,w.id', userId).map(row => ({ ...this.workspace(row.id), role: row.role as 'owner' | 'member', membershipSuspended: Boolean(row.membership_suspended_at) })); }
+  workspaces(userId: string) { return this.all('SELECT w.*,wm.role,wm.suspended_at AS membership_suspended_at FROM workspaces w JOIN workspace_members wm ON wm.workspace_id=w.id WHERE wm.user_id=? AND wm.removed_at IS NULL ORDER BY wm.joined_at,w.id', userId).map(row => ({ ...this.workspace(row.id), role: row.role as WorkspaceRole, membershipSuspended: Boolean(row.membership_suspended_at) })); }
   workspace(id: string): Workspace { const row = this.get('SELECT * FROM workspaces WHERE id=?', id)!; return { id: row.id, name: row.name, isDemo: Boolean(row.is_demo), suspended: Boolean(row.suspended_at) }; }
   canAccessChannel(userId: string, channelId: string, workspaceId?: string): boolean {
-    return Boolean(this.get(`SELECT c.id FROM channels c JOIN workspace_members wm ON wm.workspace_id=c.workspace_id JOIN users u ON u.id=wm.user_id JOIN workspaces w ON w.id=c.workspace_id WHERE c.id=? AND u.id=? AND (? IS NULL OR c.workspace_id=?) AND u.suspended_at IS NULL AND wm.suspended_at IS NULL AND wm.removed_at IS NULL AND w.suspended_at IS NULL AND (c.kind!='dm' OR EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=u.id))`, channelId, userId, workspaceId ?? null, workspaceId ?? null));
+    return Boolean(this.get(`SELECT c.id FROM channels c JOIN workspace_members wm ON wm.workspace_id=c.workspace_id JOIN users u ON u.id=wm.user_id JOIN workspaces w ON w.id=c.workspace_id WHERE c.id=? AND u.id=? AND (? IS NULL OR c.workspace_id=?) AND u.suspended_at IS NULL AND wm.suspended_at IS NULL AND wm.removed_at IS NULL AND w.suspended_at IS NULL AND ((c.kind!='dm' AND c.visibility='public' AND wm.role!='guest') OR EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=u.id))`, channelId, userId, workspaceId ?? null, workspaceId ?? null));
   }
   canWriteChannel(userId: string, channelId: string, workspaceId?: string): boolean { return this.canAccessChannel(userId, channelId, workspaceId) && !this.get('SELECT archived_at FROM channels WHERE id=?', channelId)?.archived_at; }
   channel(row: Row): Channel {
-    return { id: row.id, name: row.name, description: row.description, kind: row.kind, archived: Boolean(row.archived_at), ...(row.kind === 'dm' ? { memberIds: this.all('SELECT user_id FROM channel_members WHERE channel_id=? ORDER BY user_id', row.id).map(x => x.user_id) } : {}) };
+    return { id: row.id, name: row.name, description: row.description, kind: row.kind, visibility: row.kind === 'dm' ? 'private' : row.visibility, archived: Boolean(row.archived_at), memberIds: this.all('SELECT user_id FROM channel_members WHERE channel_id=? ORDER BY user_id', row.id).map(x => x.user_id) };
   }
   channels(userId: string, workspaceId: string): Channel[] {
-    return this.all(`SELECT c.* FROM channels c WHERE c.workspace_id=? AND (c.kind!='dm' OR EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=?)) ORDER BY c.created_at,c.rowid`, workspaceId, userId).map(row => this.channel(row));
+    return this.all(`SELECT c.* FROM channels c JOIN workspace_members wm ON wm.workspace_id=c.workspace_id JOIN users u ON u.id=wm.user_id JOIN workspaces w ON w.id=c.workspace_id WHERE c.workspace_id=? AND wm.user_id=? AND u.suspended_at IS NULL AND wm.suspended_at IS NULL AND wm.removed_at IS NULL AND w.suspended_at IS NULL AND ((c.kind!='dm' AND c.visibility='public' AND wm.role!='guest') OR EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=wm.user_id)) ORDER BY c.created_at,c.rowid`, workspaceId, userId).map(row => this.channel(row));
   }
   attachment(row: Row): Attachment { return { id: row.id, name: row.name, size: row.size, mime: row.mime, url: `/api/files/${row.id}` }; }
   message(row: Row): Message {

@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Check, Eye, EyeOff } from "lucide-react";
 import type { Bootstrap } from "../../shared/types";
-import { post } from "../lib/api";
+import type { TwoFactorChallenge } from "../../shared/security-types";
+import { ApiError, post } from "../lib/api";
 import { IconButton, Spinner } from "./ui";
 import { AuthLayout } from "./AuthLayout";
 import { EmailUnavailableNotice, ForgotPassword } from "./AccountRecovery";
@@ -24,6 +25,8 @@ export function Auth({
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [challenge, setChallenge] = useState<TwoFactorChallenge | null>(null);
+  const [useRecovery, setUseRecovery] = useState(false);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (mode === "register" && !registrationAvailable) return;
@@ -31,10 +34,18 @@ export function Auth({
     setError("");
     const values = Object.fromEntries(new FormData(e.currentTarget));
     try {
-      const result = await post<Bootstrap>(`/auth/${mode}`, {
-        ...values,
-        ...(inviteToken ? { inviteToken } : {}),
-      });
+      const result = await post<Bootstrap | TwoFactorChallenge>(
+        `/auth/${mode}`,
+        {
+          ...values,
+          ...(inviteToken ? { inviteToken } : {}),
+        },
+      );
+      if ("twoFactorRequired" in result) {
+        setChallenge(result);
+        setUseRecovery(false);
+        return;
+      }
       sessionStorage.removeItem("mola:logged-out");
       history.replaceState(
         null,
@@ -46,6 +57,31 @@ export function Auth({
       onLogin(result);
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function verifyChallenge(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const values = new FormData(event.currentTarget);
+    try {
+      const result = await post<Bootstrap>("/auth/2fa/challenge", {
+        code: values.get("code"),
+      });
+      sessionStorage.removeItem("mola:logged-out");
+      history.replaceState(
+        null,
+        "",
+        inviteToken ? `/?invite=${encodeURIComponent(inviteToken)}` : "/",
+      );
+      onLogin(result);
+    } catch (error) {
+      setError((error as Error).message);
+      if (error instanceof ApiError && error.code === "TWO_FACTOR_EXPIRED")
+        setChallenge(null);
     } finally {
       setBusy(false);
     }
@@ -62,6 +98,77 @@ export function Auth({
       setBusy(false);
     }
   }
+  if (challenge)
+    return (
+      <AuthLayout>
+        <span className="auth-greeting">Son bir güvenlik adımı</span>
+        <h2>Sensiz kapı açılmaz.</h2>
+        <p>
+          {useRecovery
+            ? "Kaydettiğin kurtarma kodlarından birini kullan. Her kod bir kez geçerlidir."
+            : "Doğrulama uygulamandaki 6 haneli kodu gir."}
+        </p>
+        <form
+          onSubmit={verifyChallenge}
+          className="two-factor-form"
+          aria-label="İki aşamalı giriş"
+        >
+          <label>
+            {useRecovery ? "Kurtarma kodu" : "Doğrulama kodu"}
+            <input
+              key={String(useRecovery)}
+              className={useRecovery ? "" : "two-factor-code"}
+              name="code"
+              autoComplete="one-time-code"
+              inputMode={useRecovery ? "text" : "numeric"}
+              autoFocus
+              required
+              minLength={6}
+              maxLength={useRecovery ? 32 : 6}
+              pattern={useRecovery ? undefined : "[0-9]{6}"}
+              placeholder={useRecovery ? "XXXXX-XXXXX-XXXXX-XXXXX" : "000000"}
+              disabled={busy}
+            />
+          </label>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="primary-button full-width" disabled={busy}>
+            {busy ? (
+              <Spinner label="Doğrulanıyor" />
+            ) : (
+              <>
+                Doğrula ve giriş yap <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+        </form>
+        <button
+          className="auth-text-button two-factor-switch"
+          disabled={busy}
+          onClick={() => {
+            setUseRecovery(!useRecovery);
+            setError("");
+          }}
+        >
+          {useRecovery
+            ? "Doğrulama uygulamamı kullan"
+            : "Telefonuma erişemiyorum"}
+        </button>
+        <button
+          className="auth-text-button"
+          disabled={busy}
+          onClick={() => {
+            setChallenge(null);
+            setError("");
+          }}
+        >
+          Giriş ekranına dön
+        </button>
+      </AuthLayout>
+    );
   if (mode === "forgot")
     return (
       <ForgotPassword

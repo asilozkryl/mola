@@ -28,6 +28,9 @@ test('v3 workspace migration keeps identity, content, session expiry and ownersh
     // fields, so the upgrade exercises the actual destructive legacy relation.
     repo.db.exec(`PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE;
       DROP TRIGGER initial_user_membership; DROP TRIGGER initial_session_workspace; DROP TABLE workspace_members; DROP INDEX idx_sessions_workspace; ALTER TABLE sessions DROP COLUMN workspace_id;
+      ALTER TABLE channels DROP COLUMN visibility; DROP INDEX idx_channel_members_user;
+      DROP TRIGGER IF EXISTS message_order_insert; DROP TABLE IF EXISTS message_order;
+      DROP TABLE push_outbox; DROP TABLE push_subscriptions; DROP TABLE notification_preferences; DROP TABLE message_drafts; DROP TABLE notifications; DROP TABLE channel_reads; DROP TABLE bot_accounts; DROP TABLE integration_deliveries; DROP TABLE integrations;
       CREATE TABLE users_v3 (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE, name TEXT NOT NULL, email TEXT NOT NULL COLLATE NOCASE UNIQUE, password_hash TEXT, color TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('owner','member')), status TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, email_verified INTEGER NOT NULL DEFAULT 0, site_admin INTEGER NOT NULL DEFAULT 0, suspended_at TEXT);
       INSERT INTO users_v3 SELECT * FROM users; DROP TABLE users; ALTER TABLE users_v3 RENAME TO users;
       CREATE INDEX idx_preserved_user_verification ON users(email_verified);
@@ -36,7 +39,7 @@ test('v3 workspace migration keeps identity, content, session expiry and ownersh
       PRAGMA user_version=3; COMMIT; PRAGMA foreign_keys=ON;`);
     assert.equal(repo.all('PRAGMA foreign_key_list(users)')[0].on_delete, 'CASCADE');
     repo.close(); repo = new Repository(openDatabase(filename));
-    assert.equal(repo.get('PRAGMA user_version')!.user_version, 4);
+    assert.equal(repo.get('PRAGMA user_version')!.user_version, 5);
     assert.equal(repo.session(sessionHash)!.workspace_id, seed.workspaceId);
     assert.equal(repo.session(sessionHash)!.expires_at, expiresAt);
     assert.equal(repo.session(sessionHash)!.role, 'owner');
@@ -97,7 +100,7 @@ test('v2 administrative migration preserves verified accounts, sessions, invitat
     legacy.close();
     // The fixture above deliberately resembles v2 on disk; migration must add only administrative fields.
     repo = new Repository(openDatabase(filename));
-    assert.equal(repo.get('PRAGMA user_version')!.user_version, 4);
+    assert.equal(repo.get('PRAGMA user_version')!.user_version, 5);
     const user = repo.get('SELECT * FROM users WHERE id=?', userId)!;
     assert.equal(user.password_hash, 'preserved-password-hash'); assert.equal(user.email_verified, 1);
     assert.equal(user.site_admin, 0, 'migration must never promote the first existing account');
@@ -120,11 +123,11 @@ test('a future database version is rejected before any schema or data changes', 
   const directory = mkdtempSync(join(tmpdir(), 'mola-future-schema-'));
   const filename = join(directory, 'mola.sqlite');
   try {
-    const future = new DatabaseSync(filename); future.exec("CREATE TABLE future_record (value TEXT); INSERT INTO future_record VALUES ('untouched'); PRAGMA user_version=5;"); future.close();
+    const future = new DatabaseSync(filename); future.exec("CREATE TABLE future_record (value TEXT); INSERT INTO future_record VALUES ('untouched'); PRAGMA user_version=6;"); future.close();
     assert.throws(() => openDatabase(filename), /newer Mola release/);
     const unchanged = new DatabaseSync(filename);
     try {
-      assert.equal(unchanged.prepare('PRAGMA user_version').get()!.user_version, 5);
+      assert.equal(unchanged.prepare('PRAGMA user_version').get()!.user_version, 6);
       assert.equal(unchanged.prepare('SELECT value FROM future_record').get()!.value, 'untouched');
       assert.equal(unchanged.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table'").get()!.n, 1);
     } finally { unchanged.close(); }

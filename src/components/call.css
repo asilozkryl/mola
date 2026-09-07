@@ -10,6 +10,228 @@
   padding: 28px;
   color: #20382f;
 }
+
+.call-person.call-person-speaking {
+  box-shadow: inset 0 0 0 3px #2d6650;
+}
+.call-person-speaking::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 3px solid #2d6650;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.call-person-quality {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+}
+.call-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 10px;
+  color: #44564b;
+  background: #ffffffec;
+}
+.call-quality-good {
+  color: #235738;
+}
+.call-quality-fair {
+  color: #755319;
+}
+.call-quality-poor {
+  color: #96362f;
+}
+.call-share-actions {
+  display: flex;
+  gap: 4px;
+}
+.call-share-expanded {
+  position: fixed !important;
+  inset: 16px;
+  z-index: 125;
+  display: flex;
+  flex-direction: column;
+  margin: 0 !important;
+}
+.call-share-expanded .call-screen-video {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+.call-chat-return {
+  border: 0;
+  border-radius: 8px;
+  background: #e9efdf;
+  color: #254a36;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.call-settings-section {
+  padding: 16px 26px;
+  border-bottom: 1px solid #dce5d9;
+  max-height: 270px;
+  overflow-y: auto;
+}
+.call-device-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 13px;
+}
+.call-device-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 650;
+  min-width: 0;
+}
+.call-device-settings select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d4ded2;
+  border-radius: 9px;
+  background: white;
+  color: #20382f;
+  padding: 10px;
+  font: inherit;
+  font-weight: 450;
+}
+.call-device-help {
+  grid-column: 1/-1;
+  color: #64715f;
+  font-size: 11px;
+  line-height: 1.65;
+  margin: 0;
+}
+.call-device-error {
+  grid-column: 1/-1;
+  color: #923a30;
+  background: #fff0eb;
+  padding: 11px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0;
+}
+.call-preflight {
+  color: #20382f;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-top: 5px;
+}
+.call-preflight-room {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.call-preflight-room > span {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  background: #e8efdf;
+  color: #254a36;
+  border-radius: 12px;
+}
+.call-preflight-room strong {
+  font-size: 15px;
+}
+.call-preflight-room p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: #64715f;
+}
+.call-mic-test {
+  border-block: 1px solid #e3e9df;
+  padding: 17px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.call-mic-test strong {
+  font-size: 12px;
+  display: block;
+}
+.call-mic-test small {
+  font-size: 11px;
+  color: #64715f;
+  display: block;
+  margin-top: 6px;
+}
+.call-mic-test button {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.call-level-meter {
+  height: 8px;
+  width: 100%;
+  background: #e1e8db;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.call-level-meter span {
+  display: block;
+  height: 100%;
+  background: #2d6650;
+}
+.call-muted-choice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+}
+.call-muted-choice input {
+  accent-color: #2d6650;
+  width: 16px;
+  height: 16px;
+}
+.call-preflight-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 9px;
+}
+.call-preflight-actions .call-primary {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .call-footer {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .call-footer-note {
+    display: flex !important;
+  }
+  .call-device-settings {
+    grid-template-columns: 1fr;
+  }
+  .call-share-expanded {
+    inset: 5px;
+  }
+  .call-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .call-preflight-actions button {
+    font-size: 12px;
+  }
+}
 .call-dialog {
   background: #fbfcfa;
   width: min(1080px, 100%);

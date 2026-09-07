@@ -12,7 +12,7 @@ export async function syncDirectory(path) {
   const handle = await open(path, 'r'); try { await handle.sync(); } finally { await handle.close(); }
 }
 export async function verifyBackup(directory, { requireChecksums = false } = {}) {
-  const allowed = new Set(['mola.sqlite', 'manifest.json', 'checksums.json', '.mail-key', 'uploads']);
+  const allowed = new Set(['mola.sqlite', 'manifest.json', 'checksums.json', '.mail-key', '.account-security-key', 'uploads']);
   for (const entry of await readdir(directory)) {
     if (!allowed.has(entry)) throw new Error(`Unexpected backup entry: ${entry}`);
     const info = await lstat(join(directory, entry));
@@ -37,7 +37,7 @@ export async function verifyBackup(directory, { requireChecksums = false } = {})
     paths.push(path);
   }
   if ((await readdir(join(directory, 'uploads'))).length !== rows.length) throw new Error('Unexpected backup upload files.');
-  try { await stat(join(directory, '.mail-key')); paths.push('.mail-key'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  for (const key of ['.mail-key', '.account-security-key']) try { await stat(join(directory, key)); paths.push(key); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   const sums = {};
   for (const path of paths) {
     const hash = createHash('sha256');

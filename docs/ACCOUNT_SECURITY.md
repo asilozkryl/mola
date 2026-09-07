@@ -1,5 +1,32 @@
 # Hesap doğrulama ve kurtarma
 
+## İki aşamalı doğrulama ve cihaz oturumları
+
+Hesap ayarlarının güvenlik bölümünde **İki aşamalı doğrulamayı kur** seçeneğini açın. Mevcut parolanızı doğruladıktan sonra QR kodu doğrulama uygulamanıza ekleyin veya verilen kurulum anahtarını elle girin. Uygulamanın ürettiği altı haneli kodla kurulumu tamamlayın. İki aşamalı doğrulama açılınca diğer cihazlardaki oturumlar kapanır; açık olan kurulum oturumu devam eder.
+
+Kurulum onayından sonra gösterilen **10 kurtarma kodunu** indirin veya kopyalayıp güvenli bir yerde saklayın. Kodlar yalnız o ekranda gösterilir ve her biri bir kez kullanılabilir. Doğrulama uygulamasına erişemediğinizde giriş ekranında kurtarma kodu kullanılabilir. **Kurtarma kodlarını yenile** yeni bir takım oluşturur ve önceki kodları geçersiz kılar. Yenileme ve iki aşamalı doğrulamayı kapatma işlemleri mevcut parola ile bir doğrulama/kurtarma kodu ister.
+
+Girişte önce parola, sonra ikinci aşama istenir. İkinci aşama tamamlanmadan oturum veya çalışma alanı erişimi açılmaz. Parola sıfırlamak iki aşamalı doğrulamayı kaldırmaz. Kapatma işlemi diğer oturumları da iptal eder.
+
+**Açık oturumlar** bölümünde hesapla açılmış cihazlar, görülebilen oturum zamanları ve kullanılan oturum işareti gösterilir. Cihaz adı tarayıcı bilgisinden türetilen bir etikettir; donanım kimliği değildir. **Oturumu kapat** ilgili cihazın API/WebSocket erişimini ve görüşmesini sonlandırır. Geçişten önce açılmış oturumların bilinmeyen zamanları uydurulmaz. Bu liste parola, çerez veya oturum anahtarlarını göstermez.
+
+Teknik kapsam: TOTP, RFC 6238 SHA-1 ile altı hane ve 30 saniyelik adım kullanır; yakın zaman adımları için ±1 tolerans vardır. Başarılı kullanılan sayaç tekrar kabul edilmez. Giriş sınaması beş dakika geçerli HttpOnly çereze bağlıdır; beş başarısız denemeden sonra hesap için 15 dakikalık sınır uygulanır. Kurtarma kodlarının veritabanında yalnız özeti tutulur. Kurulum/giriş kuralları sunucuda uygulanır.
+
+Doğrulama komutları:
+
+```sh
+node --import tsx --test tests/account-security.test.ts
+npx playwright test tests/account-security.e2e.spec.ts
+```
+
+## Güvenlik anahtarını yedekleme
+
+İki aşamalı doğrulama sırları AES-256-GCM ile şifrelenir. Yapılandırılmış `MAIL_ENCRYPTION_KEY` varsa anahtar bu kalıcı değerden amaç ayrımıyla türetilir. Yoksa `DATA_DIR/.account-security-key` oluşturulur ve yeniden başlatmada aynı dosya kullanılır. GitHub/entegrasyon sırları ve Web Push anahtarları da kendi amaçlarına ayrılmış anahtar materyalini kullanır.
+
+Üretim ortamındaki `MAIL_ENCRYPTION_KEY` dağıtımlarda korunmalıdır. Yerel `.account-security-key` dosyası yedek/geri yükleme paketine dahildir. Veritabanı yedeğini yanlış anahtarla başlatmak mevcut doğrulama hesaplarını kurtarmaz; eşleşen anahtar korunmalı ve geri yüklenmelidir. Ayrıntılar: [OPERATIONS.md](OPERATIONS.md).
+
+## E-posta doğrulaması
+
 Gerçek hesaplar için üretimde e-posta doğrulama zorunludur. Doğrulanmamış hesap giriş yapabilir ve doğrulama ekranını görür; kanal, üye listesi, mesaj, dosya, arama ve WebSocket erişimi verilmez. Yerelde aynı davranış `REQUIRE_EMAIL_VERIFICATION=true` ile etkinleşir. Örnek çalışma alanları bu kapıdan muaftır.
 
 ## Kullanıcı akışları

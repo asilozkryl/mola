@@ -11,6 +11,7 @@ import {
 import type { WorkspaceMembership } from "../../shared/types";
 import { api } from "../lib/api";
 import { Modal, Spinner } from "./ui";
+import { roleNames } from "./ChannelAccessDialog";
 import "./workspace-switcher.css";
 
 export type WorkspaceAction =
@@ -209,9 +210,7 @@ export function WorkspaceSwitcher({
                             ? "Erişim askıya alındı"
                             : item.isDemo
                               ? "Örnek çalışma alanı"
-                              : item.role === "owner"
-                                ? "Alan sahibi"
-                                : "Üye"}
+                              : roleNames[item.role]}
                         </small>
                       </span>
                       {selected ? (

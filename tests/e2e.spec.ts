@@ -72,7 +72,7 @@ test('channel switching, replies and workspace search keep conversations organiz
   await page.getByRole('button', { name: 'Yanıt gönder', exact: true }).click();
   await expect(page.locator('p.message-text').filter({ hasText: 'Bu fikir hakkında bir yanıt.' })).toBeVisible();
   await page.getByRole('button', { name: 'Mesaj dizisini kapat', exact: true }).click();
-  await page.getByRole('button', { name: 'tasarım', exact: true }).click();
+  await page.locator('.channel-nav').filter({ has: page.getByText('tasarım', { exact: true }) }).click();
   await expect(page.getByText(content, { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Çalışma alanında ara', exact: true }).click();
   const search = page.getByRole('dialog', { name: 'Çalışma alanında ara' });
@@ -184,7 +184,7 @@ test('messages can be saved, pinned, edited and deleted with state preserved aft
   await page.reload();
   await page.getByRole('navigation').getByRole('button', { name: /^Kaydedilenler/ }).click();
   await expect(page.getByText(original, { exact: true })).toBeVisible();
-  await page.locator('.channel-nav').filter({ hasText: /^tasarım$/ }).click();
+  await page.locator('.channel-nav').filter({ has: page.getByText('tasarım', { exact: true }) }).click();
   await article.hover();
   await article.getByRole('button', { name: 'Diğer mesaj işlemleri', exact: true }).click();
   await article.getByRole('button', { name: 'Mesajı düzenle', exact: true }).click();

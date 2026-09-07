@@ -55,7 +55,7 @@ test('channel and reply drafts stay private across account changes and survive t
   const parent = `Ortak konuşma ${randomUUID()}`;
   await composer(page).fill(parent);
   await page.getByRole('button', { name: 'Mesaj gönder', exact: true }).click();
-  await expect(page.getByText(parent, { exact: true })).toBeVisible();
+  await expect(page.locator('.message-text').filter({ hasText: parent })).toBeVisible();
   const ownerReply = `Sahibin gizli yanıt taslağı ${randomUUID()}`;
   await (await openReply(page, parent)).fill(ownerReply);
   await page.getByRole('button', { name: 'Mesaj dizisini kapat', exact: true }).click();
@@ -79,7 +79,7 @@ test('channel and reply drafts stay private across account changes and survive t
 
   await signIn(page, memberEmail);
   await expect(composer(page)).toHaveValue('');
-  await expect(page.getByText(parent, { exact: true })).toBeVisible();
+  await expect(page.locator('.message-text').filter({ hasText: parent })).toBeVisible();
   await expect(await openReply(page, parent)).toHaveValue('');
   await page.getByRole('textbox', { name: 'Yanıtını yaz', exact: true }).fill(`Üyenin gizli yanıtı ${randomUUID()}`);
   await page.getByRole('button', { name: 'Mesaj dizisini kapat', exact: true }).click();

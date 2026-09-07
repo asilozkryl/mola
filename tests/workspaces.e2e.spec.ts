@@ -224,12 +224,14 @@ test('voice room sidebars show both accounts and update remote microphone and de
     const guestRoster = guestPage.getByRole('list', { name: `${voice.name} katılımcıları`, exact: true });
 
     await ownerPage.getByRole('button', { name: voice.name, exact: true }).click();
+    await ownerPage.getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
     await expect(ownerPage.getByRole('button', { name: 'Mikrofonu kapat', exact: true })).toBeVisible();
     await ownerPage.getByRole('button', { name: 'Görüşmeyi küçült', exact: true }).click();
     await expect(ownerRoster.getByText(owner.data.user.name, { exact: true })).toBeVisible();
     await expect(guestRoster.getByText(owner.data.user.name, { exact: true })).toBeVisible();
 
     await guestPage.getByRole('button', { name: voice.name, exact: true }).click();
+    await guestPage.getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
     await expect(guestPage.getByRole('dialog', { name: voice.name, exact: true }).getByText('2 kişi görüşmede')).toBeVisible();
     await guestPage.getByRole('button', { name: 'Görüşmeyi küçült', exact: true }).click();
     for (const roster of [ownerRoster, guestRoster]) {
@@ -313,6 +315,7 @@ test('switching during a voice call asks first, then releases media and updates 
     await ready(sibling);
     const voice = account.data.channels.find(channel => channel.kind === 'voice')!;
     await page.getByRole('button', { name: voice.name, exact: true }).click();
+    await page.getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Mikrofonu kapat', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Görüşmeyi küçült', exact: true }).click();
     await expect(sibling.getByRole('list', { name: `${voice.name} katılımcıları`, exact: true })

@@ -21,3 +21,4 @@ secrets
 *.key
 .ops-token
 .mail-key
+.account-security-key

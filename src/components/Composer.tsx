@@ -10,11 +10,14 @@ import {
   X,
 } from "lucide-react";
 import type { Attachment, Message } from "../../shared/types";
-import { api, post } from "../lib/api";
+import { api } from "../lib/api";
 import { fileSize, IconButton } from "./ui";
+import { useSyncedDraft } from "../lib/useSyncedDraft";
+import "./collaboration.css";
 
 export function Composer({
   userId,
+  workspaceId,
   channelId,
   channelName,
   parentId,
@@ -24,6 +27,7 @@ export function Composer({
   members,
 }: {
   userId: string;
+  workspaceId: string;
   channelId: string;
   channelName: string;
   parentId?: string;
@@ -32,11 +36,8 @@ export function Composer({
   onError: (error: string) => void;
   members: string[];
 }) {
-  // Legacy drafts have no author identity, so they cannot be safely reassigned.
-  const key = `mola:draft:${userId}:${channelId}:${parentId || ""}`;
-  const [content, setContent] = useState(
-    () => sessionStorage.getItem(key) || "",
-  );
+  const draft = useSyncedDraft(userId, workspaceId, channelId, parentId);
+  const content = draft.content;
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [files, setFiles] = useState<Attachment[]>([]);
@@ -44,8 +45,8 @@ export function Composer({
   const input = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   function update(value: string) {
-    setContent(value);
-    sessionStorage.setItem(key, value);
+    if (busy) return;
+    draft.update(value);
     onTyping?.(Boolean(value));
   }
   function insert(value: string, wrap = false) {
@@ -69,21 +70,32 @@ export function Composer({
     });
   }
   async function send() {
-    if (busy || uploading || (!content.trim() && !files.length)) return;
+    if (
+      busy ||
+      uploading ||
+      draft.conflict ||
+      (!content.trim() && !files.length)
+    )
+      return;
     setBusy(true);
     try {
-      const message = await post<Message>(`/channels/${channelId}/messages`, {
-        content: content.trim(),
-        ...(parentId ? { parentId } : {}),
-        attachmentIds: files.map((f) => f.id),
+      await draft.beginSend(content);
+      const message = await api<Message>(`/channels/${channelId}/messages`, {
+        method: "POST",
+        headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
+        body: JSON.stringify({
+          content: content.trim(),
+          ...(parentId ? { parentId } : {}),
+          attachmentIds: files.map((f) => f.id),
+        }),
       });
-      setContent("");
-      sessionStorage.removeItem(key);
+      await draft.sent();
       setFiles([]);
       onTyping?.(false);
       onSent(message);
       input.current?.focus();
     } catch (e) {
+      draft.failed();
       onError((e as Error).message);
     } finally {
       setBusy(false);
@@ -105,6 +117,7 @@ export function Composer({
     try {
       const attachment = await api<Attachment>("/uploads", {
         method: "POST",
+        headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
         body,
       });
       setFiles((old) => [...old, attachment]);
@@ -128,6 +141,24 @@ export function Composer({
   return (
     <div className={`composer-wrap ${parentId ? "thread-composer" : ""}`}>
       <div className="composer">
+        {draft.conflict && (
+          <div className="draft-conflict" role="status">
+            <p>
+              Bu taslak başka bir cihazda değişti. Yazdıkların burada duruyor;
+              devam etmek için hangi sürümü kullanacağını seç.
+            </p>
+            <details>
+              <summary>Diğer cihazdaki taslağı göster</summary>
+              <pre>{draft.conflict.content || "(Boş taslak)"}</pre>
+            </details>
+            <button type="button" onClick={() => draft.resolve(true)}>
+              Diğer taslağı kullan
+            </button>
+            <button type="button" onClick={() => draft.resolve(false)}>
+              Buradaki taslağı kullan
+            </button>
+          </div>
+        )}
         {files.length > 0 && (
           <div className="composer-attachments">
             {files.map((f) => (
@@ -205,7 +236,12 @@ export function Composer({
             title="Mesaj gönder"
             aria-label={parentId ? "Yanıt gönder" : "Mesaj gönder"}
             onClick={() => void send()}
-            disabled={busy || uploading || (!content.trim() && !files.length)}
+            disabled={
+              busy ||
+              uploading ||
+              Boolean(draft.conflict) ||
+              (!content.trim() && !files.length)
+            }
           >
             {busy ? (
               <LoaderCircle size={17} className="spin" />
@@ -283,10 +319,23 @@ export function Composer({
         <span>
           <kbd>Enter</kbd> ile gönder · <kbd>Shift + Enter</kbd> ile yeni satır
         </span>
-        <span>
-          {content.length > 9000
-            ? `${content.length}/10000`
-            : "Küçük bir mesaj, güzel bir başlangıç."}
+        <span className="draft-status" aria-live="polite">
+          {draft.status === "offline" ? (
+            <>
+              Taslak bu cihazda ·{" "}
+              <button onClick={() => void draft.retry()}>Yeniden dene</button>
+            </>
+          ) : draft.status === "conflict" ? (
+            "Taslak seçimi bekleniyor"
+          ) : content.length > 9000 ? (
+            `${content.length}/10000`
+          ) : draft.status === "saving" ? (
+            "Taslak eşitleniyor…"
+          ) : content ? (
+            "Taslak eşitlendi"
+          ) : (
+            "Küçük bir mesaj, güzel bir başlangıç."
+          )}
         </span>
       </div>
     </div>

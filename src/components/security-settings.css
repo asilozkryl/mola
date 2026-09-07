@@ -1,0 +1,234 @@
+.security-body {
+  padding: 4px 0 16px;
+}
+.security-body h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--forest);
+}
+.security-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.security-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.security-badge {
+  display: inline-flex;
+  border-radius: 5px;
+  background: #eee;
+  color: #5d665f;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.security-badge.enabled {
+  color: #24573e;
+  background: #edf5e7;
+}
+.security-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.security-actions .secondary-button {
+  font-size: 12px;
+}
+.security-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 0;
+  border: 0;
+  background: none;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.security-text-button:hover {
+  text-decoration: underline;
+}
+.security-text-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.security-meta {
+  width: 100%;
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.security-form {
+  margin-top: 15px;
+}
+.security-qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  max-width: 100%;
+  margin: 10px auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.security-manual {
+  padding: 10px 12px;
+  margin: 10px 0;
+  border-radius: 8px;
+  background: #f6f8f4;
+  font-size: 12px;
+  color: var(--forest);
+}
+.security-manual summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.security-manual code {
+  display: block;
+  overflow-wrap: anywhere;
+  user-select: all;
+  padding: 8px 0;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.security-warning {
+  padding: 10px 12px;
+  background: #fff4e9;
+  border: 1px solid #f1dfc9;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #714d2c;
+}
+.security-recovery {
+  margin-top: 15px;
+  padding: 14px;
+  border: 1px solid #d9e5cf;
+  border-radius: 10px;
+  background: #f7faf3;
+}
+.security-recovery h4 {
+  margin: 0;
+  color: var(--forest);
+  font-size: 14px;
+}
+.security-recovery p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #586650;
+}
+.security-recovery ul {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.security-recovery li {
+  padding: 6px 3px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #e4eadf;
+  border-radius: 5px;
+  font-size: 10px;
+  user-select: all;
+}
+.security-devices {
+  margin-top: 23px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.security-device-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.security-session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.security-session-list > li {
+  display: flex;
+  gap: 11px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+  align-items: flex-start;
+}
+.security-session-list > li > svg {
+  flex-shrink: 0;
+  color: var(--forest);
+  margin-top: 2px;
+}
+.security-session-details {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
+}
+.security-session-details > strong {
+  font-size: 12px;
+}
+.security-session-details > small {
+  width: 100%;
+  font-size: 11px;
+  color: var(--muted);
+}
+.security-session-details > .security-text-button {
+  font-size: 11px;
+}
+.security-session-confirm {
+  width: 100%;
+  font-size: 12px;
+}
+.security-session-confirm > p {
+  margin: 6px 0;
+}
+.security-session-confirm .secondary-button {
+  font-size: 11px;
+  margin-right: 10px;
+}
+.security-notice {
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: #eef5e8;
+  color: #285338;
+}
+.two-factor-form .two-factor-code {
+  font-size: 23px;
+  letter-spacing: 5px;
+  text-align: center;
+}
+.two-factor-switch {
+  margin-top: 14px;
+}
+.security-body .security-form > label {
+  margin-bottom: 14px;
+}
+@media (max-width: 390px) {
+  .security-recovery ul {
+    grid-template-columns: 1fr;
+  }
+  .security-recovery li {
+    font-size: 12px;
+  }
+  .security-heading > div {
+    gap: 6px;
+  }
+}
+.account-security .security-meta,
+.account-security .security-session-details > small {
+  color: #65705f;
+}

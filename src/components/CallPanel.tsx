@@ -15,9 +15,14 @@ import {
   VideoOff,
   Volume2,
   VolumeX,
+  Settings2,
+  PictureInPicture2,
+  MessageSquare,
   X,
 } from "lucide-react";
 import type { CallController, CallParticipant } from "../lib/useCall";
+import type { ConnectionQuality } from "../../shared/call-types";
+import { MediaSettings } from "./CallSetup";
 import "./call.css";
 
 function MediaVideo({
@@ -57,11 +62,15 @@ function RemoteAudio({
   muted,
   onBlocked,
   playbackAttempt,
+  outputDeviceId,
+  onOutputError,
 }: {
   stream: MediaStream | null;
   muted: boolean;
   onBlocked: () => void;
   playbackAttempt: number;
+  outputDeviceId: string;
+  onOutputError: () => void;
 }) {
   const ref = useRef<HTMLAudioElement>(null);
   const audioTrackIds =
@@ -90,7 +99,160 @@ function RemoteAudio({
       element.srcObject = null;
     };
   }, [stream, audioTrackIds, onBlocked, playbackAttempt]);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || typeof element.setSinkId !== "function") return;
+    let cancelled = false;
+    void element.setSinkId(outputDeviceId).catch(() => {
+      if (!cancelled) onOutputError();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [outputDeviceId, onOutputError]);
   return <audio ref={ref} autoPlay muted={muted} />;
+}
+
+const qualityLabel = {
+  unknown: "Ölçülüyor",
+  good: "İyi",
+  fair: "Orta",
+  poor: "Zayıf",
+};
+function QualityBadge({ quality }: { quality?: ConnectionQuality }) {
+  const details = quality
+    ? [
+        quality.rttMs !== null
+          ? `Gecikme: ${Math.round(quality.rttMs)} ms`
+          : "",
+        quality.jitterMs !== null
+          ? `Ses dalgalanması: ${Math.round(quality.jitterMs)} ms`
+          : "",
+        quality.packetLossPercent !== null
+          ? `Paket kaybı: %${quality.packetLossPercent.toFixed(1)}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "İlk bağlantı ölçümü bekleniyor";
+  return (
+    <span
+      className={`call-quality call-quality-${quality?.level ?? "unknown"}`}
+      title={details}
+      aria-label={`Bağlantı kalitesi: ${qualityLabel[quality?.level ?? "unknown"]}. ${details}`}
+    >
+      <Signal size={13} />
+      {qualityLabel[quality?.level ?? "unknown"]}
+    </span>
+  );
+}
+
+function useShareWindow(stream: MediaStream | null, title: string) {
+  const external = useRef<Window | null>(null);
+  const current = useRef(stream);
+  current.current = stream;
+  const request = useRef(0);
+  const [error, setError] = useState("");
+  const close = () => {
+    request.current++;
+    const target = external.current;
+    external.current = null;
+    if (target && !target.closed) {
+      try {
+        const video = target.document.querySelector("video");
+        if (video) video.srcObject = null;
+      } catch {
+        /* A user may have navigated the separate window. */
+      }
+      target.close();
+    }
+  };
+  useEffect(() => {
+    const target = external.current;
+    if (!stream) close();
+    else if (target && !target.closed) {
+      try {
+        const video = target.document.querySelector("video");
+        if (video) {
+          video.srcObject = stream;
+          void video.play().catch(() => {});
+        }
+        target.document.title = title;
+        const heading = target.document.querySelector("p");
+        if (heading) heading.textContent = title;
+      } catch {
+        close();
+      }
+    }
+  }, [stream, title]);
+  useEffect(() => {
+    window.addEventListener("pagehide", close);
+    return () => {
+      window.removeEventListener("pagehide", close);
+      close();
+    };
+  }, []);
+  const open = async () => {
+    if (!stream) return;
+    setError("");
+    if (external.current && !external.current.closed) {
+      external.current.focus();
+      return;
+    }
+    const version = ++request.current;
+    try {
+      const pip = (
+        window as Window & {
+          documentPictureInPicture?: {
+            requestWindow(options: {
+              width: number;
+              height: number;
+            }): Promise<Window>;
+          };
+        }
+      ).documentPictureInPicture;
+      const target = pip
+        ? await pip.requestWindow({ width: 880, height: 540 })
+        : window.open("about:blank", "", "popup,width=880,height=540");
+      if (!target) throw new Error("window-blocked");
+      if (version !== request.current || !current.current) {
+        target.close();
+        return;
+      }
+      external.current = target;
+      if (!pip) target.opener = null;
+      target.document.title = title;
+      const style = target.document.createElement("style");
+      style.textContent =
+        "body{margin:0;background:#153d36;color:white;font:14px system-ui;display:flex;flex-direction:column;height:100vh}p{padding:14px 18px;margin:0}video{width:100%;height:0;flex:1;min-height:0;object-fit:contain;background:#092118}button{align-self:flex-end;margin:10px 16px;padding:8px 12px;border:0;border-radius:8px;background:#c0e1ad;color:#153d36;cursor:pointer}";
+      const heading = target.document.createElement("p");
+      heading.textContent = title;
+      const video = target.document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true;
+      video.srcObject = current.current;
+      const button = target.document.createElement("button");
+      button.textContent = "Pencereyi kapat";
+      button.onclick = close;
+      target.document.head.append(style);
+      target.document.body.replaceChildren(heading, video, button);
+      target.addEventListener(
+        "pagehide",
+        () => {
+          video.srcObject = null;
+          if (external.current === target) external.current = null;
+        },
+        { once: true },
+      );
+      await video.play().catch(() => {});
+    } catch {
+      setError(
+        "Ayrı pencere açılamadı. Tarayıcıda açılır pencerelere izin verin veya tam ekranı kullanın.",
+      );
+    }
+  };
+  return { open, error };
 }
 
 const initials = (name: string) =>
@@ -120,7 +282,8 @@ function ParticipantTile({
   const connected = local || peer.connectionState === "connected";
   return (
     <div
-      className={`call-person ${peer.camera && connected ? "call-person-camera" : ""}`}
+      className={`call-person ${peer.camera && connected ? "call-person-camera" : ""} ${peer.speaking && peer.mic ? "call-person-speaking" : ""}`}
+      aria-label={`${peer.user.name}${peer.speaking && peer.mic ? ": konuşuyor" : ""}`}
     >
       {peer.camera && connected && peer.stream ? (
         <MediaVideo stream={peer.stream} mirror={local} />
@@ -159,6 +322,11 @@ function ParticipantTile({
           <span>Ekran paylaşıyor</span>
         </span>
       )}
+      {!local && connected && (
+        <div className="call-person-quality">
+          <QualityBadge quality={peer.quality} />
+        </div>
+      )}
     </div>
   );
 }
@@ -181,6 +349,11 @@ export function CallPanel({
   const [playbackAttempt, setPlaybackAttempt] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [selectedSharing, setSelectedSharing] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [expandedScreen, setExpandedScreen] = useState(false);
+  const [screenError, setScreenError] = useState("");
+  const [outputError, setOutputError] = useState(false);
+  const outputErrorCallback = useRef(() => setOutputError(true));
   const blockedCallback = useRef(() => setAudioBlocked(true));
   const closeCallback = useRef(onClose);
   closeCallback.current = () => {
@@ -236,7 +409,6 @@ export function CallPanel({
     };
   }, [visible]);
 
-  if (!call.channelId && !call.error) return null;
   const localPeer: CallParticipant | null =
     call.user && call.joined
       ? {
@@ -248,6 +420,7 @@ export function CallPanel({
           stream: call.localStream,
           screen: call.localScreen,
           connectionState: "connected",
+          speaking: call.localSpeaking,
         }
       : null;
   const participants = [...(localPeer ? [localPeer] : []), ...call.peers];
@@ -259,6 +432,19 @@ export function CallPanel({
   );
   const activeShare =
     shares.find((p) => p.socketId === selectedSharing) ?? shares[0];
+  const shareWindow = useShareWindow(
+    activeShare?.screen ?? null,
+    activeShare ? `${activeShare.user.name} · Ekran paylaşımı` : "Mola",
+  );
+  useEffect(() => {
+    if (!activeShare) setExpandedScreen(false);
+    if (!call.joined) {
+      setSettingsOpen(false);
+      setOutputError(false);
+      setScreenError("");
+    }
+  }, [Boolean(activeShare), call.joined]);
+  if (!call.channelId && !call.error) return null;
   const time = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
   const leaveCall = () => {
     call.leave();
@@ -274,6 +460,8 @@ export function CallPanel({
           muted={deafened}
           onBlocked={blockedCallback.current}
           playbackAttempt={playbackAttempt}
+          outputDeviceId={call.preferences.outputDeviceId}
+          onOutputError={outputErrorCallback.current}
         />
       ))}
       {minimized ? (
@@ -366,6 +554,34 @@ export function CallPanel({
               </button>
             </header>
 
+            {outputError && (
+              <div className="call-error" role="alert">
+                <span>
+                  Seçili hoparlöre ses aktarılamadı. Ses ayarlarından sistem
+                  varsayılanını veya bağlı bir cihazı seçin.
+                </span>
+                <button
+                  aria-label="Hoparlör uyarısını kapat"
+                  onClick={() => setOutputError(false)}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+            {(screenError || shareWindow.error) && (
+              <div className="call-error" role="alert">
+                {screenError || shareWindow.error}
+              </div>
+            )}
+            {settingsOpen && call.joined && (
+              <section
+                className="call-settings-section"
+                aria-label="Görüşme ses ayarları"
+              >
+                <MediaSettings call={call} />
+              </section>
+            )}
+
             {call.error && (
               <div className="call-error" role="alert">
                 <span>{call.error}</span>
@@ -443,7 +659,10 @@ export function CallPanel({
               ) : (
                 <>
                   {activeShare && (
-                    <div className="call-share-stage" ref={screenStage}>
+                    <div
+                      className={`call-share-stage ${expandedScreen ? "call-share-expanded" : ""}`}
+                      ref={screenStage}
+                    >
                       <div className="call-share-heading">
                         <span>
                           <MonitorUp size={15} />
@@ -451,20 +670,42 @@ export function CallPanel({
                             ? "Ekranınızı paylaşıyorsunuz"
                             : `${activeShare.user.name} ekranını paylaşıyor`}
                         </span>
-                        <button
-                          className="call-icon-button"
-                          aria-label="Paylaşılan ekranı büyüt"
-                          onClick={() => {
-                            if (document.fullscreenElement)
-                              void document.exitFullscreen();
-                            else
-                              void screenStage.current
-                                ?.requestFullscreen()
-                                .catch(() => undefined);
-                          }}
-                        >
-                          <Maximize2 size={17} />
-                        </button>
+                        <div className="call-share-actions">
+                          <button
+                            className="call-icon-button"
+                            aria-label="Paylaşılan ekranı ayrı pencerede aç"
+                            onClick={() => void shareWindow.open()}
+                          >
+                            <PictureInPicture2 size={17} />
+                          </button>
+                          <button
+                            className="call-icon-button"
+                            aria-label="Paylaşılan ekranı büyüt"
+                            onClick={() => {
+                              setScreenError("");
+                              if (document.fullscreenElement)
+                                void document
+                                  .exitFullscreen()
+                                  .catch(() =>
+                                    setScreenError(
+                                      "Tam ekrandan çıkılamadı. Escape tuşunu kullanın.",
+                                    ),
+                                  );
+                              else if (
+                                document.fullscreenEnabled &&
+                                screenStage.current?.requestFullscreen
+                              )
+                                void screenStage.current
+                                  .requestFullscreen()
+                                  .catch(() =>
+                                    setExpandedScreen((value) => !value),
+                                  );
+                              else setExpandedScreen((value) => !value);
+                            }}
+                          >
+                            <Maximize2 size={17} />
+                          </button>
+                        </div>
                       </div>
                       <MediaVideo
                         stream={activeShare.screen}
@@ -523,12 +764,13 @@ export function CallPanel({
             {call.joined && (
               <footer className="call-footer">
                 <div className="call-footer-note">
-                  <span className="call-live-dot" />
-                  <span>
-                    {call.sharing
-                      ? "Ekranınız paylaşılıyor"
-                      : "Sohbet burada devam ediyor"}
-                  </span>
+                  <button
+                    className="call-chat-return"
+                    onClick={() => closeCallback.current()}
+                  >
+                    <MessageSquare size={15} />
+                    Sohbete dön
+                  </button>
                 </div>
                 <div className="call-controls">
                   <div className="call-control-wrap">
@@ -594,6 +836,17 @@ export function CallPanel({
                     <span>Hoparlör</span>
                   </div>
                   <span className="call-controls-divider" />
+                  <div className="call-control-wrap">
+                    <button
+                      className={`call-control ${settingsOpen ? "call-control-active" : ""}`}
+                      aria-label="Ses ayarları"
+                      aria-expanded={settingsOpen}
+                      onClick={() => setSettingsOpen((value) => !value)}
+                    >
+                      <Settings2 size={21} />
+                    </button>
+                    <span>Ayarlar</span>
+                  </div>
                   <div className="call-control-wrap">
                     <button
                       className="call-control call-control-leave"

@@ -75,7 +75,7 @@ export function installOperations(app: Express, options: { db: DatabaseSync; io:
         try { linkSync(source, join(path, 'uploads', file.storage_name)); }
         catch (error) { if (['EXDEV', 'EPERM', 'ENOTSUP'].includes((error as NodeJS.ErrnoException).code || '')) copyFileSync(source, join(path, 'uploads', file.storage_name)); else throw error; }
       }
-      if (existsSync(join(dataDir, '.mail-key'))) copyFileSync(join(dataDir, '.mail-key'), join(path, '.mail-key'));
+      for (const key of ['.mail-key', '.account-security-key']) if (existsSync(join(dataDir, key))) copyFileSync(join(dataDir, key), join(path, key));
       const manifest = { version: 1, id, createdAt: new Date().toISOString(), files: files.length, uploadBytes: files.reduce((sum, file) => sum + file.size, 0), database: 'mola.sqlite', consistency: 'single-instance synchronous vacuum and immutable file links' };
       writeFileSync(join(path, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 });
       lastSnapshot = Date.now() / 1000; snapshots++;

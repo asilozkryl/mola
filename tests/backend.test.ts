@@ -28,6 +28,20 @@ async function fixture(run: (ctx: { runtime: ReturnType<typeof createApp>; reque
   finally { await runtime.close(); assert.ok(resolve(uploadDir).startsWith(resolve(tmpdir()) + '/'.replace('/', process.platform === 'win32' ? '\\' : '/'))); rmSync(uploadDir, { recursive: true, force: true }); }
 }
 
+test('delayed composer requests cannot become another account in the same workspace', async () => fixture(async ({request,runtime})=>{
+  const first=await(await request('/api/auth/register',{method:'POST',json:{name:'İlk Kullanıcı',email:'bound-first@example.invalid',password:'account-bound-password',workspaceName:'Kimlik Bağı'}})).json();
+  const invitation=await(await request('/api/invites',{method:'POST'})).json();
+  const inviteToken=new URL(invitation.url).searchParams.get('invite');
+  const second=await(await request('/api/auth/register',{method:'POST',json:{name:'İkinci Kullanıcı',email:'bound-second@example.invalid',password:'account-bound-password',inviteToken}})).json();
+  assert.equal(second.workspace.id,first.workspace.id);
+  const channel=first.channels.find((c:{name:string})=>c.name==='genel');
+  const headers={'X-User-Id':first.user.id,'X-Workspace-Id':first.workspace.id};
+  assert.equal((await request(`/api/channels/${channel.id}/draft`,{method:'PUT',headers,json:{content:'Eski hesabın taslağı',revision:0}})).status,409);
+  assert.equal((await request(`/api/channels/${channel.id}/messages`,{method:'POST',headers,json:{content:'Eski hesabın mesajı'}})).status,409);
+  assert.equal(runtime.repo.get('SELECT COUNT(*) AS n FROM message_drafts')!.n,0);
+  assert.equal(runtime.repo.get('SELECT COUNT(*) AS n FROM messages')!.n,0);
+}));
+
 test('registration, hashed sessions, login and logout persist and revoke access', async () => fixture(async ({ runtime, request, getCookie, setCookie }) => {
   assert.equal((await request('/api/auth/me')).status, 401);
   const registration = await request('/api/auth/register', { method: 'POST', json: { name: 'Asil Test', email: 'Asil@Example.com', password: 'correct-horse-123', workspaceName: 'Test ekibi' } });

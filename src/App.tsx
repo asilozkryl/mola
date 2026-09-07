@@ -42,6 +42,8 @@ import {
   Volume2,
   X,
   Pin,
+  Lock,
+  Plug,
   WifiOff,
 } from "lucide-react";
 import type {
@@ -73,6 +75,12 @@ import { Composer } from "./components/Composer";
 import { MessageItem } from "./components/MessageItem";
 import { useCall } from "./lib/useCall";
 import { CallPanel } from "./components/CallPanel";
+import { CallSetup } from "./components/CallSetup";
+import ChannelAccessDialog from "./components/ChannelAccessDialog";
+import { NotificationsInbox } from "./components/NotificationsInbox";
+import IntegrationsDialog from "./components/IntegrationsDialog";
+import { NotificationSettings } from "./components/NotificationSettings";
+import type { NotificationState } from "../shared/collaboration-types";
 import { SettingsDialog } from "./components/SettingsDialog";
 import AdminPanel from "./components/AdminPanel";
 import {
@@ -95,6 +103,8 @@ type Dialog =
   | "help"
   | "members"
   | "info"
+  | "notifications"
+  | "integrations"
   | null;
 type View = "channel" | "saved" | "inbox";
 let initialBootstrap: Promise<Bootstrap | null> | undefined;
@@ -139,14 +149,23 @@ export default function App() {
   const [details, setDetails] = useState(true);
   const [mobileNav, setMobileNav] = useState(false);
   const [thread, setThread] = useState<Message | null>(null);
+  const [linkedReply, setLinkedReply] = useState<Message | null>(null);
   const [replies, setReplies] = useState<Message[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
   const [toast, setToast] = useState("");
   const [toastError, setToastError] = useState(false);
   const [unread, setUnread] = useState<Record<string, number>>({});
+  const [notificationState, setNotificationState] =
+    useState<NotificationState | null>(null);
+  const [notificationError, setNotificationError] = useState("");
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [typing, setTyping] = useState<Record<string, number>>({});
   const [saved, setSaved] = useState<Message[]>([]);
   const [showCall, setShowCall] = useState(false);
+  const [callSetupChannel, setCallSetupChannel] = useState<Channel | null>(
+    null,
+  );
+  const [channelAccess, setChannelAccess] = useState<Channel | null>(null);
   const [quiet, setQuiet] = useState(
     localStorage.getItem("mola:quiet") === "true",
   );
@@ -184,7 +203,9 @@ export default function App() {
     [notify],
   );
   const acceptData = useCallback((next: Bootstrap) => {
-    const contextChanged = dataRef.current?.workspace.id !== next.workspace.id || dataRef.current?.user.id !== next.user.id;
+    const contextChanged =
+      dataRef.current?.workspace.id !== next.workspace.id ||
+      dataRef.current?.user.id !== next.user.id;
     const changed =
       dataRef.current?.workspace.id !== next.workspace.id ||
       dataRef.current?.user.id !== next.user.id ||
@@ -207,24 +228,34 @@ export default function App() {
       setChannelFiles([]);
       setReplies([]);
       setThread(null);
+      setLinkedReply(null);
       threadRef.current = null;
       setTyping({});
       setUnread({});
+      setNotificationState(null);
+      setNotificationError("");
       setSaved([]);
       setSavedOwner("");
       setHasMore(false);
       setRepliesHasMore(false);
       setShowCall(false);
+      setCallSetupChannel(null);
+      setChannelAccess(null);
       setVoicePreviewId(null);
       setView("channel");
       setTab("chat");
       setDialog(null);
       setMobileNav(false);
-      if (contextChanged) setAdminOpen(Boolean(next.workspace.suspended && next.user.siteAdmin));
-      else if (next.workspace.suspended && next.user.siteAdmin) setAdminOpen(true);
+      if (contextChanged)
+        setAdminOpen(Boolean(next.workspace.suspended && next.user.siteAdmin));
+      else if (next.workspace.suspended && next.user.siteAdmin)
+        setAdminOpen(true);
       else if (next.user.suspended && !next.user.siteAdmin) setAdminOpen(false);
       highlightRef.current = null;
-    } else if (next.user.role !== "owner" && !next.user.siteAdmin)
+    } else if (
+      !["owner", "admin"].includes(next.user.role) &&
+      !next.user.siteAdmin
+    )
       setAdminOpen(false);
     const selected =
       !changed &&
@@ -233,6 +264,23 @@ export default function App() {
         : next.channels.find((c) => c.name === "tasarım" && !c.archived)?.id ||
           next.channels.find((c) => c.kind === "text" && !c.archived)?.id ||
           "";
+    if (!changed) {
+      const allowed = new Set(
+        next.channels.filter((c) => !c.archived).map((c) => c.id),
+      );
+      setSaved((old) => old.filter((m) => allowed.has(m.channelId)));
+      setCallSetupChannel((old) => (old && allowed.has(old.id) ? old : null));
+      setChannelAccess((old) => (old && allowed.has(old.id) ? old : null));
+      if (channelRef.current !== selected) {
+        setMessages([]);
+        setReplies([]);
+        setThread(null);
+        setPins([]);
+        setChannelFiles([]);
+        setHasMore(false);
+        threadRef.current = null;
+      }
+    }
     channelRef.current = selected;
     dataRef.current = next;
     setData(next);
@@ -437,15 +485,6 @@ export default function App() {
       window.dispatchEvent(new Event("mola:admin-refresh"));
     });
     client.on("message:created", (message: Message) => {
-      if (
-        message.channelId === channelRef.current &&
-        viewRef.current !== "channel" &&
-        message.userId !== data.user.id
-      )
-        setUnread((old) => ({
-          ...old,
-          [message.channelId]: (old[message.channelId] || 0) + 1,
-        }));
       if (message.attachments.length) setCollectionVersion((v) => v + 1);
       if (message.channelId === channelRef.current) {
         if (message.parentId) {
@@ -477,10 +516,6 @@ export default function App() {
             );
         }
       } else if (message.userId !== data.user.id) {
-        setUnread((old) => ({
-          ...old,
-          [message.channelId]: (old[message.channelId] || 0) + 1,
-        }));
         if (!quietRef.current) notify("Diğer bir sohbette yeni bir mesaj var.");
       }
     });
@@ -488,6 +523,7 @@ export default function App() {
       setMessages((old) => old.map((m) => (m.id === message.id ? message : m)));
       setReplies((old) => old.map((m) => (m.id === message.id ? message : m)));
       setThread((old) => (old?.id === message.id ? message : old));
+      setLinkedReply((old) => (old?.id === message.id ? message : old));
       setSaved((old) => old.map((m) => (m.id === message.id ? message : m)));
       setCollectionVersion((v) => v + 1);
     });
@@ -496,6 +532,7 @@ export default function App() {
       setReplies((old) => old.filter((m) => m.id !== id));
       setSaved((old) => old.filter((m) => m.id !== id));
       setThread((old) => (old?.id === id ? null : old));
+      setLinkedReply((old) => (old?.id === id ? null : old));
       setCollectionVersion((v) => v + 1);
     });
     client.on("member:updated", (user: User) =>
@@ -576,7 +613,11 @@ export default function App() {
       `/channels/${channelId}/messages`,
     )
       .then((result) => {
-        if (!cancelled) {
+        if (
+          !cancelled &&
+          channelRef.current === channelId &&
+          dataRef.current?.channels.some((c) => c.id === channelId)
+        ) {
           setMessages(result.messages);
           setHasMore(result.hasMore);
           void document.fonts.ready.then(() =>
@@ -622,7 +663,11 @@ export default function App() {
       `/channels/${thread.channelId}/messages?parentId=${encodeURIComponent(thread.id)}`,
     )
       .then((result) => {
-        if (!cancelled) {
+        if (
+          !cancelled &&
+          threadRef.current?.id === thread.id &&
+          dataRef.current?.channels.some((c) => c.id === thread.channelId)
+        ) {
           setReplies(result.messages);
           setRepliesHasMore(result.hasMore);
         }
@@ -661,7 +706,12 @@ export default function App() {
     const path = `/channels/${channelId}/${tab}`;
     api<{ messages?: Message[]; files?: Attachment[] }>(path)
       .then((result) => {
-        if (cancelled) return;
+        if (
+          cancelled ||
+          channelRef.current !== channelId ||
+          !dataRef.current?.channels.some((c) => c.id === channelId)
+        )
+          return;
         if (tab === "pins") setPins(result.messages || []);
         else setChannelFiles(result.files || []);
       })
@@ -675,6 +725,196 @@ export default function App() {
       cancelled = true;
     };
   }, [channelId, tab, view, collectionVersion, fail]);
+
+  useEffect(() => {
+    if (
+      !data ||
+      verificationPending ||
+      data.user.suspended ||
+      data.workspace.suspended
+    )
+      return;
+    const workspaceId = data.workspace.id;
+    let cancelled = false,
+      sequence = 0;
+    const receive = (next: NotificationState) => {
+      if (
+        !cancelled &&
+        next.workspaceId === workspaceId &&
+        dataRef.current?.workspace.id === workspaceId
+      ) {
+        sequence++;
+        setNotificationState(next);
+        setUnread(next.unreadByChannel);
+        setNotificationError("");
+      }
+    };
+    async function load() {
+      const version = ++sequence;
+      setNotificationsLoading(true);
+      try {
+        const next = await api<NotificationState>("/notifications", {
+          headers: { "X-Workspace-Id": workspaceId },
+        });
+        if (version === sequence) receive(next);
+      } catch (e) {
+        if (!cancelled && version === sequence)
+          setNotificationError((e as Error).message);
+      } finally {
+        if (!cancelled) setNotificationsLoading(false);
+      }
+    }
+    const draftChanged = (detail: unknown) =>
+      window.dispatchEvent(new CustomEvent("mola:draft-changed", { detail }));
+    void load();
+    socket?.on("notifications:state", receive);
+    socket?.on("draft:changed", draftChanged);
+    socket?.on("connect", load);
+    window.addEventListener("focus", load);
+    window.addEventListener("mola:admin-refresh", load);
+    return () => {
+      cancelled = true;
+      socket?.off("notifications:state", receive);
+      socket?.off("draft:changed", draftChanged);
+      socket?.off("connect", load);
+      window.removeEventListener("focus", load);
+      window.removeEventListener("mola:admin-refresh", load);
+    };
+  }, [
+    data?.user.id,
+    data?.workspace.id,
+    data?.user.suspended,
+    data?.workspace.suspended,
+    verificationPending,
+    socket,
+  ]);
+  useEffect(() => {
+    if (
+      !data ||
+      view !== "channel" ||
+      tab !== "chat" ||
+      messagesLoading ||
+      !channelId ||
+      !messages.length
+    )
+      return;
+    const workspaceId = data.workspace.id,
+      messageId = messages.at(-1)!.id;
+    const mark = () => {
+      if (
+        document.visibilityState === "visible" &&
+        dataRef.current?.workspace.id === workspaceId
+      )
+        void api(`/channels/${channelId}/read`, {
+          method: "POST",
+          headers: { "X-Workspace-Id": workspaceId },
+          body: JSON.stringify({ messageId }),
+        }).catch(() => {});
+    };
+    const timer = setTimeout(mark, 400);
+    window.addEventListener("focus", mark);
+    document.addEventListener("visibilitychange", mark);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("focus", mark);
+      document.removeEventListener("visibilitychange", mark);
+    };
+  }, [
+    data?.workspace.id,
+    channelId,
+    view,
+    tab,
+    messagesLoading,
+    messages.at(-1)?.id,
+  ]);
+  useEffect(() => {
+    if (
+      !data ||
+      !thread ||
+      threadLoading ||
+      !replies.length ||
+      view !== "channel"
+    )
+      return;
+    const workspaceId = data.workspace.id,
+      threadChannel = thread.channelId,
+      messageId = replies.at(-1)!.id;
+    const mark = () => {
+      if (
+        document.visibilityState === "visible" &&
+        dataRef.current?.workspace.id === workspaceId
+      )
+        void api(`/channels/${threadChannel}/read`, {
+          method: "POST",
+          headers: { "X-Workspace-Id": workspaceId },
+          body: JSON.stringify({ messageId }),
+        }).catch(() => {});
+    };
+    const timer = setTimeout(mark, 400);
+    document.addEventListener("visibilitychange", mark);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", mark);
+    };
+  }, [data?.workspace.id, thread?.id, threadLoading, replies.at(-1)?.id, view]);
+  useEffect(() => {
+    if (!data || verificationPending) return;
+    let cancelled = false;
+    const open = async () => {
+      const params = new URLSearchParams(location.search),
+        id = params.get("message"),
+        workspace = params.get("workspace");
+      if (!id || !workspace) return;
+      const clean = () => {
+        params.delete("message");
+        params.delete("workspace");
+        history.replaceState(
+          null,
+          "",
+          location.pathname + (params.size ? "?" + params : "") + location.hash,
+        );
+      };
+      if (!data.workspaces.some((w) => w.id === workspace)) {
+        clean();
+        fail("Bu mesajın çalışma alanına erişimin yok.");
+        return;
+      }
+      if (workspace !== data.workspace.id) {
+        if (callRef.current.joined || callRef.current.joining) {
+          openWorkspaces("list", workspace);
+          return;
+        }
+        try {
+          await changeWorkspace({ kind: "switch", id: workspace });
+        } catch (e) {
+          clean();
+          fail((e as Error).message);
+        }
+        return;
+      }
+      try {
+        const message = await api<Message>(
+          `/messages/${encodeURIComponent(id)}`,
+        );
+        if (cancelled) return;
+        clean();
+        await navigateMessage(message);
+      } catch (e) {
+        if (!cancelled) {
+          clean();
+          fail((e as Error).message);
+        }
+      }
+    };
+    void open();
+    window.addEventListener("popstate", open);
+    window.addEventListener("focus", open);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("popstate", open);
+      window.removeEventListener("focus", open);
+    };
+  }, [data?.workspace.id, data?.user.id, verificationPending]);
 
   const channel = data?.channels.find((c) => c.id === channelId);
   const userMap = useMemo(
@@ -690,10 +930,19 @@ export default function App() {
   const onlineMembers =
     data?.members.filter((m) => data.onlineIds.includes(m.id)) || [];
   const conversationMembers =
-    channel?.kind === "dm"
+    channel?.kind === "dm" || channel?.visibility === "private"
       ? data?.members.filter((m) => channel.memberIds?.includes(m.id)) || []
-      : data?.members.filter((m) => !m.suspended) || [];
+      : data?.members.filter(
+          (m) =>
+            !m.suspended &&
+            (m.role !== "guest" || channel?.memberIds?.includes(m.id)),
+        ) || [];
   const totalUnread = Object.values(unread).reduce((a, b) => a + b, 0);
+  const canManage = Boolean(
+    data &&
+    (["owner", "admin"].includes(data.user.role) || data.user.siteAdmin),
+  );
+  const canCreate = Boolean(data && data.user.role !== "guest");
   const voiceChannels = new Map(
     call.voiceChannels.map((roster) => [roster.channelId, roster.peers]),
   );
@@ -809,9 +1058,28 @@ export default function App() {
         message={message}
         author={userMap.get(message.userId)}
         selfId={data!.user.id}
+        canModerate={Boolean(
+          data &&
+          (["owner", "admin", "moderator"].includes(data.user.role) ||
+            data.user.siteAdmin),
+        )}
+        onCopyLink={() => {
+          const url = new URL(location.origin);
+          url.searchParams.set("workspace", data!.workspace.id);
+          url.searchParams.set("message", message.id);
+          void navigator.clipboard
+            .writeText(url.href)
+            .then(() => notify("Mesaj bağlantısı kopyalandı."))
+            .catch(() =>
+              fail("Bağlantı kopyalanamadı. Tarayıcı izinlerini kontrol et."),
+            );
+        }}
         saved={saved.some((m) => m.id === message.id)}
         onSave={() => saveMessage(message)}
-        onReply={() => setThread(message)}
+        onReply={() => {
+          setLinkedReply(null);
+          setThread(message);
+        }}
         onReact={(emoji) => {
           void mutate(`/messages/${message.id}/reactions`, {
             method: "POST",
@@ -845,7 +1113,11 @@ export default function App() {
     }
     try {
       const dm = await post<Channel>("/dms", { userId: user.id });
-      if (dataRef.current?.workspace.id !== data?.workspace.id || dataRef.current?.user.id !== data?.user.id) return;
+      if (
+        dataRef.current?.workspace.id !== data?.workspace.id ||
+        dataRef.current?.user.id !== data?.user.id
+      )
+        return;
       setData((old) =>
         old
           ? {
@@ -900,6 +1172,10 @@ export default function App() {
     }
   }
   async function navigateMessage(message: Message) {
+    if (!dataRef.current?.channels.some((c) => c.id === message.channelId)) {
+      fail("Bu mesaja artık erişemiyorsun.");
+      return;
+    }
     selectChannel(message.channelId);
     setDialog(null);
     try {
@@ -914,7 +1190,10 @@ export default function App() {
         const root = message.parentId
           ? await api<Message>(`/messages/${message.parentId}`)
           : await api<Message>(`/messages/${message.id}`);
-        if (channelRef.current === message.channelId) setThread(root);
+        if (channelRef.current === message.channelId) {
+          setLinkedReply(message.parentId ? message : null);
+          setThread(root);
+        }
       } else {
         highlightRef.current = message.id;
         requestAnimationFrame(() => {
@@ -951,7 +1230,6 @@ export default function App() {
       );
       return;
     }
-    setShowCall(true);
     if (
       (call.joined || call.joining) &&
       call.channelId &&
@@ -960,8 +1238,8 @@ export default function App() {
       fail("Başka bir odaya geçmeden önce mevcut aramadan ayrıl.");
       return;
     }
-    if (!call.joined && !call.joining)
-      void call.join({ id: target.id, name: target.name });
+    if (!call.joined && !call.joining) setCallSetupChannel(target);
+    else setShowCall(true);
   }
   const typingNames = Object.keys(typing)
     .filter((id) => typing[id])
@@ -1108,11 +1386,12 @@ export default function App() {
         <div className="rail-bottom">
           <IconButton
             label="Ekip arkadaşlarını davet et"
+            disabled={!canManage}
             onClick={() => setDialog("invite")}
           >
             <Users size={21} />
           </IconButton>
-          {(data.user.role === "owner" || data.user.siteAdmin) && (
+          {canManage && (
             <IconButton
               label="Yönetim paneli"
               onClick={() => setAdminOpen(true)}
@@ -1205,6 +1484,7 @@ export default function App() {
               </span>
               <IconButton
                 label="Kanal oluştur"
+                disabled={!canCreate}
                 onClick={() => setDialog("channel")}
               >
                 <Plus size={16} />
@@ -1218,7 +1498,13 @@ export default function App() {
                   className={`channel-nav ${channelId === c.id && view === "channel" ? "selected" : ""}`}
                   onClick={() => selectChannel(c.id)}
                 >
-                  <Hash size={18} />
+                  <>
+                    {c.visibility === "private" ? (
+                      <Lock size={16} />
+                    ) : (
+                      <Hash size={18} />
+                    )}
+                  </>
                   <span>{c.name}</span>
                   {(unread[c.id] || 0) > 0 && (
                     <span className="count-badge">{unread[c.id]}</span>
@@ -1230,6 +1516,7 @@ export default function App() {
               ))}
             <button
               className="add-channel"
+              disabled={!canCreate}
               onClick={() => setDialog("channel")}
             >
               <Plus size={16} />
@@ -1305,7 +1592,16 @@ export default function App() {
               </IconButton>
             </div>
             {data.members
-              .filter((u) => u.id !== data.user.id && !u.suspended)
+              .filter(
+                (u) =>
+                  u.id !== data.user.id &&
+                  !u.suspended &&
+                  !u.isBot &&
+                  ((u.role !== "guest" && data.user.role !== "guest") ||
+                    data.channels.some(
+                      (c) => c.kind === "dm" && c.memberIds?.includes(u.id),
+                    )),
+              )
               .slice(0, 5)
               .map((user) => (
                 <button
@@ -1324,6 +1620,7 @@ export default function App() {
             {data.members.length === 1 && (
               <button
                 className="add-channel"
+                disabled={!canManage}
                 onClick={() => setDialog("invite")}
               >
                 <Plus size={16} />
@@ -1333,7 +1630,29 @@ export default function App() {
           </div>
         </div>
         <div className="sidebar-bottom">
-          {(data.user.role === "owner" || data.user.siteAdmin) && (
+          {canManage && (
+            <button
+              className="sidebar-utility"
+              onClick={() => {
+                setMobileNav(false);
+                setDialog("integrations");
+              }}
+            >
+              <Plug size={18} />
+              Entegrasyonlar
+            </button>
+          )}
+          <button
+            className="sidebar-utility"
+            onClick={() => {
+              setMobileNav(false);
+              setDialog("notifications");
+            }}
+          >
+            <Bell size={18} />
+            Bildirimler ve uygulama
+          </button>
+          {canManage && (
             <button
               className="mobile-admin-entry"
               onClick={() => {
@@ -1363,7 +1682,7 @@ export default function App() {
               </span>
               <strong>Birlikte daha güzel.</strong>
               <p>Ekibine de bir yer aç.</p>
-              <button onClick={() => setDialog("invite")}>
+              <button disabled={!canManage} onClick={() => setDialog("invite")}>
                 Arkadaşlarını davet et
                 <ArrowRight size={15} />
               </button>
@@ -1605,50 +1924,32 @@ export default function App() {
                       )}
                     </>
                   ) : view === "inbox" ? (
-                    <>
-                      {totalUnread ? (
-                        <div className="inbox-list">
-                          <h2>Sohbete yetiş.</h2>
-                          {Object.entries(unread)
-                            .filter(([, count]) => count > 0)
-                            .map(([id, count]) => (
-                              <button
-                                key={id}
-                                onClick={() => selectChannel(id)}
-                              >
-                                <span className="channel-title-icon">
-                                  <Hash size={22} />
-                                </span>
-                                <span>
-                                  <strong>
-                                    {
-                                      data.channels.find((c) => c.id === id)
-                                        ?.name
-                                    }
-                                  </strong>
-                                  <small>{count} yeni mesaj</small>
-                                </span>
-                                <ArrowRight size={19} />
-                              </button>
-                            ))}
-                        </div>
-                      ) : (
-                        <EmptyState
-                          icon={<Check size={30} />}
-                          title="Her şeye yetiştin."
-                          text="Diğer kanallara gelen yeni mesajları burada göreceksin. Şimdi küçük bir molanın tam zamanı."
-                          extra={
-                            <button
-                              className="secondary-button"
-                              onClick={() => selectChannel(channelId)}
-                            >
-                              Sohbete dön
-                              <ArrowRight size={15} />
-                            </button>
-                          }
-                        />
-                      )}
-                    </>
+                    <NotificationsInbox
+                      state={notificationState}
+                      channels={data.channels}
+                      error={notificationError}
+                      loading={notificationsLoading}
+                      onSettings={() => setDialog("notifications")}
+                      onChannel={selectChannel}
+                      onReadAll={() => {
+                        void post("/notifications/read")
+                          .then(() => api<NotificationState>("/notifications"))
+                          .then((next) => {
+                            if (
+                              next.workspaceId === dataRef.current?.workspace.id
+                            ) {
+                              setNotificationState(next);
+                              setUnread(next.unreadByChannel);
+                            }
+                          })
+                          .catch((e) => setNotificationError(e.message));
+                      }}
+                      onOpen={(id) => {
+                        void api<Message>(`/messages/${id}`)
+                          .then(navigateMessage)
+                          .catch((e) => fail(e.message));
+                      }}
+                    />
                   ) : messagesLoading || collectionLoading ? (
                     <div className="messages-loading">
                       <Spinner label="Sohbet yükleniyor" />
@@ -1798,6 +2099,7 @@ export default function App() {
                       <Composer
                         key={`${data.user.id}:${channelId}`}
                         userId={data.user.id}
+                        workspaceId={data.workspace.id}
                         channelId={channelId}
                         channelName={channelName}
                         members={conversationMembers.map((m) => m.name)}
@@ -1833,6 +2135,18 @@ export default function App() {
                   </div>
                   <div className="thread-messages">
                     {renderMessage(thread, true)}
+                    {!threadLoading &&
+                      linkedReply?.parentId === thread.id &&
+                      !replies.some((r) => r.id === linkedReply.id) && (
+                        <section
+                          className="linked-reply"
+                          aria-label="Bağlantıdaki yanıt"
+                        >
+                          <strong>Bağlantıdaki yanıt</strong>
+                          {renderMessage(linkedReply, true)}
+                          <small>Konuşmanın en son yanıtları aşağıda.</small>
+                        </section>
+                      )}
                     <div className="thread-divider">
                       {thread.replyCount} yanıt
                     </div>
@@ -1859,6 +2173,7 @@ export default function App() {
                     <Composer
                       key={`${data.user.id}:${thread.id}`}
                       userId={data.user.id}
+                      workspaceId={data.workspace.id}
                       channelId={thread.channelId}
                       channelName={channelName}
                       parentId={thread.id}
@@ -1992,6 +2307,7 @@ export default function App() {
                       </div>
                       <button
                         className="detail-invite"
+                        disabled={!canManage}
                         onClick={() => setDialog("invite")}
                       >
                         <Plus size={15} />
@@ -2049,11 +2365,29 @@ export default function App() {
           onSelect={(message) => void navigateMessage(message)}
         />
       )}
+      {dialog === "integrations" && canManage && (
+        <IntegrationsDialog
+          key={data.workspace.id}
+          channels={data.channels}
+          isDemo={data.workspace.isDemo}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === "notifications" && (
+        <NotificationSettings
+          key={`${data.user.id}:${data.workspace.id}`}
+          onClose={() => setDialog(null)}
+        />
+      )}
       {dialog === "channel" && (
         <CreateChannel
           onClose={() => setDialog(null)}
           onCreate={(created) => {
-            if (dataRef.current?.workspace.id !== data.workspace.id || dataRef.current?.user.id !== data.user.id) return;
+            if (
+              dataRef.current?.workspace.id !== data.workspace.id ||
+              dataRef.current?.user.id !== data.user.id
+            )
+              return;
             setData((old) =>
               old
                 ? {
@@ -2066,6 +2400,7 @@ export default function App() {
                 : old,
             );
             if (created.kind === "text") selectChannel(created.id);
+            if (created.visibility === "private") setChannelAccess(created);
             setDialog(null);
             notify(`#${created.name} kanalı oluşturuldu.`);
           }}
@@ -2080,7 +2415,11 @@ export default function App() {
           isDemo={data.workspace.isDemo}
           onClose={() => setDialog(null)}
           onSave={(user) => {
-            if (dataRef.current?.workspace.id !== data.workspace.id || dataRef.current?.user.id !== data.user.id) return;
+            if (
+              dataRef.current?.workspace.id !== data.workspace.id ||
+              dataRef.current?.user.id !== data.user.id
+            )
+              return;
             setData((old) =>
               old
                 ? {
@@ -2096,7 +2435,7 @@ export default function App() {
           }}
           onLogout={() => void logout()}
           onManage={
-            data.user.role === "owner" || data.user.siteAdmin
+            canManage
               ? () => {
                   setDialog(null);
                   setAdminOpen(true);
@@ -2120,8 +2459,24 @@ export default function App() {
           </p>
           <p className="modal-description">
             {conversationMembers.length} üye ·{" "}
-            {channel?.kind === "dm" ? "Özel sohbet" : "Ekip kanalı"}
+            {channel?.kind === "dm"
+              ? "Özel sohbet"
+              : channel?.visibility === "private"
+                ? "Özel kanal"
+                : "Ekip kanalı"}
           </p>
+          {channel && channel.kind !== "dm" && (
+            <button
+              className="secondary-button full-width channel-access-button"
+              onClick={() => {
+                setDialog(null);
+                setChannelAccess(channel);
+              }}
+            >
+              <ShieldCheck size={17} />
+              Kanal erişimi ve üyeler
+            </button>
+          )}
           <button
             className="primary-button full-width"
             onClick={() => {
@@ -2143,7 +2498,19 @@ export default function App() {
             {data.members
               .filter((user) => !user.suspended)
               .map((user) => (
-                <button key={user.id} onClick={() => void openDm(user)}>
+                <button
+                  key={user.id}
+                  disabled={
+                    user.id !== data.user.id &&
+                    (Boolean(user.isBot) ||
+                      ((user.role === "guest" || data.user.role === "guest") &&
+                        !data.channels.some(
+                          (c) =>
+                            c.kind === "dm" && c.memberIds?.includes(user.id),
+                        )))
+                  }
+                  onClick={() => void openDm(user)}
+                >
                   <Avatar
                     user={user}
                     online={data.onlineIds.includes(user.id)}
@@ -2167,6 +2534,7 @@ export default function App() {
           </div>
           <button
             className="primary-button full-width"
+            disabled={!canManage}
             onClick={() => setDialog("invite")}
           >
             <Plus size={17} />
@@ -2239,13 +2607,38 @@ export default function App() {
           onClose={() => setShowCall(false)}
         />
       )}
-      {adminOpen && (data.user.role === "owner" || data.user.siteAdmin) && (
-        <AdminPanel
-          data={data}
-          onClose={() => setAdminOpen(false)}
-          onChanged={() => void refreshAccess()}
+      {callSetupChannel && (
+        <CallSetup
+          call={call}
+          channel={callSetupChannel}
+          onClose={() => setCallSetupChannel(null)}
+          onJoin={() => {
+            const target = callSetupChannel;
+            setCallSetupChannel(null);
+            setShowCall(true);
+            void call.join({ id: target.id, name: target.name });
+          }}
         />
       )}
+      {channelAccess && (
+        <ChannelAccessDialog
+          channel={channelAccess}
+          currentUserId={data.user.id}
+          onClose={() => setChannelAccess(null)}
+          onChanged={() => {
+            void refreshAccess();
+          }}
+        />
+      )}
+      {adminOpen &&
+        (["owner", "admin"].includes(data.user.role) ||
+          data.user.siteAdmin) && (
+          <AdminPanel
+            data={data}
+            onClose={() => setAdminOpen(false)}
+            onChanged={() => void refreshAccess()}
+          />
+        )}
       {toast && (
         <div
           className={`toast ${toastError ? "toast-error" : ""}`}
@@ -2358,6 +2751,19 @@ function CreateChannel({
             rows={3}
           />
         </label>
+        <label>
+          Görünürlük
+          <select name="visibility" defaultValue="public">
+            <option value="public">Ekip kanalı — çalışma alanı üyeleri</option>
+            <option value="private">
+              Özel kanal — yalnızca eklenen kişiler
+            </option>
+          </select>
+        </label>
+        <p className="channel-private-label">
+          Özel kanalı oluşturduktan sonra kanal erişiminden üyelerini
+          ekleyebilirsin.
+        </p>
         {error && (
           <p className="form-error" role="alert">
             {error}
@@ -2392,11 +2798,36 @@ function SearchDialog({
   onSelect: (message: Message) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState({
+    channelId: "",
+    userId: "",
+    from: "",
+    until: "",
+    hasFiles: false,
+  });
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const accessKey = data.channels
+    .map((c) => c.id)
+    .sort()
+    .join(",");
+  const canSearch =
+    query.trim().length >= 2 ||
+    Boolean(
+      filters.channelId ||
+      filters.userId ||
+      filters.from ||
+      filters.until ||
+      filters.hasFiles,
+    );
   const [results, setResults] = useState<Message[]>([]);
+  const visibleResults = results.filter((m) =>
+    data.channels.some((c) => c.id === m.channelId),
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (query.trim().length < 2) {
+    if (!canSearch) {
       setResults([]);
       setLoading(false);
       return;
@@ -2404,12 +2835,17 @@ function SearchDialog({
     let cancelled = false;
     setLoading(true);
     const timer = setTimeout(() => {
-      api<{ messages: Message[] }>(
-        `/search?q=${encodeURIComponent(query.trim())}`,
-      )
+      const params = new URLSearchParams({
+        q: query.trim(),
+        offset: String(offset),
+      });
+      for (const [key, value] of Object.entries(filters))
+        if (value) params.set(key, String(value));
+      api<{ messages: Message[]; hasMore: boolean }>(`/search?${params}`)
         .then((r) => {
           if (!cancelled) {
             setResults(r.messages);
+            setHasMore(r.hasMore);
             setError("");
           }
         })
@@ -2424,7 +2860,7 @@ function SearchDialog({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, filters, offset, canSearch, accessKey]);
   return (
     <Modal title="Çalışma alanında ara" onClose={onClose} wide>
       <div className="search-input-wrap">
@@ -2432,12 +2868,103 @@ function SearchDialog({
         <input
           aria-label="Mesajlarda ara"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOffset(0);
+          }}
           placeholder="Bir mesaj, bir fikir, bir kelime..."
           autoFocus
           maxLength={100}
         />
         <kbd>Esc</kbd>
+      </div>
+      <div className="search-filters">
+        <label>
+          Kanal
+          <select
+            aria-label="Kanal"
+            value={filters.channelId}
+            onChange={(e) => {
+              setFilters({ ...filters, channelId: e.target.value });
+              setOffset(0);
+            }}
+          >
+            <option value="">Tüm kanallar</option>
+            {data.channels.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.visibility === "private" ? "🔒 " : ""}
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Gönderen
+          <select
+            aria-label="Gönderen"
+            value={filters.userId}
+            onChange={(e) => {
+              setFilters({ ...filters, userId: e.target.value });
+              setOffset(0);
+            }}
+          >
+            <option value="">Herkes</option>
+            {data.members.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Başlangıç tarihi (UTC)
+          <input
+            type="date"
+            value={filters.from}
+            onChange={(e) => {
+              setFilters({ ...filters, from: e.target.value });
+              setOffset(0);
+            }}
+          />
+        </label>
+        <label>
+          Bitiş tarihi (UTC)
+          <input
+            type="date"
+            value={filters.until}
+            min={filters.from}
+            onChange={(e) => {
+              setFilters({ ...filters, until: e.target.value });
+              setOffset(0);
+            }}
+          />
+        </label>
+        <label className="search-files">
+          <input
+            type="checkbox"
+            checked={filters.hasFiles}
+            onChange={(e) => {
+              setFilters({ ...filters, hasFiles: e.target.checked });
+              setOffset(0);
+            }}
+          />
+          Yalnızca dosya içerenler
+        </label>
+        <button
+          className="text-button"
+          onClick={() => {
+            setFilters({
+              channelId: "",
+              userId: "",
+              from: "",
+              until: "",
+              hasFiles: false,
+            });
+            setOffset(0);
+          }}
+        >
+          Filtreleri temizle
+        </button>
       </div>
       <div className="search-results">
         {error ? (
@@ -2446,13 +2973,13 @@ function SearchDialog({
           </p>
         ) : loading ? (
           <Spinner label="Mesajlar aranıyor" />
-        ) : query.trim().length < 2 ? (
+        ) : !canSearch ? (
           <div className="search-empty">
             <Search size={29} />
-            <p>Aramak için en az 2 karakter yaz.</p>
+            <p>Aramak için en az 2 karakter yaz veya filtre seç.</p>
             <small>Erişebildiğin kanallarda ve özel mesajlarında arar.</small>
           </div>
-        ) : !results.length ? (
+        ) : !visibleResults.length ? (
           <div className="search-empty">
             <MessageCircle size={29} />
             <p>“{query}” için bir mesaj bulamadık.</p>
@@ -2460,8 +2987,10 @@ function SearchDialog({
           </div>
         ) : (
           <>
-            <div className="search-count">{results.length} sonuç</div>
-            {results.map((message) => (
+            <div className="search-count">
+              {offset + 1}–{offset + visibleResults.length}. sonuçlar
+            </div>
+            {visibleResults.map((message) => (
               <button
                 key={message.id}
                 className="search-result"
@@ -2481,6 +3010,24 @@ function SearchDialog({
           </>
         )}
       </div>
+      {(offset > 0 || hasMore) && (
+        <div className="modal-actions">
+          <button
+            className="secondary-button"
+            disabled={!offset || loading}
+            onClick={() => setOffset(Math.max(0, offset - 50))}
+          >
+            Önceki sayfa
+          </button>
+          <button
+            className="secondary-button"
+            disabled={!hasMore || loading}
+            onClick={() => setOffset(offset + 50)}
+          >
+            Sonraki sayfa
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -2525,7 +3072,8 @@ function InviteDialog({
           etmek için profil menüsünden çıkış yapıp kendi çalışma alanını
           oluştur.
         </p>
-      ) : data.user.role !== "owner" ? (
+      ) : !["owner", "admin"].includes(data.user.role) &&
+        !data.user.siteAdmin ? (
         <p className="demo-notice">
           Davet bağlantısı oluşturmak için çalışma alanı sahibinden yardım iste.
         </p>

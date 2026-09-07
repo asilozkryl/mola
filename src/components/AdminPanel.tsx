@@ -28,6 +28,7 @@ import type {
 import { api, post, ApiError } from "../lib/api";
 import { Avatar, Logo, Modal, Spinner, fileSize } from "./ui";
 import SystemAdmin from "./SystemAdmin";
+import ChannelAccessDialog, { roleNames } from "./ChannelAccessDialog";
 import "./admin.css";
 
 type Section =
@@ -49,6 +50,8 @@ const date = (value: string) =>
   });
 const auditNames: Record<string, string> = {
   "workspace.renamed": "Çalışma alanı güncellendi",
+  "workspace.member.role.updated": "Üye rolü güncellendi",
+  "channel.access.updated": "Kanal erişimi güncellendi",
   "workspace.member.suspended": "Üye askıya alındı",
   "workspace.member.restored": "Üye etkinleştirildi",
   "system.member.suspended": "Hesap askıya alındı",
@@ -96,9 +99,11 @@ export default function AdminPanel({
   const [action, setAction] = useState<Action>();
   const [actionError, setActionError] = useState("");
   const [editing, setEditing] = useState<Channel | "new">();
+  const [accessChannel, setAccessChannel] = useState<Channel>();
   const [inviteUrl, setInviteUrl] = useState("");
   const [showArchived, setShowArchived] = useState(false);
-  const canManage = data.user.role === "owner" || data.user.siteAdmin;
+  const canManage = data.user.role === "owner" || data.user.role === "admin" || data.user.siteAdmin;
+  const canManageAdmins = data.user.role === "owner" || data.user.siteAdmin;
   const changedRef = useRef(onChanged);
   changedRef.current = onChanged;
   const refresh = useCallback(async () => {
@@ -436,9 +441,16 @@ export default function AdminPanel({
                                     </div>
                                   </td>
                                   <td>
-                                    {member.role === "owner"
-                                      ? "Alan sahibi"
-                                      : "Üye"}
+                                    {member.role === "owner" || member.id === data.user.id || member.siteAdmin || member.isBot || (member.role === "admin" && !canManageAdmins)
+                                      ? member.isBot ? "Ekip botu" : roleNames[member.role]
+                                      : <select className="adm-role-select" aria-label={`${member.name} rolü`} value={member.role} disabled={busy} onChange={e => confirm({
+                                        title: "Üye rolünü değiştir",
+                                        description: `${member.name} için ${roleNames[e.target.value as keyof typeof roleNames]} rolü uygulanacak.${e.target.value === "guest" ? " Yalnızca atandığı kanalları görebilecek. Kanal erişimi bölümünden atamaları düzenleyebilirsin." : ""}`,
+                                        label: "Rolü değiştir", path: `/admin/workspace/members/${member.id}/role`, method: "PATCH", body: { role: e.target.value },
+                                      })}>
+                                        {canManageAdmins && <option value="admin">Yönetici</option>}
+                                        <option value="moderator">Moderatör</option><option value="member">Üye</option><option value="guest">Misafir</option>
+                                      </select>}
                                   </td>
                                   <td>
                                     <span
@@ -452,7 +464,7 @@ export default function AdminPanel({
                                       member.id !== data.user.id && (
                                         <button
                                           className="secondary-button"
-                                          disabled={busy || member.siteAdmin}
+                                          disabled={busy || member.siteAdmin || (member.role === "admin" && !canManageAdmins)}
                                           onClick={() =>
                                             confirm({
                                               title: member.suspended
@@ -526,9 +538,11 @@ export default function AdminPanel({
                                   {channel.kind === "voice"
                                     ? "Sesli oda"
                                     : "Yazılı kanal"}
+                                  {channel.visibility === "private" && " · Özel"}
                                 </small>
                               </div>
                               <div className="adm-actions">
+                                <button className="secondary-button" aria-label={`${channel.name} kanal erişimi`} onClick={() => setAccessChannel(channel)}>Erişim</button>
                                 <button
                                   className="secondary-button"
                                   onClick={() => {
@@ -944,13 +958,13 @@ export default function AdminPanel({
               />
             </label>
             {editing === "new" && (
-              <label>
+              <><label>
                 Kanal türü
                 <select name="kind" defaultValue="text">
                   <option value="text">Yazılı kanal</option>
                   <option value="voice">Sesli oda</option>
                 </select>
-              </label>
+              </label><label>Kanal görünürlüğü<select name="visibility" aria-label="Kanal görünürlüğü" defaultValue="public"><option value="public">Herkese açık</option><option value="private">Özel kanal</option></select></label><p className="channel-access-note">Özel kanal ilk olarak yalnızca sana açılır. Oluşturduktan sonra Erişim bölümünden üyeleri seçebilirsin.</p></>
             )}
             {actionError && (
               <p className="form-error" role="alert">
@@ -979,6 +993,7 @@ export default function AdminPanel({
           </form>
         </Modal>
       )}
+      {accessChannel && <ChannelAccessDialog channel={accessChannel} currentUserId={data.user.id} onClose={() => setAccessChannel(undefined)} onChanged={() => { setAccessChannel(undefined); void changed("Kanal erişimi güncellendi."); }} />}
     </dialog>
   );
 }

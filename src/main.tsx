@@ -7,6 +7,9 @@ import "@fontsource/manrope/700.css";
 import "@fontsource/manrope/800.css";
 import App from "./App";
 import "./styles.css";
+import { initializePwa } from "./lib/pwa";
+
+initializePwa();
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },

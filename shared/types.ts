@@ -1,13 +1,15 @@
+export type WorkspaceRole = "owner" | "admin" | "moderator" | "member" | "guest";
 export interface User {
   id: string;
   name: string;
   email: string;
   color: string;
-  role: "owner" | "member";
+  role: WorkspaceRole;
   status?: string;
   emailVerified: boolean;
   siteAdmin?: boolean;
   suspended?: boolean;
+  isBot?: boolean;
 }
 export interface Workspace {
   id: string;
@@ -16,7 +18,7 @@ export interface Workspace {
   suspended?: boolean;
 }
 export interface WorkspaceMembership extends Workspace {
-  role: "owner" | "member";
+  role: WorkspaceRole;
   membershipSuspended: boolean;
 }
 export interface Channel {
@@ -24,8 +26,15 @@ export interface Channel {
   name: string;
   description: string;
   kind: "text" | "voice" | "dm";
+  visibility?: "public" | "private";
   memberIds?: string[];
   archived?: boolean;
+}
+export interface ChannelAccess {
+  channel: Channel;
+  members: User[];
+  canManage: boolean;
+  canModerate: boolean;
 }
 export interface Reaction {
   emoji: string;

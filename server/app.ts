@@ -18,6 +18,11 @@ import { installOperations, requestMetrics } from './observability.js';
 import { readListenerConfig } from './listeners.js';
 import { HttpError } from './errors.js';
 import { installAdminRoutes, recordAudit } from './admin.js';
+import { installChannelPermissionRoutes, canCreateChannel, canInviteMembers, canModerateMessages } from './permissions.js';
+import { installAccountSecurity } from './account-security.js';
+import { loadAccountSecurityKey } from './security-key.js';
+import { installCollaborationData } from './collaboration-data.js';
+import { createIntegrations } from './integrations.js';
 import type { Bootstrap, Message } from '../shared/types.js';
 
 declare global { namespace Express { interface Request { auth?: Row; sessionHash?: string; } } }
@@ -87,10 +92,15 @@ export function createApp(options: AppOptions = {}) {
   mkdirSync(uploadDir, { recursive: true });
   const db = openDatabase(options.databasePath || join(dataDir, 'mola.sqlite'));
   const repo = new Repository(db);
+  const featureKey = loadAccountSecurityKey(dataDir, options.mailEncryptionKey || process.env.MAIL_ENCRYPTION_KEY);
+  let collaborationData: ReturnType<typeof installCollaborationData>;
   let mail: ReturnType<typeof createMailService>;
   try { mail = createMailService(repo, { production, dataDir, origin, mailTransport: options.mailTransport, mailEncryptionKey: options.mailEncryptionKey }); }
   catch (error) { db.close(); throw error; }
   const app = express();
+  const server = createServer(app);
+  const io = new Server(server, { maxHttpBufferSize: 256 * 1024, serveClient: false, cors: { origin: [...allowedOrigins], credentials: true }, allowRequest: (req, callback) => callback(null, Boolean(req.headers.origin && allowedOrigins.has(req.headers.origin))) });
+  const integrations = createIntegrations({repo,io,key:featureKey,origin,onMessageCreated:id=>collaborationData.onMessageCreated(id)});
   if (process.env.TRUST_PROXY) {
     const hops = Number(process.env.TRUST_PROXY);
     if (!Number.isInteger(hops) || hops < 0 || hops > 5) throw new Error('TRUST_PROXY must be an integer from 0 to 5.');
@@ -109,6 +119,7 @@ export function createApp(options: AppOptions = {}) {
   });
   app.use((_req, res, next) => { res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self), geolocation=()'); next(); });
   app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'blob:'], mediaSrc: ["'self'", 'blob:'], connectSrc: ["'self'", origin.replace(/^http/, 'ws')], objectSrc: ["'none'"], frameAncestors: ["'none'"], upgradeInsecureRequests: production ? [] : null } }, crossOriginEmbedderPolicy: false }));
+  integrations.installPublicRoutes(app);
   app.use(express.json({ limit: '96kb' }));
   app.use(cookieParser());
   app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
@@ -118,8 +129,6 @@ export function createApp(options: AppOptions = {}) {
     next();
   });
 
-  const server = createServer(app);
-  const io = new Server(server, { maxHttpBufferSize: 256 * 1024, serveClient: false, cors: { origin: [...allowedOrigins], credentials: true }, allowRequest: (req, callback) => callback(null, Boolean(req.headers.origin && allowedOrigins.has(req.headers.origin))) });
   const opsApp = opsPort === undefined ? undefined : express();
   if (opsApp) { opsApp.disable('x-powered-by'); opsApp.use(helmet()); opsApp.use(requestMetrics); }
   const operations = installOperations(opsApp || app, { db, io, dataDir, uploadDir, production });
@@ -144,10 +153,12 @@ export function createApp(options: AppOptions = {}) {
     const user = findSession(token);
     if (!user) return next(new HttpError(401, 'Devam etmek için giriş yapın.'));
     if (user.suspended_at) return next(new HttpError(403, 'Hesabınız askıya alındı. Çalışma alanı yöneticinize başvurun.', 'ACCOUNT_SUSPENDED'));
+    const expectedUser = req.headers['x-user-id'];
+    if(expectedUser && expectedUser!==user.id)return next(new HttpError(409,'Bu tarayıcıdaki hesap değişti. Güncel hesabın yükleniyor.','WORKSPACE_CHANGED'));
     const expectedWorkspace = req.headers['x-workspace-id'];
     const refreshContext = req.method === 'GET' && ['/auth/me', '/workspaces'].includes(req.path.replace(/^\/api(?=\/)/, ''));
     if (expectedWorkspace && expectedWorkspace !== user.workspace_id && !refreshContext) return next(new HttpError(409, 'Çalışma alanınız başka bir sekmede değişti. Güncel alan yükleniyor.', 'WORKSPACE_CHANGED'));
-    req.auth = user; req.sessionHash = hashToken(token); next();
+    req.auth = user; req.sessionHash = hashToken(token); security.touchSession(req.sessionHash); next();
   };
   const requiresVerification = (user: Row) => verificationRequired && !user.email_verified && !repo.workspace(user.workspace_id).isDemo;
   const bootstrap = (user: Row): Bootstrap => {
@@ -172,9 +183,11 @@ export function createApp(options: AppOptions = {}) {
     const available = repo.get('SELECT wm.workspace_id FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=? ORDER BY (wm.removed_at IS NOT NULL),(wm.suspended_at IS NOT NULL OR w.suspended_at IS NOT NULL),wm.joined_at,wm.workspace_id LIMIT 1', userId);
     if (!available) throw new HttpError(403, 'Etkin bir çalışma alanı üyeliği bulunamadı.');
     repo.run('INSERT INTO sessions(token_hash,user_id,expires_at,workspace_id) VALUES (?,?,?,?)', hashToken(token), userId, Date.now() + SESSION_MS, available.workspace_id);
+    security.registerSession(req,hashToken(token));
     res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: production, maxAge: SESSION_MS, path: '/' });
     res.json(bootstrap(repo.session(hashToken(token))!));
   };
+  const security = installAccountSecurity(app,{repo,io,authenticate,verifyPassword,startSession,dataDir,production,encryptionKey:options.mailEncryptionKey || process.env.MAIL_ENCRYPTION_KEY});
   const authLimiter = rateLimit({ windowMs: 15 * 60_000, limit: authLimit, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Çok fazla giriş denemesi. 15 dakika sonra tekrar deneyin.' } });
 
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
@@ -221,6 +234,7 @@ export function createApp(options: AppOptions = {}) {
     if (repo.get('SELECT password_hash FROM users WHERE id=?', user!.id)?.password_hash !== user!.password_hash) throw new HttpError(401, 'Parolanız değişti. Yeni parolanızla tekrar giriş yapın.');
     const fresh = repo.get('SELECT * FROM users WHERE id=?', user!.id)!;
     if (fresh.suspended_at) throw new HttpError(403, 'Hesabınız askıya alındı. Çalışma alanı yöneticinize başvurun.', 'ACCOUNT_SUSPENDED');
+    if (security.beginLogin(req,res,fresh)) return;
     startSession(req, res, user!.id);
   });
   app.post('/api/auth/logout', authenticate, (req, res) => {
@@ -347,6 +361,9 @@ export function createApp(options: AppOptions = {}) {
   });
   installAdminRoutes(app, { repo, io, verifyPassword });
   app.use('/api', (req, _res, next) => { try { requireActiveWorkspace(req); next(); } catch (error) { next(error); } });
+  installChannelPermissionRoutes(app,{repo,io});
+  collaborationData = installCollaborationData(app,{repo,io,key:featureKey,origin,requiresVerification});
+  integrations.installRoutes(app);
   const passwordLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Çok fazla parola değiştirme denemesi. 15 dakika sonra tekrar deneyin.' } });
   app.patch('/api/auth/password', passwordLimiter, async (req, res) => {
     const input = parse(z.object({ currentPassword: z.string().min(1).max(128), newPassword: z.string().min(12, 'Yeni parolanız en az 12 karakter olmalı.').max(128) }), req.body);
@@ -424,6 +441,8 @@ export function createApp(options: AppOptions = {}) {
       return id;
     });
     const message = broadcastMessage(messageId, 'message:created');
+    collaborationData.clearDraft(req.auth!.id,channel.id,input.parentId||'',input.content);
+    collaborationData.onMessageCreated(messageId);
     if (input.parentId) broadcastMessage(input.parentId);
     res.status(201).json(message);
   });
@@ -433,17 +452,19 @@ export function createApp(options: AppOptions = {}) {
     if (input.content !== undefined && message.user_id !== req.auth!.id) throw new HttpError(403, 'Yalnızca kendi mesajınızı düzenleyebilirsiniz.');
     if (input.content !== undefined) repo.run('UPDATE messages SET content=?,edited_at=? WHERE id=?', input.content, new Date().toISOString(), message.id);
     if (input.pinned !== undefined) repo.run('UPDATE messages SET pinned=? WHERE id=?', input.pinned ? 1 : 0, message.id);
+    collaborationData.refreshChannel(message.channel_id);
     res.json(broadcastMessage(message.id));
   });
   app.delete('/api/messages/:id', (req, res) => {
     const message = requireMessage(req, String(req.params.id));
-    if (message.user_id !== req.auth!.id && req.auth!.role !== 'owner') throw new HttpError(403, 'Bu mesajı silme yetkiniz yok.');
+    if (message.user_id !== req.auth!.id && !canModerateMessages(req.auth! as any)) throw new HttpError(403, 'Bu mesajı silme yetkiniz yok.');
     const descendants = repo.all('SELECT id FROM messages WHERE parent_id=?', message.id);
     const attachments = repo.all('SELECT storage_name FROM attachments WHERE message_id=? OR message_id IN (SELECT id FROM messages WHERE parent_id=?)', message.id, message.id);
     repo.run('DELETE FROM messages WHERE id=?', message.id);
     for (const file of attachments) try { unlinkSync(join(uploadDir, file.storage_name)); } catch { /* already removed */ }
     for (const id of [message.id, ...descendants.map(row => row.id)]) io.to(`channel:${message.channel_id}`).emit('message:deleted', { id, channelId: message.channel_id });
     if (message.parent_id) broadcastMessage(message.parent_id);
+    collaborationData.refreshChannel(message.channel_id);
     res.status(204).end();
   });
   app.post('/api/messages/:id/reactions', (req, res) => {
@@ -459,13 +480,17 @@ export function createApp(options: AppOptions = {}) {
   });
 
   app.post('/api/channels', (req, res) => {
-    const input = parse(z.object({ name: z.string().trim().min(2).max(40).regex(/^[\p{L}\p{N}\s_-]+$/u, 'Kanal adında harf, sayı, boşluk ve tire kullanabilirsiniz.'), description: z.string().trim().max(300).default(''), kind: z.enum(['text', 'voice']) }), req.body);
+    if(!canCreateChannel(req.auth! as any))throw new HttpError(403,'Bu rol yeni kanal oluşturamaz.');
+    const input = parse(z.object({ name: z.string().trim().min(2).max(40).regex(/^[\p{L}\p{N}\s_-]+$/u, 'Kanal adında harf, sayı, boşluk ve tire kullanabilirsiniz.'), description: z.string().trim().max(300).default(''), kind: z.enum(['text', 'voice']),visibility:z.enum(['public','private']).default('public'),memberIds:z.array(idSchema).max(1000).default([]) }), req.body);
     if (repo.get("SELECT id FROM channels WHERE workspace_id=? AND name=? COLLATE NOCASE AND kind!='dm'", req.auth!.workspace_id, input.name)) throw new HttpError(409, 'Bu isimde bir kanal var.');
     const id = randomUUID();
-    repo.run('INSERT INTO channels (id,workspace_id,name,description,kind,created_at) VALUES (?,?,?,?,?,?)', id, req.auth!.workspace_id, input.name, input.description, input.kind, new Date().toISOString());
+    repo.transaction(()=>{
+      const members=[...new Set([req.auth!.id,...input.memberIds])];for(const userId of members){const member=repo.member(userId,req.auth!.workspace_id);if(!member||member.membership_removed_at||member.membership_suspended_at||member.suspended_at)throw new HttpError(400,'Aktif çalışma alanı üyelerini seçin.');}
+      repo.run('INSERT INTO channels (id,workspace_id,name,description,kind,created_at,visibility) VALUES (?,?,?,?,?,?,?)', id, req.auth!.workspace_id, input.name, input.description, input.kind, new Date().toISOString(),input.visibility);
+      for(const userId of members)repo.run('INSERT INTO channel_members VALUES(?,?)',id,userId);
+    });
     const channel = repo.channel(repo.get('SELECT * FROM channels WHERE id=?', id)!);
-    io.in(`workspace:${req.auth!.workspace_id}`).socketsJoin(`channel:${id}`);
-    io.to(`workspace:${req.auth!.workspace_id}`).emit('channel:created', channel);
+    for(const member of repo.members(req.auth!.workspace_id))if(repo.canAccessChannel(member.id,id,req.auth!.workspace_id)){io.in(`workspace-user:${req.auth!.workspace_id}:${member.id}`).socketsJoin(`channel:${id}`);io.to(`workspace-user:${req.auth!.workspace_id}:${member.id}`).emit('channel:created',channel);}
     res.status(201).json(channel);
   });
   app.post('/api/dms', (req, res) => {
@@ -474,6 +499,7 @@ export function createApp(options: AppOptions = {}) {
     if (!other || other.suspended_at || other.membership_suspended_at || other.membership_removed_at || other.id === req.auth!.id) throw new HttpError(400, 'Mesajlaşmak için aktif bir ekip arkadaşı seçin.');
     const existing = repo.get("SELECT c.* FROM channels c WHERE c.workspace_id=? AND c.kind='dm' AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id=c.id AND user_id=?) AND EXISTS (SELECT 1 FROM channel_members WHERE channel_id=c.id AND user_id=?)", req.auth!.workspace_id, req.auth!.id, other.id);
     if (existing) return res.json(repo.channel(existing));
+    if(req.auth!.role==='guest'||other.role==='guest')throw new HttpError(403,'Misafirler yalnızca atandıkları sohbetlere katılabilir.');
     const id = repo.transaction(() => {
       const id = randomUUID(); repo.run('INSERT INTO channels (id,workspace_id,name,description,kind,created_at) VALUES (?,?,?,?,?,?)', id, req.auth!.workspace_id, other.name, 'Doğrudan mesaj', 'dm', new Date().toISOString());
       for (const userId of [req.auth!.id, other.id]) repo.run('INSERT INTO channel_members VALUES (?,?)', id, userId);
@@ -484,20 +510,28 @@ export function createApp(options: AppOptions = {}) {
     res.status(201).json(channel);
   });
   app.get('/api/search', (req, res) => {
-    const input = parse(z.object({ q: z.string().trim().min(2, 'Aramak için en az 2 karakter yazın.').max(100) }), req.query);
+    const input = parse(z.object({ q: z.string().trim().max(100).default(''), channelId:z.string().uuid().optional(),userId:z.string().uuid().optional(),from:z.iso.date().optional(),until:z.iso.date().optional(),hasFiles:z.enum(['true','false']).optional(),offset:z.coerce.number().int().min(0).max(10000).default(0) }).refine(v=>v.q.length>=2||Boolean(v.channelId||v.userId||v.from||v.until||v.hasFiles==='true'),'Aramak için en az 2 karakter yazın veya filtre seçin.').refine(v=>!v.from||!v.until||v.from<=v.until,'Bitiş tarihi başlangıçtan önce olamaz.'), req.query);
     const pattern = `%${input.q.normalize('NFKC').toLocaleLowerCase('tr-TR').replace(/[\\%_]/g, value => `\\${value}`)}%`;
-    const rows = repo.all("SELECT m.* FROM messages m JOIN channels c ON c.id=m.channel_id WHERE c.workspace_id=? AND (c.kind!='dm' OR EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=?)) AND fold_text(m.content) LIKE ? ESCAPE '\\' ORDER BY m.created_at DESC,m.id DESC LIMIT 50", req.auth!.workspace_id, req.auth!.id, pattern);
-    res.json({ messages: rows.map(row => repo.message(row)) });
+    const allowed = repo.channels(req.auth!.id,req.auth!.workspace_id).filter(c=>!input.channelId||c.id===input.channelId).map(c=>c.id);
+    if (!allowed.length) {res.json({messages:[],hasMore:false});return;}
+    const conditions = ["m.channel_id IN (SELECT value FROM json_each(?))","fold_text(m.content) LIKE ? ESCAPE '\\'"];
+    const values:(string|number)[] = [JSON.stringify(allowed),pattern];
+    if(input.userId){conditions.push('m.user_id=?');values.push(input.userId);}
+    if(input.from){conditions.push('m.created_at>=?');values.push(`${input.from}T00:00:00.000Z`);}
+    if(input.until){conditions.push('m.created_at<?');values.push(new Date(Date.parse(`${input.until}T00:00:00Z`)+86400000).toISOString());}
+    if(input.hasFiles==='true')conditions.push('EXISTS(SELECT 1 FROM attachments a WHERE a.message_id=m.id)');
+    const rows = repo.all(`SELECT m.* FROM messages m WHERE ${conditions.join(' AND ')} ORDER BY m.created_at DESC,m.id DESC LIMIT 51 OFFSET ?`,...values,input.offset);
+    res.json({messages:rows.slice(0,50).map(row=>repo.message(row)),hasMore:rows.length>50});
   });
   app.post('/api/invites', (req, res) => {
-    if (req.auth!.role !== 'owner' && !req.auth!.site_admin) throw new HttpError(403, 'Davet bağlantısını çalışma alanı sahibi oluşturabilir.');
+    if (!canInviteMembers(req.auth! as any)) throw new HttpError(403, 'Davet bağlantısını alan sahibi veya yöneticisi oluşturabilir.');
     if (repo.workspace(req.auth!.workspace_id).isDemo) throw new HttpError(400, 'Ekibinizi davet etmek için kendi çalışma alanınızı oluşturun.');
     const token = randomBytes(32).toString('hex'); const expiresAt = Date.now() + 3 * 24 * 60 * 60_000;
     const invitationId = randomUUID();
     repo.transaction(() => {
       requireActiveWorkspace(req);
       const actor = repo.member(req.auth!.id, req.auth!.workspace_id)!;
-      if (actor.role !== 'owner' && !actor.site_admin) throw new HttpError(403, 'Davet oluşturma yetkiniz artık yok.');
+      if (!canInviteMembers(actor as any)) throw new HttpError(403, 'Davet oluşturma yetkiniz artık yok.');
       repo.run('INSERT INTO invites (token_hash,workspace_id,created_by,expires_at,uses,max_uses,id,created_at) VALUES (?,?,?,?,?,?,?,?)', hashToken(token), req.auth!.workspace_id, req.auth!.id, expiresAt, 0, 20, invitationId, new Date().toISOString());
       recordAudit(repo, actor, actor.workspace_id, 'invite.created', 'invite', invitationId);
     });
@@ -557,7 +591,7 @@ export function createApp(options: AppOptions = {}) {
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Bu işlem bulunamadı.')));
   const distDir = resolve('dist');
   if ((production || process.env.SERVE_STATIC === 'true') && existsSync(join(distDir, 'index.html'))) {
-    app.use(express.static(distDir, { index: false, maxAge: '1h' }));
+    app.use(express.static(distDir, { index: false, maxAge: '1h',setHeaders:(res,path)=>{if(path.endsWith('sw.js')||path.endsWith('manifest.webmanifest'))res.setHeader('Cache-Control','no-cache');} }));
     app.get('/{*path}', (_req, res) => res.sendFile(join(distDir, 'index.html')));
   }
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
@@ -608,6 +642,8 @@ export function createApp(options: AppOptions = {}) {
   });
 
   const maintenance = () => {
+    security.cleanup();
+    collaborationData.cleanup();
     repo.run('DELETE FROM sessions WHERE expires_at<?', Date.now());
     repo.run('DELETE FROM invites WHERE expires_at<?', Date.now() - 30 * 24 * 60 * 60_000);
     repo.run('DELETE FROM auth_tokens WHERE expires_at<?', Date.now() - 7 * 24 * 60 * 60_000);
@@ -639,6 +675,7 @@ export function createApp(options: AppOptions = {}) {
     ]);
     if (server.listening) await new Promise<void>((resolveClose, reject) => server.close(error => error ? reject(error) : resolveClose()));
     await mail.close();
+    await collaborationData.close();
     await operations.close?.();
     repo.close();
   })();

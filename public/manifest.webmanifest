@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "Mola — Ekip çalışma alanı",
+  "short_name": "Mola",
+  "description": "Ekibinin sohbetleri, sesli odaları ve paylaşımları aynı yerde.",
+  "lang": "tr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f9f4",
+  "theme_color": "#153d36",
+  "categories": ["productivity", "social"],
+  "icons": [
+    {
+      "src": "/icons/mola-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/mola-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/mola-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

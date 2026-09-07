@@ -9,6 +9,7 @@ import {
 import type { User } from "../../shared/types";
 import { api } from "../lib/api";
 import { Avatar, Modal, Spinner } from "./ui";
+import { SecuritySettings } from "./SecuritySettings";
 
 interface SettingsDialogProps {
   user: User;
@@ -147,7 +148,7 @@ export function SettingsDialog({
         >
           <span>
             <strong>Biraz odak zamanı</strong>
-            <small>Yeni mesaj bildirimlerini sessize al.</small>
+            <small>Uygulama içindeki yeni mesaj uyarılarını sessize al.</small>
           </span>
           <span className={`switch ${quiet ? "on" : ""}`} aria-hidden="true" />
         </button>
@@ -256,6 +257,7 @@ export function SettingsDialog({
           </form>
         </details>
       )}
+      {!isDemo && <SecuritySettings />}
       {onManage && (
         <button
           type="button"
