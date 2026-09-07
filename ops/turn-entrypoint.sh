@@ -9,13 +9,33 @@ printf '%s\n' "$TURN_PUBLIC_IP" | awk -F. 'NF != 4 {exit 1} {for(i=1;i<=4;i++) i
 case "$TURN_SECRET" in *[!A-Za-z0-9_=-]*) echo 'TURN_SECRET must use base64url or hex characters' >&2; exit 1;; esac
 test "${#TURN_SECRET}" -ge 32
 test -r /etc/coturn/certs/fullchain.pem && test -r /etc/coturn/certs/privkey.pem
+# Discover this network namespace's own address; never trust a configured peer
+# exception or a Docker IP saved from an earlier deployment. Verify hostname
+# resolution against the kernel's LOCAL routes; no ip/BusyBox package is needed.
+turn_local_ip=$(hostname -i) || { echo 'Cannot discover TURN relay IPv4' >&2; exit 1; }
+printf '%s\n' "$turn_local_ip" | awk '
+  NF != 1 {exit 1}
+  {count++; if ($0 !~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) exit 1;
+   split($0,a,"."); for(i=1;i<=4;i++) if(a[i]>255 || (length(a[i])>1 && substr(a[i],1,1)=="0")) exit 1;
+   if(a[1]==0 || a[1]==127 || a[1]>=224 || (a[1]==169 && a[2]==254)) exit 1}
+  END {if(count!=1) exit 1}
+' || { echo 'TURN requires exactly one usable non-loopback local IPv4' >&2; exit 1; }
+awk -v expected="$turn_local_ip" '
+  $1=="|--" {address=$2}
+  $1=="/32" && $2=="host" && $3=="LOCAL" && address !~ /^127\./ {addresses[address]=1}
+  END {for(address in addresses) count++; if(count!=1 || !(expected in addresses)) exit 1}
+' /proc/net/fib_trie || { echo 'TURN hostname must match the sole local IPv4 in this network namespace' >&2; exit 1; }
 umask 077
 cat > /tmp/turnserver.conf <<EOF
 listening-port=3478
 tls-listening-port=5349
 min-port=49160
 max-port=49259
-external-ip=$TURN_PUBLIC_IP
+# The explicit mapping permits only this relay's own address through the
+# private-range ACL, allowing two allocations on this server to exchange ICE.
+# Coturn 4.17.2 automatically whitelists the private half of this mapping.
+relay-ip=$turn_local_ip
+external-ip=$TURN_PUBLIC_IP/$turn_local_ip
 realm=$TURN_REALM
 use-auth-secret
 static-auth-secret=$TURN_SECRET

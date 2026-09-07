@@ -22,6 +22,11 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - name: Validate TURN network and certificate lifecycle
+        run: |
+          node scripts/check-turn-entrypoint.mjs
+          node scripts/check-turn-cert-hook.mjs --require-lifecycle
+          node --test scripts/check-turn-wan.test.mjs
       - run: npm audit --omit=dev --audit-level=high
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
