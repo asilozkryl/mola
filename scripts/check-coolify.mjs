@@ -11,6 +11,10 @@ import { fileURLToPath } from 'node:url';
 import { io } from 'socket.io-client';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const args = process.argv.slice(2);
+assert.ok(args.every(arg => arg === '--deferred'), 'Usage: node scripts/check-coolify.mjs [--deferred]');
+const deferred = args.includes('--deferred');
+const reportName = deferred ? 'coolify-deferred-smoke.json' : 'coolify-smoke.json';
 const project = `mola-coolify-qa-${Date.now()}-${randomBytes(3).toString('hex')}`;
 const scratch = await mkdtemp(join(tmpdir(), 'mola-coolify-qa-'));
 const emptyEnv = join(scratch, 'empty.env');
@@ -18,7 +22,7 @@ const overridePath = join(scratch, 'override.json');
 const startedAt = new Date().toISOString();
 const checks = {};
 const secrets = [];
-const report = { passed: false, startedAt, project, checks, limitations: ['A local private CA stands in for the Coolify TLS proxy; no real Coolify instance was contacted.', 'External SMTP delivery, TURN reachability, remote offsite storage and alert delivery require deployment credentials and separate live checks.'] };
+const report = { passed: false, mode: deferred ? 'deferred-providers' : 'configured-providers', startedAt, project, checks, limitations: ['A local private CA stands in for the Coolify TLS proxy; no real Coolify instance was contacted.', 'External SMTP delivery, TURN reachability, remote offsite storage and alert delivery require deployment credentials and separate live checks.'] };
 let composeArgs;
 let composeEnv;
 let ca;
@@ -122,11 +126,11 @@ async function cleanup() {
 }
 
 try {
-  console.log(`Testing isolated project ${project}`);
+  console.log(`Testing isolated project ${project} (${report.mode})`);
   const source = await readFile(join(root, 'compose.coolify.yaml'), 'utf8');
   const variables = [...source.matchAll(/\$\{([A-Z][A-Z0-9_]*)/g)].map(match => match[1]);
   const cleanEnv = { ...process.env };
-  for (const name of [...variables, 'COMPOSE_FILE', 'COMPOSE_PROFILES', 'COMPOSE_PROJECT_NAME']) delete cleanEnv[name];
+  for (const name of [...variables, ...Object.keys(cleanEnv).filter(name => /^(SMTP_|TURN_|MAIL_|ALERT_)/.test(name)), 'COMPOSE_FILE', 'COMPOSE_PROFILES', 'COMPOSE_PROJECT_NAME']) delete cleanEnv[name];
   await writeFile(emptyEnv, '');
   const baseArgs = ['compose', '--project-directory', root, '--project-name', project, '--env-file', emptyEnv, '-f', 'compose.coolify.yaml'];
   const missing = await command([...baseArgs, 'config', '--format', 'json'], { env: cleanEnv, allowFailure: true });
@@ -134,7 +138,7 @@ try {
   assert.match(missing.stderr, /required|missing|Set |is not set/i);
   step('missingRequiredEnvironmentRejected');
   const port = await freePort();
-  composeEnv = { ...cleanEnv, APP_ORIGIN: `https://localhost:${port}`, TURN_URLS: 'turn:qa.invalid:3478', TURN_SECRET: randomBytes(32).toString('hex'), SMTP_HOST: 'smtp.qa.invalid', SMTP_PORT: '587', SMTP_SECURE: 'false', SMTP_USER: 'qa', SMTP_PASS: randomBytes(24).toString('hex'), MAIL_FROM: 'Mola QA <qa@example.invalid>', MAIL_ENCRYPTION_KEY: randomBytes(32).toString('hex'), ALERT_WEBHOOK_URL: 'https://alerts.qa.invalid/no-delivery', OFFSITE_ENABLED: 'false', BACKUP_INTERVAL_SECONDS: '86400' };
+  composeEnv = { ...cleanEnv, APP_ORIGIN: `https://localhost:${port}`, EMAIL_DELIVERY_ENABLED: deferred ? 'false' : 'true', REQUIRE_TURN: deferred ? 'false' : 'true', OFFSITE_ENABLED: 'false', BACKUP_INTERVAL_SECONDS: '86400', ...(deferred ? {} : { TURN_URLS: 'turn:qa.invalid:3478', TURN_SECRET: randomBytes(32).toString('hex'), SMTP_HOST: 'smtp.qa.invalid', SMTP_PORT: '587', SMTP_SECURE: 'false', SMTP_USER: 'qa', SMTP_PASS: randomBytes(24).toString('hex'), MAIL_FROM: 'Mola QA <qa@example.invalid>', MAIL_ENCRYPTION_KEY: randomBytes(32).toString('hex'), ALERT_WEBHOOK_URL: 'https://alerts.qa.invalid/no-delivery' }) };
   secrets.push(composeEnv.TURN_SECRET, composeEnv.SMTP_PASS, composeEnv.MAIL_ENCRYPTION_KEY);
   const config = JSON.parse((await command([...baseArgs, 'config', '--format', 'json'])).stdout);
   for (const [name, service] of Object.entries(config.services)) {
@@ -154,6 +158,13 @@ try {
   assert.equal(String(config.services.app.environment.PORT), '3001');
   assert.equal(String(config.services.app.environment.OPS_PORT), '9100');
   assert.equal(String(config.services.app.environment.TRUST_PROXY), '1');
+  assert.equal(String(config.services.app.environment.EMAIL_DELIVERY_ENABLED), deferred ? 'false' : 'true');
+  assert.equal(String(config.services.app.environment.REQUIRE_TURN), deferred ? 'false' : 'true');
+  if (deferred) {
+    for (const key of ['TURN_URLS', 'TURN_SECRET', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM', 'MAIL_ENCRYPTION_KEY', 'ALERT_WEBHOOK_URL']) {
+      assert.ok(!config.services.app.environment[key], `${key} must remain empty in the deferred-provider stack`);
+    }
+  }
   assert.ok(config.services.backups.environment.APP_URL.endsWith(':9100'));
   assert.ok(config.services.app.build && config.services.backups.build);
   assert.equal(config.services.app.image, undefined, 'Application build must not overwrite a shared image tag');
@@ -168,6 +179,16 @@ try {
   step('productionImagesBuilt');
   console.log('Starting the private production stack and local TLS proxy...');
   await compose(['up', '-d', '--no-build', '--wait', '--wait-timeout', '180'], { timeout: 240_000 });
+  const serviceIds = (await compose(['ps', '-q', 'app', 'backups', 'prometheus', 'alertmanager', 'restic'])).stdout.split(/\s+/).filter(Boolean);
+  assert.equal(serviceIds.length, 5);
+  const serviceHealth = {};
+  for (const item of JSON.parse((await command(['inspect', ...serviceIds])).stdout)) {
+    const name = item.Config.Labels['com.docker.compose.service'];
+    assert.equal(item.Config.Labels['com.docker.compose.project'], project);
+    assert.equal(item.State.Health.Status, 'healthy', `${name} must become healthy`);
+    serviceHealth[name] = item.State.Health.Status;
+  }
+  step('allFiveServicesHealthy', serviceHealth);
   await compose(['cp', 'proxy:/data/caddy/pki/authorities/local/root.crt', join(scratch, 'root.crt')]);
   ca = await readFile(join(scratch, 'root.crt'));
   assert.equal((await eventually('HTTPS readiness', async () => { const response = await https('/api/health'); return response.status === 200 && response; })).json().status, 'ok');
@@ -175,6 +196,9 @@ try {
   assert.equal(index.status, 200); assert.match(index.text, /<html/);
   const publicConfig = (await https('/api/config')).json();
   assert.equal(publicConfig.demoEnabled, false); assert.equal(publicConfig.emailVerificationRequired, true);
+  assert.equal(publicConfig.emailDeliveryAvailable, !deferred);
+  assert.equal(publicConfig.registrationAvailable, !deferred);
+  assert.equal(publicConfig.relayConfigured, !deferred);
   step('verifiedTlsAndProductionDefaults');
   const opsToken = (await compose(['exec', '-T', 'app', 'node', '-e', "process.stdout.write(require('node:fs').readFileSync(process.env.OPS_TOKEN_FILE,'utf8').trim())"])).stdout;
   secrets.push(opsToken);
@@ -191,12 +215,34 @@ try {
   assert.ok(seeded.userId);
   let cookie = '';
   const api = (path, options = {}) => https(path, { ...options, headers: { Origin: composeEnv.APP_ORIGIN, Cookie: cookie, ...options.headers } });
+  if (deferred) {
+    const authCounts = () => execNode(`import {openDatabase} from './server/db.ts';const db=openDatabase('/app/data/mola.sqlite');const counts={};for(const table of ['users','workspaces','sessions','auth_tokens','mail_outbox'])counts[table]=db.prepare('SELECT count(*) AS count FROM '+table).get().count;console.log(JSON.stringify(counts));db.close();`);
+    const before = await authCounts();
+    const blockedRegistration = await api('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Unavailable signup', email: `registration-${randomUUID()}@example.invalid`, password, workspaceName: 'Must not be created' }) });
+    assert.equal(blockedRegistration.status, 503, blockedRegistration.text);
+    const recoveryResponses = [];
+    for (const address of [email, `unknown-${randomUUID()}@example.invalid`]) {
+      const response = await api('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: address }) });
+      assert.equal(response.status, 503, response.text);
+      recoveryResponses.push(response.json());
+    }
+    assert.deepEqual(recoveryResponses[0], recoveryResponses[1], 'Unavailable recovery must not reveal whether an account exists');
+    assert.deepEqual(await authCounts(), before, 'Unavailable registration and recovery must not create accounts, sessions, tokens or queued email');
+    step('deferredRegistrationAndRecoveryRejectWithoutWrites');
+  }
   const login = await api('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
   assert.equal(login.status, 200, login.text);
   const cookieHeader = login.headers['set-cookie'][0];
   assert.match(cookieHeader, /; Secure/); assert.match(cookieHeader, /; HttpOnly/); assert.match(cookieHeader, /; SameSite=Lax/i);
   cookie = cookieHeader.split(';')[0]; secrets.push(cookie);
   const state = login.json(); assert.equal(state.user.emailVerified, true);
+  const rtcResponse = await api('/api/rtc/config');
+  assert.equal(rtcResponse.status, 200, rtcResponse.text);
+  const rtcConfig = rtcResponse.json();
+  assert.equal(rtcConfig.relayConfigured, !deferred);
+  const rtcUrls = rtcConfig.iceServers.flatMap(server => Array.isArray(server.urls) ? server.urls : [server.urls]);
+  assert.equal(rtcUrls.some(url => /^turns?:/.test(url)), !deferred);
+  if (deferred) step('directCallConfigurationWithoutRelay');
   assert.equal((await api('/api/auth/login', { method: 'POST', headers: { Origin: 'https://attacker.invalid', 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })).status, 403);
   socket = await socketResult(composeEnv.APP_ORIGIN, cookie);
   assert.equal(socket.io.engine.transport.name, 'websocket');
@@ -290,9 +336,9 @@ try {
   try { await cleanup(); } catch (error) { report.cleanupError = redact(error.message); report.passed = false; process.exitCode = 1; console.error(`QA cleanup failed: ${report.cleanupError}`); }
   report.finishedAt = new Date().toISOString();
   await mkdir(join(root, 'artifacts'), { recursive: true });
-  await writeFile(join(root, 'artifacts', 'coolify-smoke.json'), JSON.stringify(report, null, 2) + '\n');
+  await writeFile(join(root, 'artifacts', reportName), JSON.stringify(report, null, 2) + '\n');
   // scratch was created by mkdtemp, and only this exact owned directory is removed.
   assert.ok(scratch.startsWith(join(tmpdir(), 'mola-coolify-qa-')));
   await rm(scratch, { recursive: true, force: true });
-  console.log(`Coolify smoke ${report.passed ? 'passed' : 'failed'}; report: artifacts/coolify-smoke.json`);
+  console.log(`Coolify smoke ${report.passed ? 'passed' : 'failed'}; report: artifacts/${reportName}`);
 }

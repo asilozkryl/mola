@@ -4,14 +4,18 @@ import type { Bootstrap } from "../../shared/types";
 import { post } from "../lib/api";
 import { IconButton, Spinner } from "./ui";
 import { AuthLayout } from "./AuthLayout";
-import { ForgotPassword } from "./AccountRecovery";
+import { EmailUnavailableNotice, ForgotPassword } from "./AccountRecovery";
 
 export function Auth({
   onLogin,
   demoEnabled,
+  emailDeliveryAvailable = true,
+  registrationAvailable = true,
 }: {
   onLogin: (data: Bootstrap) => void;
   demoEnabled: boolean;
+  emailDeliveryAvailable?: boolean;
+  registrationAvailable?: boolean;
 }) {
   const inviteToken = new URLSearchParams(location.search).get("invite") || "";
   const [mode, setMode] = useState<"login" | "register" | "forgot">(
@@ -22,6 +26,7 @@ export function Auth({
   const [error, setError] = useState("");
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (mode === "register" && !registrationAvailable) return;
     setBusy(true);
     setError("");
     const values = Object.fromEntries(new FormData(e.currentTarget));
@@ -54,6 +59,7 @@ export function Auth({
   if (mode === "forgot")
     return (
       <ForgotPassword
+        emailDeliveryAvailable={emailDeliveryAvailable}
         onBack={() => {
           setMode("login");
           setError("");
@@ -89,6 +95,10 @@ export function Auth({
         </button>
         <button
           className={mode === "register" ? "active" : ""}
+          disabled={!registrationAvailable}
+          aria-describedby={
+            !registrationAvailable ? "email-unavailable" : undefined
+          }
           onClick={() => {
             setMode("register");
             setError("");
@@ -97,95 +107,116 @@ export function Auth({
           Hesap oluştur
         </button>
       </div>
-      <form onSubmit={submit}>
-        {mode === "register" && (
-          <label>
-            Adın soyadın
-            <input
-              name="name"
-              placeholder="Örn. Asil Yılmaz"
-              autoComplete="name"
-              required
-              minLength={2}
-              maxLength={60}
-            />
-          </label>
-        )}
-        <label>
-          E-posta adresin
-          <input
-            name="email"
-            type="email"
-            placeholder="sen@ekibin.com"
-            autoComplete="email"
-            required
-            maxLength={254}
-          />
-        </label>
-        <label>
-          Parola
-          <div className="password-field">
-            <input
-              name="password"
-              type={showPassword ? "text" : "password"}
-              placeholder={
-                mode === "register" ? "En az 12 karakter" : "Parolanı gir"
-              }
-              autoComplete={
-                mode === "login" ? "current-password" : "new-password"
-              }
-              minLength={mode === "register" ? 12 : 1}
-              maxLength={128}
-              required
-            />
-            <IconButton
-              label={showPassword ? "Parolayı gizle" : "Parolayı göster"}
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </IconButton>
-          </div>
-        </label>
-        {mode === "login" && (
-          <button
-            className="auth-text-button forgot-link"
-            type="button"
-            onClick={() => {
-              setMode("forgot");
-              setError("");
-            }}
-          >
-            Parolamı unuttum
-          </button>
-        )}
-        {mode === "register" && !inviteToken && (
-          <label>
-            Çalışma alanı adı
-            <input
-              name="workspaceName"
-              placeholder="Örn. Studio North"
-              required
-              minLength={2}
-              maxLength={60}
-            />
-          </label>
-        )}
-        {error && (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-        <button className="primary-button full-width" disabled={busy}>
-          {busy ? (
-            <Spinner label="Birazdan oradasın" />
-          ) : (
-            <>
-              {mode === "login" ? "Giriş yap" : "Hesap oluştur"}
-              <ArrowRight size={18} />
-            </>
-          )}
+      {!emailDeliveryAvailable && (
+        <EmailUnavailableNotice id="email-unavailable">
+          {!registrationAvailable
+            ? "Hesap oluşturma ve parola yenileme, hizmet bağlandığında açılacak. Mevcut, doğrulanmış hesabınla giriş yapabilirsin."
+            : "Parola yenileme, hizmet bağlandığında açılacak. Hesabına parolanla giriş yapabilirsin."}
+        </EmailUnavailableNotice>
+      )}
+      {mode === "register" && !registrationAvailable ? (
+        <button
+          className="primary-button full-width recovery-secondary"
+          onClick={() => setMode("login")}
+        >
+          Mevcut hesabımla giriş yap
+          <ArrowRight size={18} />
         </button>
-      </form>
+      ) : (
+        <form onSubmit={submit}>
+          {mode === "register" && (
+            <label>
+              Adın soyadın
+              <input
+                name="name"
+                placeholder="Örn. Asil Yılmaz"
+                autoComplete="name"
+                required
+                minLength={2}
+                maxLength={60}
+              />
+            </label>
+          )}
+          <label>
+            E-posta adresin
+            <input
+              name="email"
+              type="email"
+              placeholder="sen@ekibin.com"
+              autoComplete="email"
+              required
+              maxLength={254}
+            />
+          </label>
+          <label>
+            Parola
+            <div className="password-field">
+              <input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                placeholder={
+                  mode === "register" ? "En az 12 karakter" : "Parolanı gir"
+                }
+                autoComplete={
+                  mode === "login" ? "current-password" : "new-password"
+                }
+                minLength={mode === "register" ? 12 : 1}
+                maxLength={128}
+                required
+              />
+              <IconButton
+                label={showPassword ? "Parolayı gizle" : "Parolayı göster"}
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </IconButton>
+            </div>
+          </label>
+          {mode === "login" && (
+            <button
+              className="auth-text-button forgot-link"
+              type="button"
+              disabled={!emailDeliveryAvailable}
+              aria-describedby={
+                !emailDeliveryAvailable ? "email-unavailable" : undefined
+              }
+              onClick={() => {
+                setMode("forgot");
+                setError("");
+              }}
+            >
+              Parolamı unuttum
+            </button>
+          )}
+          {mode === "register" && !inviteToken && (
+            <label>
+              Çalışma alanı adı
+              <input
+                name="workspaceName"
+                placeholder="Örn. Studio North"
+                required
+                minLength={2}
+                maxLength={60}
+              />
+            </label>
+          )}
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="primary-button full-width" disabled={busy}>
+            {busy ? (
+              <Spinner label="Birazdan oradasın" />
+            ) : (
+              <>
+                {mode === "login" ? "Giriş yap" : "Hesap oluştur"}
+                <ArrowRight size={18} />
+              </>
+            )}
+          </button>
+        </form>
+      )}
       {demoEnabled && (
         <>
           <div className="or-divider">

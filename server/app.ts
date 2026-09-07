@@ -61,9 +61,17 @@ export function createApp(options: AppOptions = {}) {
     if (!options.appOrigin && !process.env.APP_ORIGIN) throw new Error('Production requires APP_ORIGIN.');
     const parsed = new URL(appOrigin);
     if (parsed.protocol !== 'https:') throw new Error('Production APP_ORIGIN must use HTTPS.');
-    if (!process.env.TURN_URLS || !process.env.TURN_SECRET || process.env.TURN_SECRET.length < 32) throw new Error('Production requires TURN_URLS and a TURN_SECRET of at least 32 characters for reliable calls.');
-    if (process.env.TURN_URLS.split(',').some(value => !/^turns?:[^\s]+$/.test(value.trim()))) throw new Error('Every TURN_URLS entry must be a valid turn: or turns: URL.');
   }
+  const configuredRequireTurn = process.env.REQUIRE_TURN;
+  if (configuredRequireTurn !== undefined && !['true', 'false'].includes(configuredRequireTurn)) throw new Error('REQUIRE_TURN must be true or false.');
+  const requireTurn = configuredRequireTurn === undefined ? production : configuredRequireTurn === 'true';
+  const turnUrls = process.env.TURN_URLS || '';
+  const turnSecret = process.env.TURN_SECRET || '';
+  if (requireTurn || turnUrls || turnSecret) {
+    if (!turnUrls.trim() || turnSecret.trim().length < 32) throw new Error('TURN_URLS and a TURN_SECRET of at least 32 characters are required when TURN is configured or REQUIRE_TURN is enabled.');
+    if (turnUrls.split(',').some(value => !/^turns?:[^\s]+$/.test(value.trim()))) throw new Error('Every TURN_URLS entry must be a valid turn: or turns: URL.');
+  }
+  const relayConfigured = Boolean(turnUrls && turnSecret);
   const origin = new URL(appOrigin).origin;
   const allowedOrigins = new Set(production ? [origin] : [origin, 'http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3001', 'http://127.0.0.1:3001']);
   const demoEnabled = !production || process.env.ENABLE_DEMO === 'true';
@@ -142,7 +150,7 @@ export function createApp(options: AppOptions = {}) {
   const bootstrap = (user: Row): Bootstrap => {
     const workspace = repo.workspace(user.workspace_id);
     const restricted = requiresVerification(user) || Boolean(user.suspended_at) || workspace.suspended;
-    return { user: repo.user(user), workspace, emailVerificationRequired: verificationRequired && !workspace.isDemo, channels: restricted ? [] : repo.channels(user.id, user.workspace_id), members: restricted ? [] : repo.all('SELECT * FROM users WHERE workspace_id=? ORDER BY created_at,rowid', user.workspace_id).map(row => repo.user(row)), onlineIds: restricted ? [] : onlineIds(user.workspace_id) };
+    return { user: repo.user(user), workspace, emailVerificationRequired: verificationRequired && !workspace.isDemo, emailDeliveryAvailable: mail.available, channels: restricted ? [] : repo.channels(user.id, user.workspace_id), members: restricted ? [] : repo.all('SELECT * FROM users WHERE workspace_id=? ORDER BY created_at,rowid', user.workspace_id).map(row => repo.user(row)), onlineIds: restricted ? [] : onlineIds(user.workspace_id) };
   };
   const requireActiveWorkspace = (req: Request) => {
     const user = repo.get('SELECT * FROM users WHERE id=?', req.auth!.id);
@@ -163,7 +171,7 @@ export function createApp(options: AppOptions = {}) {
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   let localMailboxUrl: string | undefined;
   if (!production && process.env.LOCAL_MAILBOX_URL) { try { const url = new URL(process.env.LOCAL_MAILBOX_URL); if (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) && !url.username && !url.password) localMailboxUrl = url.toString(); } catch {} }
-  app.get('/api/config', (_req, res) => res.json({ demoEnabled, emailVerificationRequired: verificationRequired, ...(localMailboxUrl ? { localMailboxUrl } : {}) }));
+  app.get('/api/config', (_req, res) => res.json({ demoEnabled, emailVerificationRequired: verificationRequired, emailDeliveryAvailable: mail.available, registrationAvailable: !verificationRequired || mail.available, relayConfigured, ...(mail.available && localMailboxUrl ? { localMailboxUrl } : {}) }));
   app.get('/api/auth/me', authenticate, (req, res) => res.json(bootstrap(req.auth!)));
   app.post('/api/auth/demo', authLimiter, (req, res) => {
     if (!demoEnabled) throw new HttpError(403, 'Örnek alan bu sunucuda kapalı.');
@@ -173,6 +181,7 @@ export function createApp(options: AppOptions = {}) {
     startSession(req, res, created.userId);
   });
   app.post('/api/auth/register', authLimiter, async (req, res) => {
+    if (verificationRequired) mail.assertAvailable();
     const input = parse(z.object({ name: displayName, email: emailSchema, password: z.string().min(12, 'Parolanız en az 12 karakter olmalı.').max(128), workspaceName: z.string().trim().min(2).max(60).optional(), inviteToken: z.string().regex(/^[a-f0-9]{64}$/).optional() }), req.body);
     if (!input.inviteToken && !input.workspaceName) throw new HttpError(400, 'Çalışma alanınıza bir ad verin.');
     if (repo.get('SELECT id FROM users WHERE email=?', input.email)) throw new HttpError(409, 'Bu e-posta ile hesap oluşturulamıyor. Giriş yapmayı deneyin.');
@@ -185,11 +194,11 @@ export function createApp(options: AppOptions = {}) {
         const id = randomUUID();
         repo.run('INSERT INTO users (id,workspace_id,name,email,password_hash,color,role,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)', id, invite.workspace_id, input.name, input.email, password, '#b6aceb', 'member', '', new Date().toISOString());
         repo.run('UPDATE invites SET uses=uses+1 WHERE token_hash=?', invite.token_hash);
-        mail.issue(repo.get('SELECT * FROM users WHERE id=?', id)!, 'verify');
+        if (mail.available) mail.issue(repo.get('SELECT * FROM users WHERE id=?', id)!, 'verify');
         return id;
       }
       const id = createWorkspace(repo, { name: input.workspaceName!, userName: input.name, email: input.email, passwordHash: password }).userId;
-      mail.issue(repo.get('SELECT * FROM users WHERE id=?', id)!, 'verify');
+      if (mail.available) mail.issue(repo.get('SELECT * FROM users WHERE id=?', id)!, 'verify');
       return id;
     });
     const user = repo.get('SELECT * FROM users WHERE id=?', userId)!;
@@ -217,6 +226,7 @@ export function createApp(options: AppOptions = {}) {
   const tokenInput = z.string().regex(/^[a-f0-9]{64}$/, 'Bağlantı geçersiz veya süresi dolmuş.');
   const activeToken = (raw: string, kind: 'verify' | 'reset') => repo.get('SELECT t.*,u.email AS current_email,u.email_verified FROM auth_tokens t JOIN users u ON u.id=t.user_id WHERE t.token_hash=? AND t.kind=? AND t.consumed_at IS NULL AND t.expires_at>? AND t.email=u.email', hashToken(raw), kind, Date.now());
   app.post('/api/auth/forgot-password', recoveryLimiter, async (req, res) => {
+    mail.assertAvailable();
     const began = Date.now();
     const input = parse(z.object({ email: emailSchema }), req.body);
     const user = repo.get('SELECT * FROM users WHERE email=?', input.email);
@@ -262,6 +272,7 @@ export function createApp(options: AppOptions = {}) {
     res.json({ message: 'E-posta adresin doğrulandı. Artık çalışma alanına katılabilirsin.' });
   });
   app.post('/api/auth/resend-verification', authenticate, recoveryLimiter, (req, res) => {
+    mail.assertAvailable();
     if (req.auth!.email_verified || repo.workspace(req.auth!.workspace_id).isDemo) return res.status(202).json({ message: 'E-posta adresin zaten doğrulandı.' });
     const cooldown = mail.cooldown(req.auth!.id, 'verify');
     if (!cooldown.allowed) { res.setHeader('Retry-After', cooldown.retryAfter); throw new HttpError(429, cooldown.retryAfter > 60 ? 'Günlük doğrulama e-postası sınırına ulaştın. Yarın tekrar deneyebilirsin.' : `Yeni bağlantı için ${cooldown.retryAfter} saniye bekle.`); }

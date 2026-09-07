@@ -49,6 +49,7 @@ import type {
   Bootstrap,
   Channel,
   Message,
+  PublicConfig,
   User,
 } from "../shared/types";
 import { api, bootstrap, post, ApiError } from "./lib/api";
@@ -96,6 +97,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState("");
   const [demoEnabled, setDemoEnabled] = useState(false);
+  const [emailDeliveryAvailable, setEmailDeliveryAvailable] = useState(true);
+  const [registrationAvailable, setRegistrationAvailable] = useState(true);
   const [mailbox, setMailbox] = useState<string>();
   const [authLink, setAuthLink] = useState(readAuthLink);
   const verificationPending = Boolean(
@@ -203,10 +206,13 @@ export default function App() {
           setLoading(false);
         }
       });
-    api<{ demoEnabled: boolean; localMailboxUrl?: string }>("/config")
+    api<PublicConfig>("/config")
       .then((c) => {
+        if (cancelled) return;
         setDemoEnabled(c.demoEnabled);
         setMailbox(c.localMailboxUrl);
+        setEmailDeliveryAvailable(c.emailDeliveryAvailable !== false);
+        setRegistrationAvailable(c.registrationAvailable !== false);
       })
       .catch(() => {});
     return () => {
@@ -843,6 +849,7 @@ export default function App() {
       <AccountRecovery
         key={authLink.action + authLink.token}
         link={authLink}
+        emailDeliveryAvailable={emailDeliveryAvailable}
         onDone={(action) => void finishRecovery(action)}
       />
     );
@@ -864,12 +871,23 @@ export default function App() {
         </button>
       </main>
     );
-  if (!data) return <Auth onLogin={acceptData} demoEnabled={demoEnabled} />;
+  if (!data)
+    return (
+      <Auth
+        onLogin={acceptData}
+        demoEnabled={demoEnabled}
+        emailDeliveryAvailable={emailDeliveryAvailable}
+        registrationAvailable={registrationAvailable}
+      />
+    );
   if (verificationPending)
     return (
       <VerificationGate
         data={data}
         mailbox={mailbox}
+        emailDeliveryAvailable={
+          data.emailDeliveryAvailable ?? emailDeliveryAvailable
+        }
         onVerified={acceptData}
         onLogout={async () => {
           try {

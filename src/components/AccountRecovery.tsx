@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -8,7 +8,7 @@ import {
   Mail,
   ShieldCheck,
 } from "lucide-react";
-import type { Bootstrap } from "../../shared/types";
+import type { Bootstrap, PublicConfig } from "../../shared/types";
 import { api, post } from "../lib/api";
 import { clearAuthLink, type AuthLink } from "../lib/auth-links";
 import { AuthLayout } from "./AuthLayout";
@@ -26,18 +26,55 @@ function LocalMailbox({ url }: { url?: string }) {
   );
 }
 
-export function ForgotPassword({ onBack }: { onBack: () => void }) {
+export function EmailUnavailableNotice({
+  children,
+  id,
+}: {
+  children: ReactNode;
+  id?: string;
+}) {
+  return (
+    <p className="demo-notice" role="status" id={id}>
+      <strong>E-posta hizmeti henüz bağlanmadı.</strong> {children}
+    </p>
+  );
+}
+
+function useEmailDelivery(emailDeliveryAvailable: boolean) {
+  const [mailbox, setMailbox] = useState<string>();
+  const [deliveryAvailable, setDeliveryAvailable] = useState(
+    emailDeliveryAvailable,
+  );
+  useEffect(() => {
+    let cancelled = false;
+    void api<PublicConfig>("/config")
+      .then((c) => {
+        if (cancelled) return;
+        setMailbox(c.localMailboxUrl);
+        setDeliveryAvailable(c.emailDeliveryAvailable !== false);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return { canSend: emailDeliveryAvailable && deliveryAvailable, mailbox };
+}
+
+export function ForgotPassword({
+  onBack,
+  emailDeliveryAvailable = true,
+}: {
+  onBack: () => void;
+  emailDeliveryAvailable?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
-  const [mailbox, setMailbox] = useState<string>();
-  useEffect(() => {
-    void api<{ localMailboxUrl?: string }>("/config")
-      .then((c) => setMailbox(c.localMailboxUrl))
-      .catch(() => {});
-  }, []);
+  const { canSend, mailbox } = useEmailDelivery(emailDeliveryAvailable);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canSend) return;
     setBusy(true);
     setError("");
     const email = new FormData(event.currentTarget).get("email");
@@ -57,12 +94,20 @@ export function ForgotPassword({ onBack }: { onBack: () => void }) {
       </span>
       <span className="auth-greeting">Yeniden buluşalım</span>
       <h2>{sent ? "E-postanı kontrol et." : "Parolanı yenileyelim."}</h2>
-      <p>
-        {sent
-          ? "Bu adresle bir hesabın varsa parola yenileme bağlantısı yola çıktı. Gelen kutuna ve istenmeyen postalara göz at."
-          : "Hesabına bağlı e-posta adresini yaz. Sana parolanı yenileyebileceğin bir bağlantı gönderelim."}
-      </p>
-      {!sent && (
+      {canSend && (
+        <p>
+          {sent
+            ? "Bu adresle bir hesabın varsa parola yenileme bağlantısı yola çıktı. Gelen kutuna ve istenmeyen postalara göz at."
+            : "Hesabına bağlı e-posta adresini yaz. Sana parolanı yenileyebileceğin bir bağlantı gönderelim."}
+        </p>
+      )}
+      {!canSend && (
+        <EmailUnavailableNotice>
+          Parola yenileme bağlantısı şu anda gönderilemiyor. Yardım için çalışma
+          alanı yöneticinle iletişime geçebilirsin.
+        </EmailUnavailableNotice>
+      )}
+      {!sent && canSend && (
         <form onSubmit={submit}>
           <label>
             E-posta adresin
@@ -101,7 +146,7 @@ export function ForgotPassword({ onBack }: { onBack: () => void }) {
       <button className="auth-text-button recovery-back" onClick={onBack}>
         <ArrowLeft size={16} /> Girişe dön
       </button>
-      <LocalMailbox url={mailbox} />
+      {canSend && <LocalMailbox url={mailbox} />}
     </AuthLayout>
   );
 }
@@ -109,9 +154,11 @@ export function ForgotPassword({ onBack }: { onBack: () => void }) {
 export function AccountRecovery({
   link,
   onDone,
+  emailDeliveryAvailable = true,
 }: {
   link: AuthLink;
   onDone: (action: AuthLink["action"]) => void;
+  emailDeliveryAvailable?: boolean;
 }) {
   const verify = link.action === "verify-email";
   const [busy, setBusy] = useState(false);
@@ -119,6 +166,7 @@ export function AccountRecovery({
   const [done, setDone] = useState(false);
   const [show, setShow] = useState(false);
   const [forgot, setForgot] = useState(false);
+  const { canSend } = useEmailDelivery(emailDeliveryAvailable);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -141,7 +189,13 @@ export function AccountRecovery({
       setBusy(false);
     }
   }
-  if (forgot) return <ForgotPassword onBack={() => onDone("reset-password")} />;
+  if (forgot)
+    return (
+      <ForgotPassword
+        emailDeliveryAvailable={canSend}
+        onBack={() => onDone("reset-password")}
+      />
+    );
   return (
     <AuthLayout>
       <span className="recovery-symbol">
@@ -240,10 +294,20 @@ export function AccountRecovery({
       {!done && (
         <button
           className="auth-text-button recovery-back"
+          disabled={!verify && !canSend}
+          aria-describedby={
+            !verify && !canSend ? "email-unavailable" : undefined
+          }
           onClick={() => (verify ? onDone(link.action) : setForgot(true))}
         >
           {verify ? "Hesabıma dön" : "Yeni bağlantı iste"}
         </button>
+      )}
+      {!done && !verify && !canSend && (
+        <EmailUnavailableNotice id="email-unavailable">
+          Yeni bir parola yenileme bağlantısı şu anda gönderilemiyor. Elindeki
+          bağlantı geçerliyse yeni parolanı belirleyebilirsin.
+        </EmailUnavailableNotice>
       )}
     </AuthLayout>
   );
@@ -254,11 +318,13 @@ export function VerificationGate({
   mailbox,
   onVerified,
   onLogout,
+  emailDeliveryAvailable = data.emailDeliveryAvailable !== false,
 }: {
   data: Bootstrap;
   mailbox?: string;
   onVerified: (data: Bootstrap) => void;
   onLogout: () => Promise<void>;
+  emailDeliveryAvailable?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -270,6 +336,7 @@ export function VerificationGate({
     return () => window.clearTimeout(timer);
   }, [cooldown]);
   async function perform(action: "check" | "resend" | "logout") {
+    if (action === "resend" && !emailDeliveryAvailable) return;
     setBusy(true);
     setError("");
     setMessage("");
@@ -286,7 +353,9 @@ export function VerificationGate({
         if (result.user.emailVerified) onVerified(result);
         else
           setMessage(
-            "Henüz doğrulama gelmedi. E-postandaki bağlantıyı açıp doğrulama düğmesine bas.",
+            emailDeliveryAvailable
+              ? "Henüz doğrulama gelmedi. E-postandaki bağlantıyı açıp doğrulama düğmesine bas."
+              : "E-posta adresin henüz doğrulanmamış. Daha önce gelen bir bağlantını kullanabilir veya çalışma alanı yöneticinle iletişime geçebilirsin.",
           );
       }
     } catch (e) {
@@ -303,23 +372,38 @@ export function VerificationGate({
       <span className="auth-greeting">
         Az kaldı, {data.user.name.split(" ")[0]}
       </span>
-      <h2>Gelen kutunda buluşalım.</h2>
-      <p>
-        <strong className="verification-email">{data.user.email}</strong>{" "}
-        adresine bir doğrulama bağlantısı gönderdik. Çalışma alanına girmek için
-        e-postandaki adımı tamamla.
-      </p>
-      <div className="verification-steps">
-        <span>
-          <b>1</b>E-postandaki bağlantıyı aç.
-        </span>
-        <span>
-          <b>2</b>E-posta adresini doğrula.
-        </span>
-        <span>
-          <b>3</b>Buraya dön ve sohbete katıl.
-        </span>
-      </div>
+      <h2>
+        {emailDeliveryAvailable
+          ? "Gelen kutunda buluşalım."
+          : "E-posta doğrulaması bekleniyor."}
+      </h2>
+      {emailDeliveryAvailable ? (
+        <>
+          <p>
+            <strong className="verification-email">{data.user.email}</strong>{" "}
+            adresine bir doğrulama bağlantısı gönderdik. Çalışma alanına girmek
+            için e-postandaki adımı tamamla.
+          </p>
+          <div className="verification-steps">
+            <span>
+              <b>1</b>E-postandaki bağlantıyı aç.
+            </span>
+            <span>
+              <b>2</b>E-posta adresini doğrula.
+            </span>
+            <span>
+              <b>3</b>Buraya dön ve sohbete katıl.
+            </span>
+          </div>
+        </>
+      ) : (
+        <EmailUnavailableNotice id="email-unavailable">
+          <strong className="verification-email">{data.user.email}</strong>{" "}
+          adresini doğrulaman gerekiyor; şu anda yeni bağlantı gönderilemiyor.
+          Daha önce gelen bir bağlantın varsa onu kullanabilir, yoksa çalışma
+          alanı yöneticinle iletişime geçebilirsin.
+        </EmailUnavailableNotice>
+      )}
       {error && (
         <p className="form-error" role="alert">
           {error}
@@ -346,17 +430,22 @@ export function VerificationGate({
       </button>
       <button
         className="secondary-button full-width recovery-secondary"
-        disabled={busy || cooldown > 0}
+        disabled={busy || cooldown > 0 || !emailDeliveryAvailable}
+        aria-describedby={
+          !emailDeliveryAvailable ? "email-unavailable" : undefined
+        }
         onClick={() => void perform("resend")}
       >
         {cooldown
           ? `Tekrar gönder (${cooldown} sn)`
           : "E-postayı tekrar gönder"}
       </button>
-      <p className="recovery-detail">
-        E-posta ulaşmadıysa istenmeyen posta klasörünü de kontrol et. Bağlantı
-        24 saat geçerli.
-      </p>
+      {emailDeliveryAvailable && (
+        <p className="recovery-detail">
+          E-posta ulaşmadıysa istenmeyen posta klasörünü de kontrol et. Bağlantı
+          24 saat geçerli.
+        </p>
+      )}
       <button
         className="auth-text-button recovery-back"
         disabled={busy}
@@ -364,7 +453,7 @@ export function VerificationGate({
       >
         <ArrowLeft size={16} /> Farklı bir hesapla giriş yap
       </button>
-      <LocalMailbox url={mailbox} />
+      {emailDeliveryAvailable && <LocalMailbox url={mailbox} />}
     </AuthLayout>
   );
 }

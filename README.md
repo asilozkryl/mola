@@ -40,7 +40,7 @@ npm run test:load
 
 ## Docker ile dağıtım
 
-**Coolify kullanıyorsanız:** [Coolify kurulum rehberi](docs/COOLIFY.md) ve `compose.coolify.yaml` dosyasını kullanın. HTTPS'i Coolify yönetir; uygulama alan adı yalnızca 3001 portuna yönlendirilir. `.env.coolify.example` gerekli ayarları listeler. Yerel paket provası: `npm run check:coolify`.
+**Coolify kullanıyorsanız:** [Coolify kurulum rehberi](docs/COOLIFY.md) ve `compose.coolify.yaml` dosyasını kullanın. HTTPS'i Coolify yönetir; uygulama alan adı yalnızca 3001 portuna yönlendirilir. `.env.coolify.example` gerekli ayarları listeler. İlk dağıtım SMTP/TURN olmadan açılabilir: yeni hesap kaydı e-posta servisi hazır olana kadar kapalıdır, mevcut doğrulanmış hesaplar kullanılabilir; doğrudan görüşmeler bazı ağlarda bağlanamayabilir. Sağlayıcılar sonradan ortam değişkenleriyle etkinleştirilir. Yerel paket provası: `npm run check:coolify`; sağlayıcısız prova: `npm run check:coolify -- --deferred`.
 
 Alan adı ve TURN servisi gerektirmeyen, yalnızca bilgisayarınıza açılan yerel Docker sürümü:
 
@@ -60,7 +60,7 @@ Depoda çok aşamalı Dockerfile, sağlık denetimi, kalıcı veri volume'u, Cad
 
 Dağıtım, TURN, yedekleme ve geri yükleme adımları: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-Üretim modu HTTPS origin, TURN ve güvenli SMTP yapılandırması olmadan başlamaz. Yerelde `localhost` üzerinden kamera/mikrofon kullanılabilir. Fiziksel cihaz izni tarayıcıdan verilir. Telefon tarayıcılarında ekran yakalama desteği değişebilir.
+Üretim modu HTTPS origin ister; TURN ve güvenli SMTP de varsayılan olarak zorunludur. Coolify ilk kurulum modu bunları açıkça erteler; e-posta doğrulamasını atlamaz. Yerelde `localhost` üzerinden kamera/mikrofon kullanılabilir. Fiziksel cihaz izni tarayıcıdan verilir. Telefon tarayıcılarında ekran yakalama desteği değişebilir.
 
 ## Yapı
 

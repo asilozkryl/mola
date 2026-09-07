@@ -1,6 +1,6 @@
 # Mola — Coolify kurulumu
 
-Bu paket, tek Linux sunucusunda **bir uygulama süreci** için hazırlanmıştır. Uygulama, günlük tam yedek, Prometheus, Alertmanager ve isteğe bağlı restic aynı kaynakta çalışır. Coolify HTTPS'i yönetir; bu pakette ayrıca 80/443 portlarını açan Caddy yoktur. Gerçek sunucuya dağıtım bu yerel hazırlık sırasında yapılmadı.
+Bu paket, tek Linux sunucusunda **bir uygulama süreci** için hazırlanmıştır. Uygulama, günlük tam yedek, Prometheus, Alertmanager ve isteğe bağlı restic aynı kaynakta çalışır. Coolify HTTPS'i yönetir; bu pakette ayrıca 80/443 portlarını açan Caddy yoktur.
 
 ## 1. Kaynağı hazırlayın
 
@@ -26,16 +26,33 @@ Compose servisleri host portu yayınlamaz. `app` için yalnızca **3001** yönle
 
 ## 2. Ortam değişkenleri
 
-`.env.coolify.example` alanlarını Coolify'nin **Environment Variables** ekranına aktarın. Gerçek sırları burada saklayın; uygulama derlemesinde `VITE_` değişkenlerine veya Dockerfile'a eklemeyin. Uygulama sırları çalışma zamanı içindir. Compose'un `${...:?}` alanları eksik olduğunda dağıtım başlamaz. Coolify'nin [ortam değişkeni belgesi](https://coolify.io/docs/knowledge-base/environment-variables) build/runtime ayrımını açıklar.
+`.env.coolify.example` alanlarını Coolify'nin **Environment Variables** ekranına aktarın. Tek değişken düzenleyicisinde **Name** alanına `APP_ORIGIN`, **Value** alanına yalnızca `https://mola.psychodry.cloud` yazın; `APP_ORIGIN=` önekini değere eklemeyin. Toplu Developer view ise `ANAHTAR=değer` satırlarını kabul eder. Gerçek sırları burada saklayın; uygulama derlemesinde `VITE_` değişkenlerine veya Dockerfile'a eklemeyin. Uygulama sırları çalışma zamanı içindir. Coolify'nin [ortam değişkeni belgesi](https://coolify.io/docs/knowledge-base/environment-variables) build/runtime ayrımını açıklar.
+
+### Sağlayıcılar hazır olmadan ilk dağıtım
+
+Coolify Compose varsayılanları `EMAIL_DELIVERY_ENABLED=false` ve `REQUIRE_TURN=false` değerleridir. İlk dağıtım için `APP_ORIGIN` zorunludur; `TURN_URLS`, `TURN_SECRET`, SMTP alanları, `MAIL_ENCRYPTION_KEY` ve `ALERT_WEBHOOK_URL` boş kalabilir. Coolify'nin daha önce oluşturduğu `Set ... in .env` örnek metinlerini **boş değerle değiştirin**; bunlar geçerli sağlayıcı bilgileri değildir.
+
+- Uygulama ve günlük yedekleme açılır. Mevcut doğrulanmış hesaplar giriş yapabilir; mesajlaşma ve ekip yönetimi kullanılabilir.
+- E-posta servisi kapalıyken production'da yeni hesap oluşturma ve doğrulama/parola yenileme e-postası isteme kapalıdır. E-posta doğrulaması atlanmaz, hesaplar otomatik doğrulanmaz. Boş veritabanında kullanabileceğiniz bir hesap için SMTP'yi bağlayın veya aşağıdaki doğrulanmış yerel hesabı taşıma akışını kullanın.
+- TURN olmadan görüşmeler doğrudan WebRTC bağlantısını dener. Bazı mobil/kurumsal ağlarda görüşme veya ekran paylaşımı bağlanamayabilir; bu durum görüşme panelinde belirtilir.
+- Prometheus ve Alertmanager çalışır. `ALERT_WEBHOOK_URL` boşken alarmlar dahili olarak görülebilir fakat dışarı bildirim gönderilmez. Harici yedekleme de `OFFSITE_ENABLED=false` iken bekler.
+
+### Sağlayıcıları sonradan etkinleştirme
+
+SMTP ve sabit `MAIL_ENCRYPTION_KEY` değerlerini tamamlayıp `EMAIL_DELIVERY_ENABLED=true` yapın. TURN adresi ve eşleşen en az 32 karakter sırrı ekleyip `REQUIRE_TURN=true` yapın. `ALERT_WEBHOOK_URL` hazırsa ekleyin. Aynı kaynağı yeniden dağıtın; kod değişikliği gerekmez. Geçersiz veya kısmen doldurulmuş TURN ayarları, isteğe bağlı modda da başlangıç hatası verir. SMTP yeniden etkinleştirildiğinde eksik/geçersiz SMTP ve şifreleme anahtarı ayarları da reddedilir. Sağlayıcılar bağlandıktan sonra gerçek e-posta ve farklı ağlarda görüşme kabulünü tamamlayın.
+
+`compose.yaml` ile bağımsız dağıtımın varsayılanı değişmez: uygulama, bu iki seçenek açıkça kapatılmadıkça production'da SMTP ve TURN ister.
 
 | Değişken | Gereken değer |
 | --- | --- |
 | `APP_ORIGIN` | Tek, HTTPS uygulama adresi; yol veya dahili port eklenmez |
-| `TURN_URLS`, `TURN_SECRET` | Erişilebilir relay adresleri ve relay ile eşleşen en az 32 karakter sır |
-| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | Gerçek posta sağlayıcısı, giriş bilgileri ve doğrulanmış gönderen |
+| `EMAIL_DELIVERY_ENABLED` | İlk dağıtımda `false`; SMTP ve anahtar hazırken `true` |
+| `REQUIRE_TURN` | İlk dağıtımda `false`; doğrulanmış relay hazırken `true` |
+| `TURN_URLS`, `TURN_SECRET` | Birlikte boş bırakın veya erişilebilir relay adresleri ve eşleşen en az 32 karakter sır girin |
+| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | E-posta etkinleştirildiğinde gerçek posta sağlayıcısı, giriş bilgileri ve doğrulanmış gönderen |
 | `SMTP_PORT`, `SMTP_SECURE` | STARTTLS için `587` / `false`; doğrudan TLS için `465` / `true` |
-| `MAIL_ENCRYPTION_KEY` | 32 rastgele byte; hex biçiminde 64 karakter. Güncellemelerde sabit tutulur |
-| `ALERT_WEBHOOK_URL` | Alertmanager JSON kabul eden harici HTTPS alıcısı; genel Slack webhook'u aynı gövdeyi kabul etmez |
+| `MAIL_ENCRYPTION_KEY` | E-posta etkinleştirildiğinde 32 rastgele byte; hex biçiminde 64 karakter. Güncellemelerde sabit tutulur |
+| `ALERT_WEBHOOK_URL` | İsteğe bağlı Alertmanager JSON kabul eden harici HTTPS alıcısı; genel Slack webhook'u aynı gövdeyi kabul etmez |
 | `BACKUP_INTERVAL_SECONDS`, `BACKUP_KEEP` | Varsayılan günlük yedek / son 14 başarılı kopya |
 | `OFFSITE_ENABLED` | Başlangıçta `false`; harici depo hazır olduğunda `true` |
 
@@ -62,7 +79,7 @@ Coolify'nin uygulama HTTPS sertifikası TURN sertifikası yerine geçmez. Yalnı
 
 Deploy sonrasında uygulama ve yedek servisi sağlıklı olmalı. Tarayıcıda `/api/health` için `{"status":"ok"}`, `/internal/metrics` için **404** beklenir. Prometheus dahili `app:9100` adresinden yetkili veri toplar. Normal ağda operations portuna yetkisiz istek **401** döner.
 
-Yeni boş veritabanında hesabınızı oluşturup e-postanızı doğrulayın. Coolify'nin **app konteyner terminalinde** çalıştırın:
+Yeni boş veritabanında, SMTP etkinleştirildikten sonra hesabınızı oluşturup e-postanızı doğrulayın. Coolify'nin **app konteyner terminalinde** çalıştırın:
 
 ```sh
 npm run admin -- grant --email KENDI_EPOSTANIZ
@@ -115,4 +132,4 @@ Güncelleme öncesi tam yedek alın, sonra aynı Coolify kaynağını yeniden da
 - Prometheus'ta üç hedefin UP olması; gerçek harici alarmın ulaşması; bağımsız HTTPS uptime kontrolü.
 - Hedef sunucuda en fazla 6 katılımcı ve beklenen eşzamanlı oda sayısıyla CPU, bellek ve relay bant genişliği ölçümü.
 
-Yerel paket provası için `npm run check:coolify` kullanılır. Bu komut ayrı bir QA Compose projesi oluşturur; gerçek sağlayıcılara bağlanmaz. Sonuçlar `artifacts/coolify-smoke.json` içine yazılır. Canlı Coolify arayüzü, gerçek SMTP/TURN sağlayıcısı ve fiziksel cihaz kabulü bu prova tarafından yapılmış sayılmaz.
+Yerel paket provası için `npm run check:coolify` kullanılır. Sağlayıcısız ilk kurulum provası `npm run check:coolify -- --deferred` ile çalışır. Bu komutlar ayrı QA Compose projeleri oluşturur; gerçek sağlayıcılara bağlanmaz. Canlı Coolify arayüzü, gerçek SMTP/TURN sağlayıcısı ve fiziksel cihaz kabulü bu prova tarafından yapılmış sayılmaz.

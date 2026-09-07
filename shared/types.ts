@@ -54,6 +54,14 @@ export interface Bootstrap {
   members: User[];
   onlineIds: string[];
   emailVerificationRequired: boolean;
+  emailDeliveryAvailable?: boolean;
+}
+export interface PublicConfig {
+  demoEnabled: boolean;
+  localMailboxUrl?: string;
+  emailDeliveryAvailable?: boolean;
+  registrationAvailable?: boolean;
+  relayConfigured?: boolean;
 }
 export interface CallPeer {
   socketId: string;

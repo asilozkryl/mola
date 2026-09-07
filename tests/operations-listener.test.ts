@@ -14,6 +14,29 @@ const listen = (server: Server) => new Promise<void>(done => server.listen(0, '1
 const portOf = (server: Server) => (server.address() as AddressInfo).port;
 const stop = (server: Server) => new Promise<void>((done, reject) => server.close(error => error ? reject(error) : done()));
 
+test('generated alert routing enables a configured receiver and disables external delivery when it is cleared', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mola-alert-routing-'));
+  const previous = process.env.ALERT_WEBHOOK_URL;
+  let runtime: ReturnType<typeof createApp> | undefined;
+  try {
+    process.env.ALERT_WEBHOOK_URL = 'https://alerts.example.invalid/receiver';
+    runtime = createApp({ dataDir: directory, production: false, appOrigin: origin, mailTransport: async () => {}, mailEncryptionKey: 'a'.repeat(64) });
+    const configured = readFileSync(join(directory, 'alertmanager.yml'), 'utf8');
+    assert.match(configured, /url_file: \/run\/mola-secrets\/alert-webhook-url/);
+    assert.doesNotMatch(configured, /alerts\.example/);
+    await runtime.close(); runtime = undefined;
+    delete process.env.ALERT_WEBHOOK_URL;
+    runtime = createApp({ dataDir: directory, production: false, appOrigin: origin, mailTransport: async () => {}, mailEncryptionKey: 'a'.repeat(64) });
+    const disabled = readFileSync(join(directory, 'alertmanager.yml'), 'utf8');
+    assert.match(disabled, /receiver: pending-setup/);
+    assert.doesNotMatch(disabled, /webhook_configs|url_file|https?:\/\//, 'An old webhook is not reused after external delivery is cleared');
+  } finally {
+    await runtime?.close();
+    if (previous === undefined) delete process.env.ALERT_WEBHOOK_URL; else process.env.ALERT_WEBHOOK_URL = previous;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 async function fixture(run: (context: { runtime: ReturnType<typeof createApp>; publicUrl: string; operationsUrl: string; token: string; directory: string }) => Promise<void>) {
   const directory = mkdtempSync(join(tmpdir(), 'mola-operations-listener-'));
   const previousPort = process.env.OPS_PORT;

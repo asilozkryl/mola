@@ -36,6 +36,12 @@ export function installOperations(app: Express, options: { db: DatabaseSync; io:
     const webhookFile = join(dirname(tokenFile), 'alert-webhook-url');
     writeFileSync(webhookFile, destination.href, { mode: 0o640 }); chmodSync(webhookFile, 0o640);
   }
+  // Coolify reads a private generated config. An absent receiver keeps alerts
+  // visible internally without making external delivery attempts.
+  const alertConfigFile = join(dirname(tokenFile), 'alertmanager.yml');
+  const alertTemplate = process.env.ALERT_WEBHOOK_URL ? '../ops/alertmanager.yml' : '../ops/alertmanager-disabled.yml';
+  writeFileSync(alertConfigFile, readFileSync(new URL(alertTemplate, import.meta.url)), { mode: 0o640 });
+  chmodSync(alertConfigFile, 0o640);
   const expected = Buffer.from(token); token = '';
   let lastSnapshot = 0, snapshots = 0, failures = 0, snapshotDuration = 0;
   const authorize = (req: Request, res: Response, next: NextFunction) => {

@@ -3,6 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID }
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { Repository, type Row } from './db.js';
+import { HttpError } from './errors.js';
 
 export interface AuthMail { id: string; to: string; subject: string; text: string; html: string; }
 export type MailTransport = (message: AuthMail) => Promise<void>;
@@ -25,6 +26,14 @@ function loadKey(options: MailOptions): Buffer {
 }
 
 export function createMailService(repo: Repository, options: MailOptions) {
+  const configuredDelivery = process.env.EMAIL_DELIVERY_ENABLED;
+  if (configuredDelivery !== undefined && !['true', 'false'].includes(configuredDelivery)) throw new Error('EMAIL_DELIVERY_ENABLED must be true or false.');
+  if (configuredDelivery === 'false') {
+    const assertAvailable = (): never => { throw new HttpError(503, 'E-posta hizmeti henüz etkin değil. Bağlantı gönderimi için lütfen daha sonra tekrar deneyin.', 'EMAIL_UNAVAILABLE'); };
+    // Explicitly deferred delivery must not load keys, generate tokens, queue mail,
+    // run delivery timers or fall back to a plaintext development mailbox.
+    return { available: false, assertAvailable, issue: (_user: Row, _kind: 'verify' | 'reset') => assertAvailable(), cooldown: (_userId: string, _kind: 'verify' | 'reset') => ({ allowed: false, retryAfter: 0 }), flush: async () => {}, close: async () => {} };
+  }
   const key = loadKey(options);
   let shutdownTransport: (() => void) | undefined;
   let spoolDirectory: string | undefined;
@@ -107,5 +116,5 @@ export function createMailService(repo: Repository, options: MailOptions) {
   sweepSpool();
   const retentionTimer = setInterval(() => { try { sweepSpool(); } catch { console.warn(JSON.stringify({ event: 'mail_spool_cleanup_failure' })); } }, 60 * 60_000); retentionTimer.unref();
   const timer = setInterval(() => { void flush().catch(() => console.warn(JSON.stringify({ event: 'mail_queue_failure' }))); }, 5000); timer.unref();
-  return { issue, cooldown, flush, close: async () => { stopped = true; clearInterval(timer); clearInterval(retentionTimer); await pending; shutdownTransport?.(); } };
+  return { available: true, assertAvailable: () => {}, issue, cooldown, flush, close: async () => { stopped = true; clearInterval(timer); clearInterval(retentionTimer); await pending; shutdownTransport?.(); } };
 }

@@ -377,6 +377,16 @@ export function CallPanel({
                 </button>
               </div>
             )}
+            {call.joined && !call.relayConfigured && (
+              <div className="call-audio-prompt" role="status">
+                <Signal size={17} />
+                <span>
+                  Görüşmeler doğrudan bağlantıyla çalışıyor. Bağlantı hizmeti
+                  henüz kurulmadığı için bazı mobil ve kurumsal ağlarda ses,
+                  kamera veya ekran paylaşımı bağlanamayabilir.
+                </span>
+              </div>
+            )}
             {audioBlocked && call.joined && (
               <div className="call-audio-prompt">
                 <Volume2 size={17} />

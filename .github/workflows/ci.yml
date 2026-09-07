@@ -30,10 +30,12 @@ jobs:
       - name: Validate monitoring rules
         run: docker run --rm --entrypoint /bin/promtool -v "$PWD/ops:/etc/prometheus:ro" prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0 test rules /etc/prometheus/alerts.test.yml
       - name: Validate alert routing
-        run: docker run --rm --entrypoint /bin/amtool -v "$PWD/ops:/etc/alertmanager:ro" prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d check-config /etc/alertmanager/alertmanager.local.yml /etc/alertmanager/alertmanager.yml
+        run: docker run --rm --entrypoint /bin/amtool -v "$PWD/ops:/etc/alertmanager:ro" prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d check-config /etc/alertmanager/alertmanager.local.yml /etc/alertmanager/alertmanager.yml /etc/alertmanager/alertmanager-disabled.yml
       - run: docker build --tag mola:ci .
       - name: Verify Coolify deployment package in an isolated stack
         run: npm run check:coolify
+      - name: Verify Coolify with email and relay setup deferred
+        run: npm run check:coolify -- --deferred
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
@@ -42,6 +44,7 @@ jobs:
             playwright-report/
             test-results/
             artifacts/coolify-smoke.json
+            artifacts/coolify-deferred-smoke.json
             artifacts/media-mesh-*.json
           retention-days: 3
           if-no-files-found: ignore

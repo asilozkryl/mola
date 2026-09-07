@@ -21,17 +21,20 @@ services:
       TRUST_PROXY: 1
       ENABLE_DEMO: "false"
       REQUIRE_EMAIL_VERIFICATION: "true"
-      TURN_URLS: ${TURN_URLS:?Set reachable TURN URLs}
-      TURN_SECRET: ${TURN_SECRET:?Set the shared TURN authentication secret}
+      # Explicit first-deployment mode; enable providers when their settings exist.
+      EMAIL_DELIVERY_ENABLED: ${EMAIL_DELIVERY_ENABLED:-false}
+      REQUIRE_TURN: ${REQUIRE_TURN:-false}
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SECRET: ${TURN_SECRET:-}
       OPS_TOKEN_FILE: /run/mola-secrets/ops-token
-      SMTP_HOST: ${SMTP_HOST:?Set the production SMTP host}
+      SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_USER: ${SMTP_USER:?Set the SMTP user}
-      SMTP_PASS: ${SMTP_PASS:?Set the SMTP password}
-      MAIL_FROM: ${MAIL_FROM:?Set a verified sender address}
-      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:?Set a stable 32-byte hex mail encryption key}
-      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:?Set an Alertmanager-compatible HTTPS receiver}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_ENCRYPTION_KEY: ${MAIL_ENCRYPTION_KEY:-}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     expose: ["3001"]
     volumes:
       - mola_data:/app/data
@@ -124,13 +127,8 @@ services:
     image: prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d
     restart: unless-stopped
     group_add: ["1000"]
-    command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager", "--cluster.listen-address="]
+    command: ["--config.file=/run/mola-secrets/alertmanager.yml", "--storage.path=/alertmanager", "--cluster.listen-address="]
     volumes:
-      - type: bind
-        source: ./ops/alertmanager.yml
-        target: /etc/alertmanager/alertmanager.yml
-        read_only: true
-        bind: {create_host_path: false}
       - mola_alertmanager:/alertmanager
       - mola_ops_secrets:/run/mola-secrets:ro
     read_only: true
