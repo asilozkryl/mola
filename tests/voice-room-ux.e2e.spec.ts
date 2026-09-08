@@ -49,7 +49,7 @@ test("voice creation shortcut selects voice and returns to normal text creation 
       (item) => item.name === "Hızlı ses odası",
     )?.kind,
   ).toBe("voice");
-  await page.getByRole("button", { name: "Kanal ekle", exact: true }).click();
+  await page.getByRole("button", { name: "Kanal oluştur", exact: true }).click();
   await expect(
     dialog.getByRole("button", { name: /Yazılı kanal/ }),
   ).toHaveAttribute("aria-pressed", "true");

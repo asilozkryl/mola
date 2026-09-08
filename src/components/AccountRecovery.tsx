@@ -8,7 +8,7 @@ import {
   Mail,
   ShieldCheck,
 } from "lucide-react";
-import type { Bootstrap, PublicConfig } from "../../shared/types";
+import type { SessionBootstrap, PublicConfig } from "../../shared/types";
 import { api, post } from "../lib/api";
 import { clearAuthLink, type AuthLink } from "../lib/auth-links";
 import { AuthLayout } from "./AuthLayout";
@@ -320,9 +320,9 @@ export function VerificationGate({
   onLogout,
   emailDeliveryAvailable = data.emailDeliveryAvailable !== false,
 }: {
-  data: Bootstrap;
+  data: SessionBootstrap;
   mailbox?: string;
-  onVerified: (data: Bootstrap) => void;
+  onVerified: (data: SessionBootstrap) => void;
   onLogout: () => Promise<void>;
   emailDeliveryAvailable?: boolean;
 }) {
@@ -349,7 +349,7 @@ export function VerificationGate({
         setMessage(result.message);
         setCooldown(60);
       } else {
-        const result = await api<Bootstrap>("/auth/me");
+        const result = await api<SessionBootstrap>("/auth/me");
         if (result.user.emailVerified) onVerified(result);
         else
           setMessage(

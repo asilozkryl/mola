@@ -71,6 +71,7 @@ export interface Message {
   pinned: boolean;
 }
 export interface Bootstrap {
+  accountOnly?: false;
   user: User;
   workspace: Workspace;
   workspaces: WorkspaceMembership[];
@@ -81,6 +82,21 @@ export interface Bootstrap {
   emailVerificationRequired: boolean;
   emailDeliveryAvailable?: boolean;
 }
+/** A signed-in identity without an active workspace has no workspace role. */
+export type AccountUser = Omit<User, "role">;
+export interface AccountBootstrap {
+  accountOnly: true;
+  user: AccountUser;
+  workspace: null;
+  workspaces: WorkspaceMembership[];
+  channels: [];
+  members: [];
+  onlineIds: [];
+  voiceChannels: [];
+  emailVerificationRequired: boolean;
+  emailDeliveryAvailable?: boolean;
+}
+export type SessionBootstrap = Bootstrap | AccountBootstrap;
 export interface PublicConfig {
   demoEnabled: boolean;
   localMailboxUrl?: string;

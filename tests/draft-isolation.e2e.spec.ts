@@ -62,7 +62,8 @@ test('channel and reply drafts stay private across account changes and survive t
   const ownerDraft = `Sahibin gizli kanal taslağı ${randomUUID()}`;
   await composer(page).fill(ownerDraft);
 
-  await page.getByRole('button', { name: 'Çalışma alanlarını değiştir', exact: true }).click();
+  await page.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Çalışma alanlarını değiştir', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Çalışma alanların', exact: true });
   await dialog.getByRole('button', { name: 'Yeni çalışma alanı', exact: true }).click();
   await dialog.getByLabel('Çalışma alanı adı', { exact: true }).fill(`Taslak İkinci Ekip ${randomUUID().slice(0, 8)}`);
@@ -70,7 +71,8 @@ test('channel and reply drafts stay private across account changes and survive t
   await expect(dialog).toHaveCount(0);
   await expect(composer(page)).toHaveValue('');
   await composer(page).fill(`İkinci alanın ayrı taslağı ${randomUUID()}`);
-  await page.getByRole('button', { name: 'Çalışma alanlarını değiştir', exact: true }).click();
+  await page.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Çalışma alanlarını değiştir', exact: true }).click();
   await dialog.getByRole('button', { name: `${owner.workspace.name} alanına geç`, exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(composer(page)).toHaveValue(ownerDraft);

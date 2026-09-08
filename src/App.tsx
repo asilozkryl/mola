@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -9,10 +8,14 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
+  type CSSProperties,
 } from "react";
 import { io, type Socket } from "socket.io-client";
 import {
   ArrowDown,
+  ArrowUp,
+  Star,
+  StarOff,
   ArrowLeft,
   ArrowRight,
   Archive,
@@ -56,12 +59,21 @@ import {
 import type {
   Attachment,
   Bootstrap,
+  AccountBootstrap,
+  SessionBootstrap,
   Channel,
   Message,
   PublicConfig,
   User,
 } from "../shared/types";
 import { api, bootstrap, post, ApiError, setApiWorkspace } from "./lib/api";
+import { WorkspaceNavigation } from "./components/WorkspaceNavigation";
+import { useSidebarPreferences } from "./lib/useSidebarPreferences";
+import type { SidebarOrder } from "../shared/sidebar";
+import {
+  AccountOnlyHome,
+  WorkspaceLifecycleDialog,
+} from "./components/WorkspaceLifecycle";
 import { Auth } from "./components/Auth";
 import {
   AccountRecovery,
@@ -113,10 +125,7 @@ import {
   type WorkspaceAction,
   type WorkspaceMode,
 } from "./components/WorkspaceSwitcher";
-import {
-  VoiceParticipants,
-  VoiceRoomPreview,
-} from "./components/VoiceParticipants";
+import { VoiceRoomPreview } from "./components/VoiceParticipants";
 
 type Dialog =
   | "workspaces"
@@ -132,7 +141,7 @@ type Dialog =
   | "archives"
   | null;
 type View = "channel" | "saved" | "inbox" | "profile";
-let initialBootstrap: Promise<Bootstrap | null> | undefined;
+let initialBootstrap: Promise<SessionBootstrap | null> | undefined;
 const uniqueMessages = (list: Message[]) =>
   [...new Map(list.map((m) => [m.id, m])).values()].sort((a, b) =>
     a.createdAt.localeCompare(b.createdAt),
@@ -140,6 +149,13 @@ const uniqueMessages = (list: Message[]) =>
 
 export default function App() {
   const [data, setData] = useState<Bootstrap | null>(null);
+  const [accountData, setAccountData] = useState<AccountBootstrap | null>(null);
+  const accountRef = useRef(accountData);
+  accountRef.current = accountData;
+  const [workspaceLifecycle, setWorkspaceLifecycle] = useState<
+    "delete" | "leave" | null
+  >(null);
+  const [adminSection, setAdminSection] = useState<"settings" | undefined>();
   const [bootstrapRevision, setBootstrapRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState("");
@@ -149,7 +165,8 @@ export default function App() {
   const [mailbox, setMailbox] = useState<string>();
   const [authLink, setAuthLink] = useState(readAuthLink);
   const verificationPending = Boolean(
-    data?.emailVerificationRequired && !data.user.emailVerified,
+    (data || accountData)?.emailVerificationRequired &&
+    !(data || accountData)?.user.emailVerified,
   );
   usePushSubscription(
     data?.user.id,
@@ -194,9 +211,10 @@ export default function App() {
     mobileNav,
     setMobileNav,
   );
-  const [memberScope, setMemberScope] = useState<"workspace" | "channel">(
-    "workspace",
-  );
+  const [directPending, setDirectPending] = useState(false);
+  const [memberScope, setMemberScope] = useState<
+    "workspace" | "channel" | "dm"
+  >("workspace");
   const [memberQuery, setMemberQuery] = useState("");
   const [awayFromLatest, setAwayFromLatest] = useState(false);
   const { freshIds, pendingCount, received, clearPending, forget } =
@@ -231,12 +249,22 @@ export default function App() {
     anchor: HTMLElement;
     workspaceId: string;
     userId: string;
+    section?: SidebarOrder;
   } | null>(null);
   const [channelAction, setChannelAction] = useState<{
     channel: Channel;
     mode: ChannelActionMode;
     workspaceId: string;
     userId: string;
+  } | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState<{
+    scope: string;
+    width: number;
+  } | null>(null);
+  const [sidebarUndo, setSidebarUndo] = useState<{
+    scope: string;
+    section: SidebarOrder;
+    ids: string[];
   } | null>(null);
   const [quiet, setQuiet] = useState(
     localStorage.getItem("mola:quiet") === "true",
@@ -277,7 +305,55 @@ export default function App() {
     [notify],
   );
   const acceptData = useCallback(
-    (next: Bootstrap, preserveProfileRoute = false) => {
+    (next: SessionBootstrap, preserveProfileRoute = false) => {
+      if (next.accountOnly) {
+        accessVersion.current += 1;
+        callRef.current.leave();
+        socketRef.current?.removeAllListeners();
+        socketRef.current?.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+        setConnected(false);
+        setApiWorkspace(undefined);
+        initialBootstrap = Promise.resolve(next);
+        dataRef.current = null;
+        accountRef.current = next;
+        setData(null);
+        setAccountData(next);
+        setMessages([]);
+        setPins([]);
+        setChannelFiles([]);
+        setReplies([]);
+        setThread(null);
+        threadRef.current = null;
+        setLinkedReply(null);
+        setTyping({});
+        setUnread({});
+        setNotificationState(null);
+        setSaved([]);
+        setSavedOwner("");
+        setShowCall(false);
+        setCallSetupChannel(null);
+        setCallSwitchTarget(null);
+        setChannelAccess(null);
+        setChannelMenu(null);
+        setChannelAction(null);
+        setVoicePreviewId(null);
+        setDialog(null);
+        setAdminOpen(false);
+        setWorkspaceLifecycle(null);
+        setMobileNav(false);
+        setChannelId("");
+        channelRef.current = "";
+        setView("channel");
+        setProfileId(null);
+        profileReturn.current = null;
+        clearProfileAddress();
+        setLoading(false);
+        return;
+      }
+      accountRef.current = null;
+      setAccountData(null);
       const contextChanged =
         dataRef.current?.workspace.id !== next.workspace.id ||
         dataRef.current?.user.id !== next.user.id;
@@ -322,6 +398,7 @@ export default function App() {
         setChannelMenu(null);
         setChannelAction(null);
         setVoicePreviewId(null);
+        setWorkspaceLifecycle(null);
         setView("channel");
         setProfileId(null);
         profileReturn.current = null;
@@ -401,7 +478,7 @@ export default function App() {
   const refreshAccess = useCallback(async () => {
     const version = ++accessVersion.current;
     try {
-      const next = await api<Bootstrap>("/auth/me");
+      const next = await api<SessionBootstrap>("/auth/me");
       if (version === accessVersion.current && !workspaceChanging.current)
         acceptData(next);
     } catch (error) {
@@ -414,6 +491,8 @@ export default function App() {
         sessionStorage.setItem("mola:logged-out", "true");
         initialBootstrap = undefined;
         setAdminOpen(false);
+        setAccountData(null);
+        accountRef.current = null;
         setData(null);
         setMessages([]);
         setDialog(null);
@@ -427,6 +506,25 @@ export default function App() {
     window.addEventListener("mola:workspace-changed", update);
     return () => window.removeEventListener("mola:workspace-changed", update);
   }, [refreshAccess]);
+  useEffect(() => {
+    if (!accountData || verificationPending || authLink) return;
+    const client = io({
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+    });
+    const update = () => void refreshAccess();
+    client.on("connect", update);
+    client.on("workspace:changed", update);
+    client.on("admin:refresh", update);
+    client.on("connect_error", update);
+    client.on("disconnect", (reason) => {
+      if (reason === "io server disconnect") update();
+    });
+    return () => {
+      client.removeAllListeners();
+      client.disconnect();
+    };
+  }, [accountData?.user.id, verificationPending, authLink, refreshAccess]);
   useEffect(() => {
     if (data) return;
     setApiWorkspace(undefined);
@@ -485,6 +583,7 @@ export default function App() {
       callSetupChannel ||
       callSwitchTarget ||
       channelAction ||
+      workspaceLifecycle ||
       channelAccess
     )
       setMobileNav(false);
@@ -495,6 +594,7 @@ export default function App() {
     callSetupChannel,
     callSwitchTarget,
     channelAction,
+    workspaceLifecycle,
     channelAccess,
   ]);
   useEffect(() => {
@@ -502,6 +602,7 @@ export default function App() {
       !(
         dialog ||
         channelAction ||
+        workspaceLifecycle ||
         channelAccess ||
         voicePreviewId ||
         callSetupChannel ||
@@ -561,7 +662,7 @@ export default function App() {
   }, [loading, channelId, view, tab, messages, messagesLoading, clearPending]);
   useEffect(() => {
     function key(e: KeyboardEvent) {
-      if (adminOpen) return;
+      if (adminOpen || workspaceLifecycle || accountData) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setDialog("search");
@@ -572,7 +673,7 @@ export default function App() {
     }
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
-  }, [adminOpen]);
+  }, [adminOpen, workspaceLifecycle, accountData]);
   useEffect(() => {
     if (!data) return;
     try {
@@ -1161,6 +1262,43 @@ export default function App() {
     };
   }, [data?.user.id, data?.workspace.id, verificationPending]);
 
+  const sidebar = useSidebarPreferences({
+    userId: data?.user.id,
+    workspaceId: data?.workspace.id,
+    channels: data?.channels || [],
+    socket,
+    enabled:
+      !!data &&
+      !verificationPending &&
+      !authLink &&
+      !data.user.suspended &&
+      !data.workspace.suspended,
+  });
+  const sidebarScope = data ? data.user.id + ":" + data.workspace.id : "";
+  const sidebarDisplayWidth =
+    sidebarWidth?.scope === sidebarScope
+      ? sidebarWidth.width
+      : sidebar.preferences.width || 272;
+  async function reorderSidebar(section: SidebarOrder, ids: string[]) {
+    const scope = sidebarScope;
+    const before = (
+      section === "text"
+        ? sidebar.orderedTextChannels
+        : section === "voice"
+          ? sidebar.orderedVoiceChannels
+          : sidebar.favoriteChannels
+    ).map((c) => c.id);
+    if (before.join("|") === ids.join("|")) return;
+    if (await sidebar.setOrder(section, ids)) {
+      if (
+        dataRef.current &&
+        dataRef.current.user.id + ":" + dataRef.current.workspace.id === scope
+      ) {
+        setSidebarUndo({ scope, section, ids: before });
+        notify("Kanal sıralaman kaydedildi.");
+      }
+    }
+  }
   const channel = data?.channels.find((c) => c.id === channelId);
   const threadChannel = data?.channels.find((c) => c.id === thread?.channelId);
   const userMap = useMemo(
@@ -1188,27 +1326,17 @@ export default function App() {
         (member) => !member.suspended && data?.onlineIds.includes(member.id),
       )
     : [];
-  const directMessageMembers =
-    data?.members.filter(
-      (user) =>
-        user.id !== data.user.id &&
-        !user.suspended &&
-        !user.isBot &&
-        ((user.role !== "guest" && data.user.role !== "guest") ||
-          data.channels.some(
-            (c) => c.kind === "dm" && c.memberIds?.includes(user.id),
-          )),
-    ) || [];
   const listedMembers = (
     memberScope === "channel" ? conversationMembers : data?.members || []
   ).filter(
     (user) =>
       !user.suspended &&
+      (memberScope !== "dm" || (user.id !== data?.user.id && !user.isBot)) &&
       user.name
         .toLocaleLowerCase("tr-TR")
         .includes(memberQuery.trim().toLocaleLowerCase("tr-TR")),
   );
-  function openMembers(scope: "workspace" | "channel" = "workspace") {
+  function openMembers(scope: "workspace" | "channel" | "dm" = "workspace") {
     setMemberScope(scope);
     setMemberQuery("");
     setDialog("members");
@@ -1246,11 +1374,13 @@ export default function App() {
     target: Channel,
     anchor: HTMLElement,
     position?: ContextMenuPosition,
+    section?: SidebarOrder,
   ) {
     if (!data) return;
     const bounds = anchor.getBoundingClientRect();
     setChannelMenu({
       channelId: target.id,
+      section,
       workspaceId: data.workspace.id,
       userId: data.user.id,
       anchor,
@@ -1312,6 +1442,16 @@ export default function App() {
       fail((error as Error).message);
     }
   }
+  const menuOrderSection =
+    channelMenu?.section || (menuChannel?.kind === "voice" ? "voice" : "text");
+  const menuOrder = (
+    menuOrderSection === "favorites"
+      ? sidebar.favoriteChannels
+      : menuOrderSection === "voice"
+        ? sidebar.orderedVoiceChannels
+        : sidebar.orderedTextChannels
+  ).map((c) => c.id);
+  const menuOrderIndex = menuOrder.indexOf(menuChannel?.id || "");
   const channelMenuItems = menuChannel
     ? [
         {
@@ -1333,6 +1473,51 @@ export default function App() {
           disabled: menuChannel.archived,
           onSelect: () => void markChannelRead(menuChannel),
         },
+        ...(menuChannel.kind !== "dm" && !menuChannel.archived
+          ? [
+              {
+                label: sidebar.preferences.favoriteIds.includes(menuChannel.id)
+                  ? "Favorilerden çıkar"
+                  : "Favorilere ekle",
+                icon: sidebar.preferences.favoriteIds.includes(
+                  menuChannel.id,
+                ) ? (
+                  <StarOff size={16} />
+                ) : (
+                  <Star size={16} />
+                ),
+                disabled: sidebar.loading || sidebar.saving,
+                onSelect: () => {
+                  setSidebarUndo(null);
+                  void sidebar.toggleFavorite(menuChannel.id);
+                },
+              },
+              ...([-1, 1] as const).map((direction) => ({
+                label: direction === -1 ? "Yukarı taşı" : "Aşağı taşı",
+                icon:
+                  direction === -1 ? (
+                    <ArrowUp size={16} />
+                  ) : (
+                    <ArrowDown size={16} />
+                  ),
+                disabled:
+                  sidebar.loading ||
+                  sidebar.saving ||
+                  menuOrderIndex < 0 ||
+                  menuOrderIndex + direction < 0 ||
+                  menuOrderIndex + direction >= menuOrder.length,
+                onSelect: () => {
+                  const next = [...menuOrder];
+                  const target = menuOrderIndex + direction;
+                  [next[menuOrderIndex], next[target]] = [
+                    next[target],
+                    next[menuOrderIndex],
+                  ];
+                  void reorderSidebar(menuOrderSection, next);
+                },
+              })),
+            ]
+          : []),
         {
           label: "Kanal adını kopyala",
           icon: <Copy size={16} />,
@@ -1405,7 +1590,7 @@ export default function App() {
     preserveProfileRoute = false,
   ) {
     if (workspaceChanging.current) return;
-    const actorId = dataRef.current?.user.id;
+    const actorId = dataRef.current?.user.id || accountRef.current?.user.id;
     if (!actorId) return;
     workspaceChanging.current = true;
     accessVersion.current += 1;
@@ -1421,7 +1606,8 @@ export default function App() {
             : await post<Bootstrap>(
                 `/workspaces/${encodeURIComponent(action.id)}/switch`,
               );
-      if (dataRef.current?.user.id !== actorId) return;
+      if ((dataRef.current?.user.id || accountRef.current?.user.id) !== actorId)
+        return;
       if (!preserveProfileRoute) clearProfileAddress();
       acceptData(next, preserveProfileRoute);
       setDialog(null);
@@ -1702,11 +1888,14 @@ export default function App() {
       sessionStorage.setItem("mola:logged-out", "true");
       initialBootstrap = undefined;
       setData(null);
+      setAccountData(null);
+      accountRef.current = null;
       setDialog(null);
       setMessages([]);
       setSaved([]);
       setUnread({});
     } catch (e) {
+      if (accountRef.current) throw e;
       fail((e as Error).message);
     }
   }
@@ -1814,12 +2003,14 @@ export default function App() {
     setLoading(true);
     setFatal("");
     setAuthLink(null);
+    setAccountData(null);
+    accountRef.current = null;
     setData(null);
     setMessages([]);
     setChannelId("");
     if (action === "verify-email") {
       try {
-        acceptData(await api<Bootstrap>("/auth/me"));
+        acceptData(await api<SessionBootstrap>("/auth/me"));
       } catch (error) {
         if (!(error instanceof ApiError && error.status === 401))
           setFatal((error as Error).message);
@@ -1853,6 +2044,28 @@ export default function App() {
           Tekrar dene
         </button>
       </main>
+    );
+  if (verificationPending && accountData)
+    return (
+      <VerificationGate
+        data={accountData}
+        mailbox={mailbox}
+        emailDeliveryAvailable={
+          accountData.emailDeliveryAvailable ?? emailDeliveryAvailable
+        }
+        onVerified={acceptData}
+        onLogout={logout}
+      />
+    );
+  if (accountData)
+    return (
+      <AccountOnlyHome
+        key={accountData.user.id}
+        data={accountData}
+        onAction={changeWorkspace}
+        onLogout={logout}
+        onRefresh={() => void refreshAccess()}
+      />
     );
   if (!data)
     return (
@@ -1891,7 +2104,10 @@ export default function App() {
     );
 
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      style={{ "--sidebar-width": `${sidebarDisplayWidth}px` } as CSSProperties}
+    >
       <a className="skip-link" href="#main-content">
         Sohbete geç
       </a>
@@ -1967,13 +2183,6 @@ export default function App() {
           >
             <CircleHelp size={21} />
           </IconButton>
-          <button
-            className="rail-profile"
-            title="Profil ve ayarlar"
-            onClick={() => setDialog("settings")}
-          >
-            <Avatar user={data.user} size="small" online={connected} />
-          </button>
         </div>
       </aside>
       {mobileNav && (
@@ -1987,7 +2196,7 @@ export default function App() {
       <div
         id="workspace-navigation"
         ref={sidebarRef}
-        className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}
+        className={`sidebar live-sidebar ${mobileNav ? "sidebar-open" : ""}`}
         aria-label="Çalışma alanı gezinmesi"
         role={isMobile && mobileNav ? "dialog" : "complementary"}
         aria-modal={isMobile && mobileNav ? true : undefined}
@@ -2003,381 +2212,57 @@ export default function App() {
             <X size={19} />
           </IconButton>
         </div>
-        <button
-          className="workspace-heading"
-          aria-label="Çalışma alanlarını değiştir"
-          onClick={() => openWorkspaces()}
-        >
-          <span>
-            <strong>{data.workspace.name}</strong>
-            <small>
-              <span className="small-status-dot" />
-              {data.workspace.isDemo
-                ? "Sana özel örnek alan"
-                : "Ekibinin çalışma alanı"}
-            </small>
-          </span>
-          <ChevronDown size={17} />
-        </button>
-        <div className="sidebar-content">
-          <button
-            className="sidebar-search"
-            aria-label="Çalışma alanında ara"
-            onClick={() => setDialog("search")}
-          >
-            <Search size={17} />
-            <span>Mesajlarda ara</span>
-            <kbd>
-              {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"} K
-            </kbd>
-          </button>
-          <nav className="primary-nav">
-            <button
-              className={view === "inbox" ? "selected" : ""}
-              aria-current={view === "inbox" ? "page" : undefined}
-              onClick={() => {
-                selectView("inbox");
-                setMobileNav(false);
-              }}
-            >
-              <Bell size={18} />
-              <span>Gelen kutusu</span>
-              {totalUnread > 0 && (
-                <span className="count-badge">{totalUnread}</span>
-              )}
-            </button>
-            <button
-              className={view === "saved" ? "selected" : ""}
-              aria-current={view === "saved" ? "page" : undefined}
-              onClick={() => {
-                selectView("saved");
-                setMobileNav(false);
-              }}
-            >
-              <Bookmark size={18} />
-              <span>Kaydedilenler</span>
-              {saved.length > 0 && <small>{saved.length}</small>}
-            </button>
-          </nav>
-          <NavigationSection
-            title="Kanallar"
-            action={
-              <IconButton
-                label="Kanal oluştur"
-                disabled={!canCreate}
-                onClick={() => {
-                  setCreateChannelKind("text");
-                  setDialog("channel");
-                }}
-              >
-                <Plus size={16} />
-              </IconButton>
-            }
-          >
-            {data.channels
-              .filter((c) => c.kind === "text" && !c.archived)
-              .map((c) => (
-                <div
-                  key={c.id}
-                  className="channel-nav-row"
-                  onContextMenu={(event) => channelContext(event, c)}
-                >
-                  <button
-                    className={`channel-nav ${channelId === c.id && view === "channel" ? "selected" : ""}`}
-                    data-unread={(unread[c.id] || 0) > 0}
-                    aria-current={
-                      channelId === c.id && view === "channel"
-                        ? "page"
-                        : undefined
-                    }
-                    title={c.description || c.name}
-                    onClick={() => selectChannel(c.id)}
-                    onKeyDown={(event) => channelMenuKey(event, c)}
-                  >
-                    <>
-                      {c.visibility === "private" ? (
-                        <Lock size={16} />
-                      ) : (
-                        <Hash size={18} />
-                      )}
-                    </>
-                    <span>{c.name}</span>
-                    {(unread[c.id] || 0) > 0 && (
-                      <span className="count-badge">{unread[c.id]}</span>
-                    )}
-                    {channelId === c.id && view === "channel" && (
-                      <span className="selected-dot" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-button channel-row-menu"
-                    aria-label={`${c.name} kanal işlemleri`}
-                    title="Kanal işlemleri"
-                    aria-haspopup="menu"
-                    aria-expanded={menuChannel?.id === c.id}
-                    onClick={(event) => openChannelMenu(c, event.currentTarget)}
-                  >
-                    <MoreHorizontal size={17} />
-                  </button>
-                </div>
-              ))}
-            <button
-              className="add-channel"
-              disabled={!canCreate}
-              onClick={() => {
-                setCreateChannelKind("text");
-                setDialog("channel");
-              }}
-            >
-              <Plus size={16} />
-              Kanal ekle
-            </button>
-            <button
-              className="add-channel"
-              onClick={() => setDialog("archives")}
-            >
-              <Archive size={16} /> Arşivlenmiş kanallar
-              {data.channels.some((c) => c.archived) && (
-                <span>({data.channels.filter((c) => c.archived).length})</span>
-              )}
-            </button>
-          </NavigationSection>
-          <NavigationSection
-            title="Sesli odalar"
-            className="voice-section"
-            action={
-              <IconButton
-                label="Sesli oda oluştur"
-                disabled={!canCreate}
-                onClick={() => {
-                  setCreateChannelKind("voice");
-                  setDialog("channel");
-                }}
-              >
-                <Plus size={16} />
-              </IconButton>
-            }
-          >
-            {data.channels
-              .filter((c) => c.kind === "voice" && !c.archived)
-              .map((c) => {
-                const peers = connected ? voiceChannels.get(c.id) || [] : [];
-                const inThisRoom =
-                  (call.joined || call.joining) && call.channelId === c.id;
-                return (
-                  <div key={c.id} className="voice-channel-entry">
-                    <div
-                      className="voice-channel-row"
-                      onContextMenu={(event) => channelContext(event, c)}
-                    >
-                      <button
-                        aria-label={c.name}
-                        title={
-                          inThisRoom ? "Görüşmeyi göster" : "Sesli odaya katıl"
-                        }
-                        className={`channel-nav voice-nav ${inThisRoom ? "voice-active" : ""}`}
-                        onClick={() => startCall(c)}
-                        onKeyDown={(event) => channelMenuKey(event, c)}
-                      >
-                        <Volume2 size={18} />
-                        <span>{c.name}</span>
-                        {peers.length > 0 && (
-                          <span
-                            className="voice-peer-count"
-                            title={`${peers.length} kişi görüşmede`}
-                          >
-                            {peers.length}
-                          </span>
-                        )}
-                        {connected && peers.length === 0 && (
-                          <small className="voice-room-idle">Boş</small>
-                        )}
-                        {inThisRoom && <span className="small-status-dot" />}
-                      </button>
-                      <IconButton
-                        label={`${c.name} katılımcılarını gör`}
-                        onClick={() => setVoicePreviewId(c.id)}
-                      >
-                        <Users size={15} />
-                      </IconButton>
-                      <button
-                        type="button"
-                        className="icon-button channel-row-menu"
-                        aria-label={`${c.name} kanal işlemleri`}
-                        title="Kanal işlemleri"
-                        aria-haspopup="menu"
-                        aria-expanded={menuChannel?.id === c.id}
-                        onClick={(event) =>
-                          openChannelMenu(c, event.currentTarget)
-                        }
-                      >
-                        <MoreHorizontal size={17} />
-                      </button>
-                    </div>
-                    {peers.length > 0 && (
-                      <VoiceParticipants
-                        peers={peers}
-                        channelName={c.name}
-                        currentUserId={data.user.id}
-                        connected={connected}
-                        onOpenProfile={openProfile}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            <div className="voice-nav-note">
-              {connected
-                ? "Bir odaya gir, sohbete katıl."
-                : "Katılımcı listesi için bağlanılıyor…"}
-            </div>
-          </NavigationSection>
-          <NavigationSection
-            title="Direkt mesajlar"
-            className="dm-section"
-            action={
-              <IconButton
-                label="Yeni direkt mesaj"
-                onClick={() => openMembers()}
-              >
-                <Plus size={16} />
-              </IconButton>
-            }
-          >
-            {directMessageMembers.slice(0, 5).map((user) => (
-              <div className="dm-nav-row" key={user.id}>
-                <button
-                  className={`channel-nav dm-nav ${channel?.kind === "dm" && channel.memberIds?.includes(user.id) && view === "channel" ? "selected" : ""}`}
-                  aria-current={
-                    channel?.kind === "dm" &&
-                    channel.memberIds?.includes(user.id) &&
-                    view === "channel"
-                      ? "page"
-                      : undefined
-                  }
-                  onClick={() => void openDm(user)}
-                >
-                  <span>{user.name}</span>
-                  {data.channels
-                    .filter(
-                      (c) =>
-                        c.kind === "dm" &&
-                        c.memberIds?.includes(user.id) &&
-                        (unread[c.id] || 0) > 0,
-                    )
-                    .map((c) => (
-                      <span key={c.id} className="count-badge">
-                        {unread[c.id]}
-                      </span>
-                    ))}
-                </button>
-                <ProfileIdentity
-                  className="dm-profile-avatar"
-                  user={user}
-                  online={data.onlineIds.includes(user.id)}
-                  connected={connected}
-                  selfId={data.user.id}
-                  onOpen={openProfile}
-                >
-                  <Avatar
-                    user={user}
-                    size="tiny"
-                    online={connected && data.onlineIds.includes(user.id)}
-                  />
-                </ProfileIdentity>
-              </div>
-            ))}
-            {directMessageMembers.length > 5 && (
-              <button className="add-channel" onClick={() => openMembers()}>
-                <Users size={15} /> Tüm kişileri gör (
-                {directMessageMembers.length})
-              </button>
-            )}
-            {data.members.length === 1 && (
-              <button
-                className="add-channel"
-                disabled={!canManage}
-                onClick={() => setDialog("invite")}
-              >
-                <Plus size={16} />
-                İlk ekip arkadaşını davet et
-              </button>
-            )}
-          </NavigationSection>
-        </div>
-        <div className="sidebar-bottom">
-          {canManage && (
-            <button
-              className="sidebar-utility"
-              onClick={() => {
-                setMobileNav(false);
-                setDialog("integrations");
-              }}
-            >
-              <Plug size={18} />
-              Entegrasyonlar
-            </button>
-          )}
-          <button
-            className="sidebar-utility"
-            onClick={() => {
-              setMobileNav(false);
-              setDialog("notifications");
-            }}
-          >
-            <Bell size={18} />
-            Bildirimler ve uygulama
-          </button>
-          {canManage && (
-            <button
-              className="mobile-admin-entry"
-              onClick={() => {
-                setMobileNav(false);
-                setAdminOpen(true);
-              }}
-            >
-              <ShieldCheck size={18} /> Yönetim paneli
-            </button>
-          )}
-          {call.joined ? (
-            <button
-              className="active-call-banner"
-              onClick={() => setShowCall(true)}
-            >
-              <AudioLines size={21} />
-              <span>
-                <strong>Sesli görüşmedesin</strong>
-                <small>{call.channelName}</small>
-              </span>
-              <ChevronRight size={17} />
-            </button>
-          ) : (
-            canManage && (
-              <button
-                className="sidebar-invite"
-                onClick={() => setDialog("invite")}
-              >
-                <Plus size={17} /> Çalışma alanına davet et
-              </button>
+        <WorkspaceNavigation
+          key={sidebarScope}
+          data={data}
+          preferences={sidebar}
+          connected={connected}
+          unread={unread}
+          currentId={channelId}
+          view={view}
+          savedCount={saved.length}
+          canManage={canManage}
+          canCreate={canCreate}
+          voiceChannels={voiceChannels}
+          call={call}
+          activeMenuId={menuChannel?.id}
+          width={sidebarDisplayWidth}
+          onPreviewWidth={(width) =>
+            setSidebarWidth(
+              width === null ? null : { scope: sidebarScope, width },
             )
-          )}
-          <button
-            className="mobile-help-entry sidebar-utility"
-            onClick={() => setDialog("help")}
-          >
-            <CircleHelp size={18} /> Kullanım rehberi
-          </button>
-          <div className="sidebar-status">
-            <span
-              className={
-                connected ? "small-status-dot" : "small-status-dot disconnected"
-              }
-            />
-            <span>{connected ? "Her şey güncel" : "Yeniden bağlanılıyor"}</span>
-            <span className="mola-wordmark">mola.</span>
-          </div>
-        </div>
+          }
+          onSelect={selectChannel}
+          onStartCall={startCall}
+          onCallOpen={() => setShowCall(true)}
+          onMenu={openChannelMenu}
+          onReorder={(section, ids) => void reorderSidebar(section, ids)}
+          onProfile={openProfile}
+          onWorkspaces={openWorkspaces}
+          onSettings={() => setDialog("settings")}
+          onWorkspaceSettings={() => {
+            setAdminSection("settings");
+            setAdminOpen(true);
+          }}
+          onLeave={() => setWorkspaceLifecycle("leave")}
+          onMembers={() => openMembers()}
+          onNewMessage={() => openMembers("dm")}
+          onInvite={() => setDialog("invite")}
+          onNotifications={() => setDialog("notifications")}
+          onHelp={() => setDialog("help")}
+          onIntegrations={() => setDialog("integrations")}
+          onSearch={() => setDialog("search")}
+          onArchives={() => setDialog("archives")}
+          onView={(next) => {
+            selectView(next);
+            setMobileNav(false);
+          }}
+          onCreate={(kind) => {
+            setCreateChannelKind(kind);
+            setDialog("channel");
+          }}
+          onVoicePreview={setVoicePreviewId}
+        />
       </div>
 
       <div className="workspace-main" inert={isMobile && mobileNav}>
@@ -3030,6 +2915,24 @@ export default function App() {
           )}
         </main>
       </div>
+      {workspaceLifecycle && (
+        <WorkspaceLifecycleDialog
+          key={data.workspace.id + workspaceLifecycle}
+          data={data}
+          mode={workspaceLifecycle}
+          inCall={call.joined || call.joining}
+          onClose={() => setWorkspaceLifecycle(null)}
+          onComplete={(next) => {
+            acceptData(next);
+            setWorkspaceLifecycle(null);
+            notify(
+              workspaceLifecycle === "delete"
+                ? "Çalışma alanı silindi."
+                : "Çalışma alanından ayrıldın.",
+            );
+          }}
+        />
+      )}
       {dialog === "workspaces" && (
         <WorkspaceSwitcher
           workspaces={data.workspaces}
@@ -3385,7 +3288,12 @@ export default function App() {
         </Modal>
       )}
       {dialog === "members" && (
-        <Modal title="Ekibindeki insanlar" onClose={() => setDialog(null)}>
+        <Modal
+          title={
+            memberScope === "dm" ? "Yeni direkt mesaj" : "Ekibindeki insanlar"
+          }
+          onClose={() => setDialog(null)}
+        >
           <p className="modal-description">
             {memberScope === "channel"
               ? `${channelName} sohbetinin üyeleri`
@@ -3416,33 +3324,63 @@ export default function App() {
             )}
           </div>
           <div className="members-modal-list">
-            {listedMembers.map((user) => (
-              <ProfileIdentity
-                key={user.id}
-                user={user}
-                online={data.onlineIds.includes(user.id)}
-                connected={connected}
-                selfId={data.user.id}
-                onOpen={openProfile}
-              >
-                <Avatar
+            {listedMembers.map((user) =>
+              memberScope === "dm" ? (
+                <button
+                  key={user.id}
+                  type="button"
+                  disabled={directPending}
+                  aria-label={`${user.name} ile mesajlaş`}
+                  onClick={() => {
+                    setDirectPending(true);
+                    void openDm(user).finally(() => setDirectPending(false));
+                  }}
+                >
+                  <Avatar
+                    user={user}
+                    online={connected && data.onlineIds.includes(user.id)}
+                  />
+                  <span>
+                    <strong>{user.name}</strong>
+                    <small>
+                      {user.status ||
+                        (connected
+                          ? data.onlineIds.includes(user.id)
+                            ? "Çevrimiçi"
+                            : "Çevrimdışı"
+                          : "Durum güncellenemiyor")}
+                    </small>
+                  </span>
+                  <ChevronRight size={17} />
+                </button>
+              ) : (
+                <ProfileIdentity
+                  key={user.id}
                   user={user}
-                  online={connected && data.onlineIds.includes(user.id)}
-                />
-                <span>
-                  <strong>{user.name}</strong>
-                  <small>
-                    {user.status ||
-                      (!connected
-                        ? "Durum güncellenemiyor"
-                        : data.onlineIds.includes(user.id)
-                          ? "Çevrimiçi"
-                          : "Çevrimdışı")}
-                  </small>
-                </span>
-                <ChevronRight size={17} />
-              </ProfileIdentity>
-            ))}
+                  online={data.onlineIds.includes(user.id)}
+                  connected={connected}
+                  selfId={data.user.id}
+                  onOpen={openProfile}
+                >
+                  <Avatar
+                    user={user}
+                    online={connected && data.onlineIds.includes(user.id)}
+                  />
+                  <span>
+                    <strong>{user.name}</strong>
+                    <small>
+                      {user.status ||
+                        (!connected
+                          ? "Durum güncellenemiyor"
+                          : data.onlineIds.includes(user.id)
+                            ? "Çevrimiçi"
+                            : "Çevrimdışı")}
+                    </small>
+                  </span>
+                  <ChevronRight size={17} />
+                </ProfileIdentity>
+              ),
+            )}
             {!listedMembers.length && (
               <p className="member-search-empty" role="status">
                 Bu isimle bir kişi bulunamadı. Farklı bir isim deneyebilirsin.
@@ -3693,6 +3631,11 @@ export default function App() {
             data={data}
             onClose={() => setAdminOpen(false)}
             onChanged={() => void refreshAccess()}
+            initialSection={adminSection}
+            onDeleteWorkspace={() => {
+              setAdminOpen(false);
+              setWorkspaceLifecycle("delete");
+            }}
           />
         )}
       {toast && (
@@ -3702,46 +3645,29 @@ export default function App() {
         >
           {toastError ? <Info size={18} /> : <Check size={18} />}
           <span>{toast}</span>
+          {!toastError &&
+            toast === "Kanal sıralaman kaydedildi." &&
+            sidebarUndo?.scope === sidebarScope && (
+              <button
+                className="sidebar-undo"
+                disabled={sidebar.saving}
+                onClick={() => {
+                  const undo = sidebarUndo;
+                  setSidebarUndo(null);
+                  void sidebar.setOrder(undo.section, undo.ids).then((ok) => {
+                    if (ok) notify("Önceki sıralamaya dönüldü.");
+                  });
+                }}
+              >
+                Geri al
+              </button>
+            )}
           <IconButton label="Bildirimi kapat" onClick={() => setToast("")}>
             <X size={15} />
           </IconButton>
         </div>
       )}
     </div>
-  );
-}
-
-function NavigationSection({
-  title,
-  action,
-  children,
-  className = "",
-}: {
-  title: string;
-  action: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const id = useId();
-  return (
-    <section className={`nav-section ${className}`}>
-      <div className="nav-section-title">
-        <button
-          className="nav-section-toggle"
-          aria-expanded={expanded}
-          aria-controls={id}
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}{" "}
-          {title}
-        </button>
-        {action}
-      </div>
-      <div id={id} hidden={!expanded}>
-        {children}
-      </div>
-    </section>
   );
 }
 

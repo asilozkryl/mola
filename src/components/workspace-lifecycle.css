@@ -1,0 +1,186 @@
+.account-workspaces {
+  min-height: 100dvh;
+  background: var(--subtle);
+}
+.account-workspaces > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 30px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+.account-workspaces > header > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.account-workspaces-content {
+  max-width: 590px;
+  margin: 0 auto;
+  padding: 90px 24px;
+}
+.workspace-empty-symbol {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  background: var(--active-surface);
+  color: var(--green);
+  border-radius: 12px;
+  margin-bottom: 25px;
+}
+.account-workspaces-content h1 {
+  font-size: 30px;
+  letter-spacing: -1px;
+  line-height: 1.3;
+  margin: 0 0 15px;
+}
+.account-workspaces-content p {
+  color: var(--muted);
+  line-height: 1.85;
+  font-size: 14px;
+}
+.account-workspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 28px 0;
+}
+.account-workspace-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 24px;
+}
+.account-workspace-list button {
+  justify-content: space-between;
+}
+.account-workspaces-content > small {
+  display: block;
+  margin-top: 25px;
+  color: var(--muted);
+}
+.workspace-lifecycle-form {
+  display: grid;
+  gap: 18px;
+}
+.workspace-lifecycle-form p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.8;
+  margin: 0;
+}
+.workspace-lifecycle-heading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.workspace-lifecycle-heading > span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: #fcf0ee;
+  color: #a73737;
+}
+.workspace-lifecycle-heading h3 {
+  font-size: 16px;
+  margin: 0 0 3px;
+  overflow-wrap: anywhere;
+}
+.workspace-lifecycle-form label {
+  display: block;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.workspace-lifecycle-form .form-error,
+.account-workspaces-content .form-error {
+  color: #963b32;
+}
+.workspace-lifecycle-form input {
+  display: block;
+  margin-top: 7px;
+  width: 100%;
+}
+.workspace-lifecycle-form footer {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.workspace-lifecycle-form .danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #a73737;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  border: 1px solid #a73737;
+}
+.workspace-lifecycle-form .danger-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.workspace-deletion-counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 16px 0;
+  border-block: 1px solid var(--line);
+}
+.workspace-deletion-counts dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+.workspace-deletion-counts dd {
+  font-size: 17px;
+  font-weight: 650;
+  margin: 4px 0 0;
+}
+.workspace-deletion-counts small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.workspace-lifecycle-form .workspace-access-note {
+  font-size: 12px;
+}
+.workspace-danger-zone {
+  border-top: 1px solid #e6c9c6;
+  padding-top: 22px;
+  margin-top: 10px;
+}
+.workspace-danger-zone > button {
+  color: #a73737;
+  border-color: #dbb6b2;
+  margin-top: 14px;
+}
+@media (max-width: 600px) {
+  .account-workspaces > header {
+    padding: 16px;
+  }
+  .account-workspaces > header > div > span:not(.avatar) {
+    display: none;
+  }
+  .account-workspaces-content {
+    padding: 55px 20px;
+  }
+  .account-workspace-actions {
+    flex-direction: column;
+  }
+  .workspace-lifecycle-form footer {
+    flex-direction: column-reverse;
+  }
+  .workspace-lifecycle-form footer > button {
+    min-height: 44px;
+    width: 100%;
+  }
+}

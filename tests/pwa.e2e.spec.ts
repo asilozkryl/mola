@@ -69,7 +69,7 @@ test('denied notification permission gives actionable help without creating a su
 
 test('public offline fallback never caches authentication or messages', async ({ page, context }) => {
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Çalışma alanlarını değiştir', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
   const manifest = await (await page.request.get('/manifest.webmanifest')).json();
   expect(manifest.display).toBe('standalone');
@@ -84,7 +84,7 @@ test('public offline fallback never caches authentication or messages', async ({
     await page.screenshot({ path: test.info().outputPath('offline.png') });
   } finally { await context.setOffline(false); }
   await page.getByRole('link', { name: 'Yeniden dene', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Çalışma alanlarını değiştir', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true })).toBeVisible();
 });
 
 test('install affordance waits for the browser prompt and only prompts after clicking', async ({ page }) => {

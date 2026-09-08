@@ -1,0 +1,2215 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Mola · Sol menü tasarım taslağı</title>
+    <style>
+      @font-face {
+        font-family: Manrope;
+        src: url("../../node_modules/@fontsource/manrope/files/manrope-latin-ext-500-normal.woff2")
+          format("woff2");
+        font-weight: 400 500;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: Manrope;
+        src: url("../../node_modules/@fontsource/manrope/files/manrope-latin-500-normal.woff2")
+          format("woff2");
+        font-weight: 400 500;
+        font-display: swap;
+        unicode-range: U+0000-00FF;
+      }
+      @font-face {
+        font-family: Manrope;
+        src: url("../../node_modules/@fontsource/manrope/files/manrope-latin-ext-700-normal.woff2")
+          format("woff2");
+        font-weight: 600 800;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: Manrope;
+        src: url("../../node_modules/@fontsource/manrope/files/manrope-latin-700-normal.woff2")
+          format("woff2");
+        font-weight: 600 800;
+        font-display: swap;
+        unicode-range: U+0000-00FF;
+      }
+      :root {
+        font-family: Manrope, system-ui, sans-serif;
+        color: #20292b;
+        background: #fff;
+        --forest: #153d36;
+        --green: #237459;
+        --tint: #eaf4ef;
+        --muted: #687176;
+        --line: #e2e6e8;
+        --surface: #f5f7f8;
+        --nav-width: 272px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      button,
+      input {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+        color: inherit;
+      }
+      button:disabled {
+        cursor: default;
+        opacity: 0.45;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--green);
+        outline-offset: 3px;
+      }
+      button {
+        border: 0;
+        background: none;
+      }
+      svg {
+        width: 17px;
+        height: 17px;
+        flex-shrink: 0;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      p {
+        margin: 0;
+      }
+      kbd {
+        font:
+          10px Manrope,
+          sans-serif;
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        padding: 1px 4px;
+        color: var(--muted);
+      }
+      [hidden] {
+        display: none !important;
+      }
+      .prototype-bar {
+        height: 45px;
+        padding: 0 22px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+        gap: 12px;
+        font-size: 12px;
+      }
+      .prototype-bar strong {
+        color: var(--forest);
+        font-size: 17px;
+        letter-spacing: -0.8px;
+        margin-right: 16px;
+      }
+      .prototype-bar span {
+        color: var(--muted);
+      }
+      .reset {
+        font-size: 11px;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .shell {
+        display: grid;
+        grid-template-columns: 56px var(--nav-width) minmax(0, 1fr);
+        height: calc(100dvh - 45px);
+        min-height: 650px;
+      }
+      .rail {
+        background: var(--forest);
+        color: #c7ddcf;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 22px 0 15px;
+      }
+      .brand {
+        font-size: 28px;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: -3px;
+        margin-bottom: 28px;
+      }
+      .rail-space {
+        width: 35px;
+        height: 35px;
+        border-radius: 9px;
+        color: #cfdfd7;
+        font-size: 11px;
+        font-weight: 700;
+        position: relative;
+      }
+      .rail-space.current {
+        background: #c4e2b4;
+        color: var(--forest);
+      }
+      .rail-space.current:before {
+        content: "";
+        position: absolute;
+        left: -11px;
+        width: 3px;
+        height: 21px;
+        background: #c4e2b4;
+        top: 7px;
+        border-radius: 0 3px 3px 0;
+      }
+      .rail-space.other {
+        background: #ffffff0d;
+      }
+      .rail-space:hover {
+        box-shadow: inset 0 0 0 1px #ffffff40;
+      }
+      .rail-space.plus {
+        border: 1px dashed #ffffff38;
+        display: grid;
+        place-items: center;
+      }
+      .rail-bottom {
+        margin-top: auto;
+        display: grid;
+        gap: 13px;
+        justify-items: center;
+      }
+      .rail-bottom button {
+        color: #b3c9c0;
+        padding: 4px;
+        display: grid;
+        place-items: center;
+      }
+      .rail small {
+        writing-mode: vertical-rl;
+        font-size: 10px;
+        letter-spacing: 1px;
+        color: #a3c2b6;
+        margin-top: auto;
+        padding: 24px 0;
+      }
+      .sidebar {
+        background: var(--surface);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        position: relative;
+      }
+      .workspace {
+        padding: 20px 17px 13px;
+      }
+      .workspace-trigger {
+        width: 100%;
+        display: flex;
+        text-align: left;
+        align-items: center;
+        gap: 10px;
+        padding: 0;
+      }
+      .workspace-copy {
+        flex: 1;
+        min-width: 0;
+      }
+      .workspace-copy strong {
+        font-size: 16px;
+        font-weight: 750;
+        letter-spacing: -0.4px;
+        display: block;
+      }
+      .workspace-copy small {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        display: inline-block;
+        border-radius: 100%;
+        background: var(--green);
+        flex-shrink: 0;
+      }
+      .workspace-trigger > svg {
+        width: 14px;
+        color: var(--muted);
+      }
+      .search {
+        margin: 0 12px 12px;
+        height: 34px;
+        border: 1px solid #dce2e4;
+        box-shadow: 0 1px 2px #153d3605;
+        border-radius: 6px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        padding: 0 9px;
+        gap: 7px;
+        color: var(--muted);
+      }
+      .search svg {
+        width: 14px;
+      }
+      .search input {
+        width: 100%;
+        min-width: 0;
+        border: 0;
+        background: none;
+        font-size: 11px;
+        outline: none;
+      }
+      .search:focus-within {
+        border-color: var(--green);
+      }
+      .search:focus-within input {
+        outline: none;
+      }
+      .search kbd {
+        white-space: nowrap;
+      }
+      .nav-scroll {
+        padding: 0 10px 16px;
+        overflow: auto;
+        scrollbar-width: thin;
+        flex: 1;
+        min-height: 0;
+      }
+      .utility {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        height: 35px;
+        gap: 9px;
+        padding: 0 8px;
+        font-size: 12px;
+        border-radius: 5px;
+      }
+      .utility svg {
+        color: var(--muted);
+        width: 16px;
+      }
+      .utility:hover,
+      .row:hover,
+      .section-more:hover {
+        background: #e9edef;
+      }
+      .utility span:first-of-type {
+        flex: 1;
+        text-align: left;
+      }
+      .utility.active-filter {
+        background: var(--tint);
+        color: var(--forest);
+      }
+      .count {
+        font-size: 10px;
+        min-width: 19px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #e5e9eb;
+        color: #465354;
+        font-weight: 700;
+      }
+      .count.green {
+        background: var(--green);
+        color: white;
+      }
+      .section {
+        margin-top: 22px;
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        height: 26px;
+        padding: 0 5px 5px;
+        gap: 4px;
+      }
+      .section-toggle {
+        font-size: 11px;
+        font-weight: 650;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: 1;
+        text-align: left;
+        padding: 0;
+      }
+      .section-toggle svg {
+        width: 11px;
+        height: 11px;
+        transition: transform 150ms;
+      }
+      .section.closed .section-toggle svg {
+        transform: rotate(-90deg);
+      }
+      .section.closed .section-list {
+        display: none;
+      }
+      .section-more {
+        padding: 0;
+        display: grid;
+        place-items: center;
+        border-radius: 3px;
+        width: 20px;
+        height: 20px;
+        color: var(--muted);
+      }
+      .section-more svg {
+        width: 13px;
+        height: 13px;
+      }
+      .collapsed-count {
+        margin-left: auto;
+      }
+      .row {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-height: 36px;
+        border-radius: 5px;
+        margin: 1px 0;
+        transition: background 120ms;
+      }
+      .row.selected {
+        background: var(--tint);
+        color: var(--forest);
+      }
+      .row.selected:before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 7px;
+        bottom: 7px;
+        width: 2px;
+        background: var(--green);
+        border-radius: 2px;
+      }
+      .row-main {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 0;
+        text-align: left;
+        padding: 7px 4px 7px 8px;
+        font-size: 13px;
+      }
+      .row-main > .row-icon {
+        color: #829090;
+        width: 16px;
+        display: flex;
+        justify-content: center;
+      }
+      .row.selected .row-icon {
+        color: var(--green);
+      }
+      .row-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+        line-height: 21px;
+      }
+      .row.unread .row-name {
+        font-weight: 750;
+      }
+      .grip {
+        position: absolute;
+        left: -10px;
+        top: 9px;
+        opacity: 0;
+        cursor: grab;
+        color: #9aa7a8;
+        padding: 0;
+        width: 12px;
+        height: 18px;
+        z-index: 2;
+      }
+      .grip svg {
+        width: 10px;
+        height: 14px;
+      }
+      .row:hover .grip,
+      .row:focus-within .grip {
+        opacity: 1;
+      }
+      .row-action {
+        display: grid;
+        place-items: center;
+        width: 23px;
+        height: 26px;
+        margin-right: 3px;
+        color: var(--muted);
+        opacity: 0;
+        border-radius: 4px;
+      }
+      .row-action svg {
+        width: 14px;
+      }
+      .row:hover .row-action,
+      .row:focus-within .row-action {
+        opacity: 1;
+      }
+      .row-action:hover {
+        background: #dce6e3;
+      }
+      .row-count {
+        margin-right: 5px;
+      }
+      .row.dragging {
+        opacity: 0.35;
+      }
+      .row.drop-before:after,
+      .row.drop-after:after {
+        content: "";
+        position: absolute;
+        left: 6px;
+        right: 2px;
+        height: 2px;
+        background: var(--green);
+        border-radius: 2px;
+        pointer-events: none;
+      }
+      .row.drop-before:after {
+        top: -2px;
+      }
+      .row.drop-after:after {
+        bottom: -2px;
+      }
+      .voice-main {
+        align-items: flex-start;
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .voice-main .row-icon {
+        padding-top: 2px;
+      }
+      .voice-copy {
+        min-width: 0;
+        flex: 1;
+      }
+      .voice-copy .row-name {
+        display: block;
+        line-height: 19px;
+      }
+      .voice-meta {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 19px;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+      .tiny-avatar {
+        width: 17px;
+        height: 17px;
+        border: 2px solid var(--surface);
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 7px;
+        color: #3e5049;
+        background: #d8e6ce;
+        margin-left: -6px;
+      }
+      .tiny-avatar:first-child {
+        margin-left: 0;
+      }
+      .tiny-avatar.lilac {
+        background: #ddd6ef;
+      }
+      .tiny-avatar.sand {
+        background: #ebdcb8;
+      }
+      .live-label {
+        margin-left: 3px;
+        color: var(--green);
+        font-size: 9px;
+      }
+      .voice-live {
+        background: #edf3ef;
+      }
+      .voice-empty .voice-meta {
+        display: none;
+      }
+      .dm-avatar {
+        width: 23px;
+        height: 23px;
+        border-radius: 7px;
+        display: grid;
+        place-items: center;
+        font-size: 8px;
+        background: #ddd6ef;
+        color: #493c67;
+        position: relative;
+        flex-shrink: 0;
+      }
+      .dm-avatar .dot {
+        position: absolute;
+        right: -2px;
+        bottom: -1px;
+        border: 2px solid var(--surface);
+        height: 8px;
+        width: 8px;
+      }
+      .dm-avatar.sand {
+        background: #ebdcb8;
+        color: #66552b;
+      }
+      .dm-self {
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .quiet-link {
+        font-size: 10px;
+        color: var(--muted);
+        padding: 8px;
+        text-align: left;
+      }
+      .quiet-link:hover {
+        color: var(--forest);
+      }
+      .no-results {
+        font-size: 11px;
+        color: var(--muted);
+        padding: 14px 8px;
+      }
+      .sidebar-footer {
+        border-top: 1px solid var(--line);
+        padding: 10px 12px 11px;
+      }
+      .profile {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+      }
+      .profile .dm-avatar {
+        width: 30px;
+        height: 30px;
+        font-size: 10px;
+        background: #dfd6ed;
+      }
+      .profile-copy {
+        flex: 1;
+        min-width: 0;
+      }
+      .profile-copy strong {
+        font-size: 11px;
+        display: block;
+      }
+      .profile-copy small {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 9px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .profile button {
+        padding: 4px;
+        color: var(--muted);
+      }
+      .call-status {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--tint);
+        margin: -1px -4px 10px;
+        padding: 8px;
+        border-radius: 5px;
+        font-size: 10px;
+        color: var(--green);
+      }
+      .call-status p {
+        flex: 1;
+      }
+      .call-status small {
+        display: block;
+        color: var(--muted);
+        font-size: 9px;
+        margin-top: 2px;
+      }
+      .call-status button {
+        color: #ae3e3e;
+        display: flex;
+        padding: 3px;
+      }
+      .plan {
+        overflow: auto;
+        min-width: 0;
+        background: #fff;
+      }
+      .plan-top {
+        height: 57px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        padding: 0 30px;
+        gap: 9px;
+        font-size: 12px;
+      }
+      .plan-top svg {
+        color: var(--green);
+      }
+      .plan-top span {
+        color: var(--muted);
+        margin-left: auto;
+        font-size: 10px;
+      }
+      .plan-content {
+        max-width: 840px;
+        padding: 50px 46px 36px;
+        margin: auto;
+      }
+      .plan h1 {
+        font-size: clamp(24px, 2.6vw, 37px);
+        letter-spacing: -1.25px;
+        line-height: 1.25;
+        max-width: 620px;
+        margin: 0 0 17px;
+        font-weight: 750;
+      }
+      .lead {
+        font-size: 13px;
+        line-height: 1.85;
+        max-width: 540px;
+        color: var(--muted);
+      }
+      .try {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--tint);
+        border-left: 2px solid var(--green);
+        padding: 12px 14px;
+        font-size: 11px;
+        line-height: 1.6;
+        color: var(--forest);
+        margin: 25px 0 30px;
+      }
+      .try svg {
+        width: 17px;
+      }
+      .design-tabs {
+        display: flex;
+        gap: 20px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 25px;
+      }
+      .design-tabs button {
+        font-size: 11px;
+        color: var(--muted);
+        padding: 0 0 11px;
+        position: relative;
+        white-space: nowrap;
+      }
+      .design-tabs button[aria-selected="true"] {
+        color: var(--forest);
+        font-weight: 700;
+      }
+      .design-tabs button[aria-selected="true"]:after {
+        position: absolute;
+        bottom: -1px;
+        height: 2px;
+        background: var(--green);
+        content: "";
+        left: 0;
+        right: 0;
+      }
+      .plan-panel h2 {
+        font-size: 17px;
+        letter-spacing: -0.35px;
+        margin: 0 0 11px;
+      }
+      .plan-panel > p {
+        font-size: 12px;
+        line-height: 1.9;
+        color: var(--muted);
+        max-width: 560px;
+      }
+      .decisions {
+        margin: 23px 0;
+        padding: 0;
+        list-style: none;
+      }
+      .decisions li {
+        display: grid;
+        grid-template-columns: 145px 1fr;
+        gap: 16px;
+        padding: 13px 0;
+        border-bottom: 1px solid #eef0f1;
+        font-size: 11px;
+        line-height: 1.8;
+      }
+      .decisions strong {
+        font-weight: 700;
+        color: #344541;
+      }
+      .decisions span {
+        color: var(--muted);
+      }
+      .next-step {
+        font-size: 11px;
+        line-height: 1.8;
+        color: var(--muted);
+        margin-top: 27px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+      }
+      .next-step strong {
+        color: var(--forest);
+      }
+      .sample-button {
+        border: 1px solid #cad5d0;
+        border-radius: 5px;
+        padding: 8px 11px;
+        font-size: 11px;
+        display: inline-flex;
+        gap: 7px;
+        align-items: center;
+        margin-top: 17px;
+      }
+      .sample-button:hover {
+        background: var(--tint);
+      }
+      .sample-button svg {
+        width: 14px;
+      }
+      .danger-text {
+        color: #ac3b3b;
+      }
+      .scope-note {
+        font-size: 10px;
+        color: var(--muted);
+        line-height: 1.8;
+        margin-top: 27px;
+      }
+      .plan-panel {
+        animation: appear 140ms ease-out;
+      }
+      @keyframes appear {
+        from {
+          opacity: 0.5;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .popover {
+        position: fixed;
+        z-index: 10;
+        width: 250px;
+        background: #fff;
+        border: 1px solid #dce2e0;
+        box-shadow:
+          0 10px 32px #153d361a,
+          0 2px 5px #153d360d;
+        border-radius: 8px;
+        padding: 5px;
+      }
+      .popover-title {
+        padding: 9px 9px 10px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 4px;
+      }
+      .popover-title strong {
+        font-size: 12px;
+        display: block;
+      }
+      .popover-title small {
+        font-size: 10px;
+        color: var(--muted);
+        display: block;
+        margin-top: 3px;
+      }
+      .menu-action {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 11px;
+        padding: 9px;
+        border-radius: 4px;
+        text-align: left;
+      }
+      .menu-action svg {
+        width: 15px;
+        height: 15px;
+        color: var(--muted);
+      }
+      .menu-action:hover {
+        background: var(--surface);
+      }
+      .menu-action.danger-text svg {
+        color: inherit;
+      }
+      .menu-divider {
+        height: 1px;
+        background: var(--line);
+        margin: 4px 0;
+      }
+      .menu-caption {
+        font-size: 9px;
+        color: var(--muted);
+        padding: 7px 9px;
+      }
+      .menu-action:disabled {
+        opacity: 0.4;
+      }
+      .toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 12px 16px;
+        box-shadow: 0 5px 25px #153d3626;
+        border: 1px solid var(--line);
+        background: white;
+        border-radius: 6px;
+        z-index: 40;
+        font-size: 11px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        max-width: 90vw;
+      }
+      .toast button {
+        color: var(--green);
+        font-weight: 700;
+        font-size: 11px;
+        padding: 0;
+        white-space: nowrap;
+      }
+      dialog {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 25px;
+        max-width: 450px;
+        width: calc(100% - 32px);
+        box-shadow: 0 20px 80px #102c3426;
+        color: var(--forest);
+      }
+      dialog::backdrop {
+        background: #14382f50;
+        backdrop-filter: blur(2px);
+      }
+      dialog h2 {
+        font-size: 20px;
+        letter-spacing: -0.5px;
+        margin: 0 0 10px;
+      }
+      dialog p {
+        font-size: 12px;
+        line-height: 1.8;
+        color: var(--muted);
+      }
+      dialog .simulated {
+        font-size: 10px;
+        background: var(--surface);
+        padding: 8px 10px;
+        border-radius: 4px;
+        margin: 15px 0;
+      }
+      dialog label {
+        display: block;
+        font-size: 11px;
+        margin-top: 17px;
+      }
+      dialog input {
+        display: block;
+        width: 100%;
+        margin-top: 6px;
+        padding: 9px 10px;
+        font-size: 12px;
+        border: 1px solid #ccd6d1;
+        border-radius: 5px;
+      }
+      dialog .impact {
+        margin-top: 16px;
+        padding: 13px 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        font-size: 11px;
+        color: var(--muted);
+        display: flex;
+        gap: 15px;
+      }
+      dialog footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 21px;
+      }
+      dialog footer button {
+        font-size: 11px;
+        padding: 9px 13px;
+        border: 1px solid #cfd8d3;
+        border-radius: 5px;
+      }
+      dialog footer button.destructive {
+        background: #a73737;
+        color: white;
+        border-color: #a73737;
+      }
+      .empty-workspace {
+        padding: 25px 16px;
+        line-height: 1.8;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .empty-workspace strong {
+        display: block;
+        color: var(--forest);
+        font-size: 14px;
+        margin-bottom: 8px;
+      }
+      .empty-workspace button {
+        display: block;
+        background: var(--forest);
+        color: white;
+        width: 100%;
+        border-radius: 5px;
+        padding: 9px;
+        margin-top: 15px;
+        font-size: 11px;
+      }
+      @media (min-width: 1400px) {
+        .plan-content {
+          padding-top: 70px;
+        }
+        .plan h1 {
+          font-size: 39px;
+        }
+        .lead {
+          font-size: 14px;
+        }
+        .decisions li {
+          font-size: 12px;
+          padding: 16px 0;
+        }
+      }
+      @media (max-width: 1000px) {
+        .plan-content {
+          padding: 34px 26px;
+        }
+        .design-tabs {
+          gap: 13px;
+        }
+        .decisions li {
+          grid-template-columns: 115px 1fr;
+          gap: 12px;
+        }
+        .plan-top {
+          padding: 0 26px;
+        }
+        .prototype-bar {
+          padding: 0 14px;
+        }
+      }
+      @media (max-width: 720px) {
+        :root {
+          --nav-width: min(292px, calc(100vw - 48px));
+        }
+        .shell {
+          grid-template-columns: 48px minmax(0, 1fr);
+          height: calc(100dvh - 45px);
+          min-height: 620px;
+          max-width: 390px;
+          margin: auto;
+        }
+        .plan {
+          display: none;
+        }
+        .rail-space.current:before {
+          left: -7px;
+        }
+        .prototype-bar {
+          font-size: 10px;
+          gap: 4px;
+        }
+        .prototype-bar strong {
+          font-size: 16px;
+          margin-right: 7px;
+        }
+        .prototype-bar .desktop-note {
+          display: none;
+        }
+        .workspace {
+          padding: 16px;
+        }
+        .row {
+          min-height: 44px;
+        }
+        .row-action {
+          opacity: 1;
+          width: 44px;
+          height: 44px;
+        }
+        .utility {
+          height: 44px;
+        }
+        .grip {
+          display: none;
+        }
+        .section {
+          margin-top: 15px;
+        }
+        .section-more {
+          height: 44px;
+          width: 44px;
+        }
+        .section-head {
+          height: 44px;
+        }
+        .row-main {
+          font-size: 13px;
+        }
+        .section-toggle {
+          font-size: 11px;
+          min-height: 28px;
+        }
+        .sidebar-footer {
+          padding-bottom: 12px;
+        }
+        .popover {
+          max-width: calc(100vw - 20px);
+        }
+        .popover button {
+          min-height: 44px;
+        }
+        .rail-space {
+          width: 44px;
+          height: 44px;
+        }
+        .rail-space.current:before {
+          left: -2px;
+          top: 11px;
+        }
+        .rail-bottom button {
+          width: 44px;
+          height: 44px;
+        }
+        .profile button {
+          width: 44px;
+          height: 44px;
+          flex-shrink: 0;
+        }
+        .voice-main {
+          padding-top: 5px;
+          padding-bottom: 5px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *:before,
+        *:after {
+          animation: none !important;
+          transition: none !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="prototype-bar">
+      <div><strong>mola.</strong> Sol menü taslağı</div>
+      <span
+        ><span class="desktop-note">Etkileşimli önizleme · </span>Örnek veriler
+        <button class="reset" id="reset">Sıfırla</button></span
+      >
+    </header>
+    <div class="shell">
+      <aside class="rail" aria-label="Çalışma alanları">
+        <div class="brand" aria-hidden="true">m</div>
+        <button
+          class="rail-space current"
+          id="rail-workspace"
+          title="Asil-O çalışma alanı"
+        >
+          A</button
+        ><button
+          class="rail-space other"
+          id="other-workspace"
+          title="ASO-2 çalışma alanı"
+        >
+          A2</button
+        ><button
+          class="rail-space plus"
+          data-demo="Yeni çalışma alanı oluştur / Davet ile katıl ekranı açılır."
+          aria-label="Çalışma alanı ekle"
+          data-icon="plus"
+        ></button
+        ><small>mola.</small>
+        <div class="rail-bottom">
+          <button
+            data-demo="Üyeler ve çalışma alanı davetleri burada açılır."
+            aria-label="Çalışma alanı üyeleri"
+            data-icon="users"
+          ></button
+          ><button
+            data-demo="Klavye kısayolları ve yardım burada açılır."
+            aria-label="Yardım"
+            data-icon="help"
+          ></button>
+        </div>
+      </aside>
+      <aside class="sidebar" aria-label="Sol menü önizlemesi">
+        <div class="workspace">
+          <button
+            class="workspace-trigger"
+            id="workspace-trigger"
+            aria-haspopup="menu"
+            aria-expanded="false"
+          >
+            <span class="workspace-copy"
+              ><strong id="workspace-name">Asil-O</strong
+              ><small
+                ><span class="dot"></span
+                ><span id="workspace-meta">8 üye · 3 çevrimiçi</span></small
+              ></span
+            ><svg><use href="#icon-chevron" /></svg>
+          </button>
+        </div>
+        <label class="search"
+          ><svg><use href="#icon-search" /></svg
+          ><input
+            type="search"
+            id="search"
+            placeholder="Kanal veya kişi bul"
+            aria-label="Kanal veya kişi bul"
+          /><kbd>/</kbd></label
+        >
+        <nav class="nav-scroll" aria-label="Kanallar ve konuşmalar">
+          <button class="utility" id="unread-filter" aria-pressed="false">
+            <svg><use href="#icon-inbox" /></svg><span>Gelen kutusu</span
+            ><span class="count" id="total-count">6</span></button
+          ><button
+            class="utility"
+            data-demo="Kaydettiğin mesajlar burada açılır."
+          >
+            <svg><use href="#icon-bookmark" /></svg><span>Kaydedilenler</span>
+          </button>
+          <div id="channel-sections"></div>
+          <section class="section" id="dm-section">
+            <div class="section-head">
+              <button
+                class="section-toggle"
+                data-collapse="dms"
+                aria-expanded="true"
+              >
+                <svg><use href="#icon-chevron" /></svg>Son konuşmalar</button
+              ><button
+                class="section-more"
+                data-demo="Yeni mesaj göndermek için kişi araması açılır."
+                aria-label="Yeni mesaj"
+                data-icon="plus"
+              ></button>
+            </div>
+            <div class="section-list">
+              <div class="row dm-row" data-person="Deniz Kaya">
+                <button
+                  class="row-main"
+                  data-demo="Deniz Kaya ile son konuşman açılır."
+                >
+                  <span class="dm-avatar">DK<span class="dot"></span></span
+                  ><span class="row-name">Deniz Kaya</span
+                  ><span class="count">2</span>
+                </button>
+              </div>
+              <div class="row dm-row" data-person="Ece Yılmaz">
+                <button
+                  class="row-main"
+                  data-demo="Ece Yılmaz ile son konuşman açılır."
+                >
+                  <span class="dm-avatar sand">EY</span
+                  ><span class="row-name">Ece Yılmaz</span>
+                </button>
+              </div>
+              <button
+                class="quiet-link"
+                data-demo="Tüm direkt mesaj konuşmaları son mesaj tarihine göre listelenir."
+              >
+                Tüm konuşmalar
+              </button>
+            </div>
+          </section>
+          <p class="no-results" id="no-results" hidden>
+            Eşleşen kanal veya kişi yok.
+          </p>
+        </nav>
+        <footer class="sidebar-footer">
+          <div class="call-status" id="call-status" hidden>
+            <svg><use href="#icon-voice" /></svg>
+            <p>Tasarım odası<small>Sesli görüşmedesin · Önizleme</small></p>
+            <button
+              id="leave-call"
+              aria-label="Örnek görüşmeden ayrıl"
+              data-icon="hangup"
+            ></button>
+          </div>
+          <div class="profile">
+            <span class="dm-avatar">AÖ<span class="dot"></span></span
+            ><span class="profile-copy"
+              ><strong>Asil Özkırayil</strong
+              ><small><span class="dot"></span>Müsait</small></span
+            ><button
+              data-demo="Bildirim tercihleri ve sessize alma burada açılır."
+              aria-label="Bildirimler"
+              data-icon="bell"
+            ></button
+            ><button
+              data-demo="Profilin ve uygulama ayarların burada açılır."
+              aria-label="Profil ve ayarlar"
+              data-icon="settings"
+            ></button>
+          </div>
+        </footer>
+      </aside>
+      <main class="plan">
+        <div class="plan-top">
+          <svg><use href="#icon-hash" /></svg
+          ><strong id="selected-channel">genel</strong
+          ><span>Tasarım önerisi · Henüz ürüne uygulanmadı</span>
+        </div>
+        <div class="plan-content">
+          <h1>Daha hızlı gezin.<br />Ekibinden haberdar ol.</h1>
+          <p class="lead">
+            Mola’nın sakin yeşilini koruyup sol menüyü daha okunaklı,
+            kişiselleştirilebilir ve olan bitene karşılık veren bir alana
+            dönüştürüyoruz.
+          </p>
+          <div class="try">
+            <svg><use href="#icon-pointer" /></svg
+            ><span
+              >Solda bir kanalı sürükle, sağ tıkla veya Asil-O menüsünü aç.<br />Bu
+              taslak yalnız örnek verilerle çalışır.</span
+            >
+          </div>
+          <div
+            class="design-tabs"
+            role="tablist"
+            aria-label="Tasarım kararları"
+          >
+            <button
+              role="tab"
+              id="tab-layout"
+              data-panel="layout"
+              aria-selected="true"
+              aria-controls="panel-layout"
+            >
+              Görünüm</button
+            ><button
+              role="tab"
+              id="tab-order"
+              data-panel="order"
+              aria-selected="false"
+              aria-controls="panel-order"
+              tabindex="-1"
+            >
+              Kanal düzeni</button
+            ><button
+              role="tab"
+              id="tab-workspace"
+              data-panel="workspace"
+              aria-selected="false"
+              aria-controls="panel-workspace"
+              tabindex="-1"
+            >
+              Workspace</button
+            ><button
+              role="tab"
+              id="tab-live"
+              data-panel="live"
+              aria-selected="false"
+              aria-controls="panel-live"
+              tabindex="-1"
+            >
+              Canlı durum
+            </button>
+          </div>
+          <section
+            class="plan-panel"
+            id="panel-layout"
+            role="tabpanel"
+            aria-labelledby="tab-layout"
+          >
+            <h2>İçerik önde, kontroller elinin altında.</h2>
+            <p>
+              56 px çalışma alanı şeridi ve 272 px kanal menüsü. Kanal
+              isimlerine daha fazla yer; daha az tekrar eden bağlantı ve tutarlı
+              küçük kontroller.
+            </p>
+            <ul class="decisions">
+              <li>
+                <strong>Net seçim</strong
+                ><span
+                  >İnce yeşil çizgi ve hafif zemin. Okunmamış kanallarda güçlü
+                  yazı ve sabit genişlikli sayaç.</span
+                >
+              </li>
+              <li>
+                <strong>Okunan oda adları</strong
+                ><span
+                  >Katılımcılar ikinci satırda. Boş odalar tek satır; uzun
+                  isimleri daraltan yan yana kontroller azalır.</span
+                >
+              </li>
+              <li>
+                <strong>Tek profil alanı</strong
+                ><span
+                  >Profil, müsaitlik ve bildirimler altta bir arada. Görüşmeye
+                  katılınca hemen üstüne görüşme kontrolü gelir.</span
+                >
+              </li>
+              <li>
+                <strong>Daha az kalabalık</strong
+                ><span
+                  >Kanal oluşturma bölüm başlığında. Arşiv ve düzenleme bölüm
+                  menüsünde; satır eylemleri hover ve klavye odağında.</span
+                >
+              </li>
+            </ul>
+          </section>
+          <section
+            class="plan-panel"
+            id="panel-order"
+            role="tabpanel"
+            aria-labelledby="tab-order"
+            hidden
+          >
+            <h2>Menüyü çalışma biçimine göre düzenle.</h2>
+            <p>
+              Sıralama sana ait olur ve her çalışma alanında ayrı saklanır.
+              Ekibin sırası ve kanal izinleri bu işlemden etkilenmez.
+            </p>
+            <ul class="decisions">
+              <li>
+                <strong>Sürükle ve bırak</strong
+                ><span
+                  >Kanalları kendi bölümünde taşı. Bırakılacak yeri ince bir
+                  çizgi gösterir. İşlem sonrası geri al seçeneği sunulur.</span
+                >
+              </li>
+              <li>
+                <strong>Favoriler</strong
+                ><span
+                  >Sık kullandığın kanalları sağ tık menüsünden üste sabitle.
+                  Favoriler birer kısayol; okunmamış sayıları iki kez
+                  sayılmaz.</span
+                >
+              </li>
+              <li>
+                <strong>Kalıcı düzen</strong
+                ><span
+                  >Sıra ve kapattığın bölümler yenilemede korunur. Üründe
+                  kullanıcı ve workspace bazında sunucuda saklanır.</span
+                >
+              </li>
+              <li>
+                <strong>Herkes için taşıma</strong
+                ><span
+                  >Üç nokta menüsünde “Yukarı taşı / Aşağı taşı”. Mobilde
+                  sürüklemeye mecbur kalmadan aynı işlemler yapılır.</span
+                >
+              </li>
+            </ul>
+          </section>
+          <section
+            class="plan-panel"
+            id="panel-workspace"
+            role="tabpanel"
+            aria-labelledby="tab-workspace"
+            hidden
+          >
+            <h2>Workspace yönetimi tamamlanmalı.</h2>
+            <p>
+              Silme ve ayrılma şu an uygulamada yok. Bunları hesap, oturum ve
+              görüşme davranışlarıyla birlikte ele almak gerekiyor.
+            </p>
+            <ul class="decisions">
+              <li>
+                <strong>Sahibi için silme</strong
+                ><span
+                  >Ayarların altında açık bir silme alanı. Etkilenen içerik
+                  özeti, alan adı ve mevcut parola ile son onay.</span
+                >
+              </li>
+              <li>
+                <strong>Üye için ayrılma</strong
+                ><span
+                  >Ayrılma ayrı bir işlem. Alan sahibi önce mevcut sahiplik
+                  devrini kullanır; yeni davetle tekrar katılım mümkün
+                  olur.</span
+                >
+              </li>
+              <li>
+                <strong>Son alan silinirse</strong
+                ><span
+                  >Hesap korunur. Başka alan varsa ona geçilir; yoksa “Çalışma
+                  alanı oluştur / Davet ile katıl” ekranı açılır.</span
+                >
+              </li>
+              <li>
+                <strong>Diğer üyeler</strong
+                ><span
+                  >Açık görüşmeler kapanır; alan tüm cihazlardan kaldırılır.
+                  Diğer çalışma alanlarındaki içerik korunur.</span
+                >
+              </li>
+            </ul>
+            <button class="sample-button danger-text" id="preview-delete">
+              <svg><use href="#icon-trash" /></svg>Silme akışını önizle
+            </button>
+          </section>
+          <section
+            class="plan-panel"
+            id="panel-live"
+            role="tabpanel"
+            aria-labelledby="tab-live"
+            hidden
+          >
+            <h2>Hareketin bir nedeni olsun.</h2>
+            <p>
+              Yeni mesaj, oda katılımı ve sıralama değişimi kısa, yerinde geri
+              bildirim üretir. Sürekli yanıp sönen göstergeler yerine gerçek
+              durum öne çıkar.
+            </p>
+            <ul class="decisions">
+              <li>
+                <strong>Gerçek hareket</strong
+                ><span
+                  >Yeni mesaj gelince sayaç değişir; kanalın yeri değişmez.
+                  Bölüm kapalıyken toplam okunmamış sayısı başlıkta
+                  görünür.</span
+                >
+              </li>
+              <li>
+                <strong>Odada kim var?</strong
+                ><span
+                  >Küçük avatarlar ve kişi sayısı. Konuşma işareti yalnız gerçek
+                  ses etkinliğiyle, bağlantı kesilince güncel durum
+                  açıklamasıyla.</span
+                >
+              </li>
+              <li>
+                <strong>Son konuşmalar</strong
+                ><span
+                  >Rastgele ilk beş üye yerine gerçekten mesajlaştığın kişiler,
+                  son mesaj sırasıyla. Yeni mesaj başlatmak ayrı bir
+                  eylem.</span
+                >
+              </li>
+              <li>
+                <strong>Kısa geçişler</strong
+                ><span
+                  >120–180 ms seçim ve açılma tepkisi. Hareketi azalt tercihi
+                  açıkken animasyonlar kapanır.</span
+                >
+              </li>
+            </ul>
+            <button class="sample-button" id="sample-event">
+              <svg><use href="#icon-inbox" /></svg>Örnek yeni mesaj göster
+            </button>
+          </section>
+          <p class="next-step">
+            <strong>Uygulama sırası:</strong> Workspace silme ve ayrılma → yeni
+            menü, favoriler ve sürükleme → son konuşmalar, genişlik ayarı ve
+            filtreler.
+          </p>
+          <p class="scope-note">
+            Bu dosya bağımsız bir tasarım taslağıdır. Kanal sırası, favoriler ve
+            kapalı bölümler yalnız bu tarayıcıdaki örnek veriler için saklanır.
+            Canlı uygulamaya veya hesabına bağlanmaz.
+          </p>
+        </div>
+      </main>
+    </div>
+    <div class="popover" id="popover" role="menu" hidden></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+      <span id="toast-text"></span><button id="undo" hidden>Geri al</button>
+    </div>
+    <dialog id="delete-dialog" aria-labelledby="delete-title">
+      <form id="delete-form">
+        <h2 id="delete-title">Asil-O silinsin mi?</h2>
+        <p>
+          Bu çalışma alanının kanalları, mesajları ve dosyaları silinir. Hesabın
+          ve diğer çalışma alanların korunur.
+        </p>
+        <div class="impact">
+          <span>8 üye</span><span>5 kanal / oda</span><span>124 mesaj</span
+          ><span>6 dosya</span>
+        </div>
+        <p class="simulated">
+          Yalnız tasarım önizlemesi. Bu örnek, son çalışma alanının silinmesini
+          gösterir. Gerçek veri silinmez ve parola istenmez; üründe mevcut
+          parola da doğrulanır.
+        </p>
+        <label
+          >Onaylamak için <strong id="confirm-name">Asil-O</strong> yaz<input
+            id="delete-name"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Çalışma alanı adı"
+        /></label>
+        <footer>
+          <button type="button" id="cancel-delete">Vazgeç</button
+          ><button
+            type="submit"
+            class="destructive"
+            id="confirm-delete"
+            disabled
+          >
+            Silme sonucunu önizle
+          </button>
+        </footer>
+      </form>
+    </dialog>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      style="position: absolute; width: 0; height: 0; overflow: hidden"
+      aria-hidden="true"
+    >
+      <defs>
+        <symbol id="icon-chevron" viewBox="0 0 24 24">
+          <path d="m6 9 6 6 6-6" />
+        </symbol>
+        <symbol id="icon-hash" viewBox="0 0 24 24">
+          <path d="M5 9h14M4 15h14M11 3 7 21M17 3l-4 18" />
+        </symbol>
+        <symbol id="icon-lock" viewBox="0 0 24 24">
+          <rect x="5" y="10" width="14" height="11" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        </symbol>
+        <symbol id="icon-search" viewBox="0 0 24 24">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="m16 16 5 5" />
+        </symbol>
+        <symbol id="icon-plus" viewBox="0 0 24 24">
+          <path d="M12 5v14M5 12h14" />
+        </symbol>
+        <symbol id="icon-inbox" viewBox="0 0 24 24">
+          <path d="M4 4h16l2 12v4H2v-4L4 4Z" />
+          <path d="M2 15h6l2 3h4l2-3h6" />
+        </symbol>
+        <symbol id="icon-bookmark" viewBox="0 0 24 24">
+          <path d="M6 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17l-6-4-6 4Z" />
+        </symbol>
+        <symbol id="icon-voice" viewBox="0 0 24 24">
+          <path
+            d="m11 4-6 5H2v6h3l6 5V4ZM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"
+          />
+        </symbol>
+        <symbol id="icon-more" viewBox="0 0 24 24">
+          <circle cx="5" cy="12" r="1" />
+          <circle cx="12" cy="12" r="1" />
+          <circle cx="19" cy="12" r="1" />
+        </symbol>
+        <symbol id="icon-grip" viewBox="0 0 12 24">
+          <path
+            d="M4 5h.1M8 5h.1M4 12h.1M8 12h.1M4 19h.1M8 19h.1"
+            stroke-width="2.6"
+          />
+        </symbol>
+        <symbol id="icon-star" viewBox="0 0 24 24">
+          <path
+            d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"
+          />
+        </symbol>
+        <symbol id="icon-users" viewBox="0 0 24 24">
+          <circle cx="9" cy="7" r="3" />
+          <path
+            d="M2 21v-3a7 7 0 0 1 14 0v3M17 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 4 4v3"
+          />
+        </symbol>
+        <symbol id="icon-settings" viewBox="0 0 24 24">
+          <path
+            d="m9 3 6 0 .5 3 2 1.2 2.8-1 3 5-2.3 2 .1 2.5 2.2 2-3 5-2.8-1-2 1.3-.5 3H9l-.5-3-2-1.3-2.8 1-3-5 2.3-2v-2.5l-2.3-2 3-5 2.8 1 2-1.2L9 3Z"
+            transform="translate(2 -1) scale(.83)"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </symbol>
+        <symbol id="icon-bell" viewBox="0 0 24 24">
+          <path d="M18 8a6 6 0 0 0-12 0c0 8-3 9-3 9h18s-3-1-3-9M10 21h4" />
+        </symbol>
+        <symbol id="icon-help" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9.5 8a2.5 2.5 0 1 1 3 3.7c-.5.3-.5 1.3-.5 2.3M12 17h.1" />
+        </symbol>
+        <symbol id="icon-trash" viewBox="0 0 24 24">
+          <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7" />
+        </symbol>
+        <symbol id="icon-up" viewBox="0 0 24 24">
+          <path d="M12 20V4m-6 6 6-6 6 6" />
+        </symbol>
+        <symbol id="icon-down" viewBox="0 0 24 24">
+          <path d="M12 4v16m-6-6 6 6 6-6" />
+        </symbol>
+        <symbol id="icon-check" viewBox="0 0 24 24">
+          <path d="m5 12 4 4L19 6" />
+        </symbol>
+        <symbol id="icon-pointer" viewBox="0 0 24 24">
+          <path d="m5 3 14 10-7 1-4 6-3-17Z" />
+        </symbol>
+        <symbol id="icon-hangup" viewBox="0 0 24 24">
+          <path d="M3 16v-4c5-5 13-5 18 0v4h-5v-4M8 12v4H3" />
+        </symbol>
+        <symbol id="icon-exit" viewBox="0 0 24 24">
+          <path d="M9 4H4v16h5M10 12h11m-4-4 4 4-4 4" />
+        </symbol>
+      </defs>
+    </svg>
+    <script>
+      const $ = (s) => document.querySelector(s),
+        $$ = (s) => [...document.querySelectorAll(s)];
+      const icon = (name) =>
+        `<svg aria-hidden="true"><use href="#icon-${name}"/></svg>`;
+      $$("[data-icon]").forEach((el) => (el.innerHTML = icon(el.dataset.icon)));
+      const channels = [
+        { id: "genel", name: "genel", kind: "text", unread: 0 },
+        { id: "duyurular", name: "duyurular", kind: "text", unread: 4 },
+        { id: "deneme", name: "deneme", kind: "text", unread: 0 },
+        { id: "tasarim", name: "Tasarım odası", kind: "voice", people: 3 },
+        { id: "kahve", name: "Kahve molası", kind: "voice", people: 0 },
+      ];
+      const defaults = () => ({
+        text: ["genel", "duyurular", "deneme"],
+        voice: ["tasarim", "kahve"],
+        favorites: ["genel"],
+        collapsed: [],
+      });
+      let state = defaults(),
+        selected = "genel",
+        workspace = "Asil-O",
+        onlyUnread = false,
+        menuOrigin = null,
+        drag = null,
+        lastUndo = null,
+        toastTimer,
+        accountOnly = false,
+        deleteReturn = null;
+      const storageKey = "mola-sidebar-design-preview-v1";
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey));
+        if (
+          saved &&
+          ["text", "voice", "favorites", "collapsed"].every((k) =>
+            Array.isArray(saved[k]),
+          )
+        ) {
+          const next = defaults();
+          for (const kind of ["text", "voice"]) {
+            next[kind] = [
+              ...new Set(
+                saved[kind].filter((id) =>
+                  channels.some((c) => c.id === id && c.kind === kind),
+                ),
+              ),
+            ];
+            next[kind].push(
+              ...defaults()[kind].filter((id) => !next[kind].includes(id)),
+            );
+          }
+          next.favorites = [
+            ...new Set(
+              saved.favorites.filter((id) => channels.some((c) => c.id === id)),
+            ),
+          ];
+          next.collapsed = [
+            ...new Set(
+              saved.collapsed.filter((id) =>
+                ["text", "voice", "favorites", "dms"].includes(id),
+              ),
+            ),
+          ];
+          state = next;
+        }
+      } catch {}
+      function save() {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(state));
+        } catch {}
+      }
+      function toast(message, undo) {
+        clearTimeout(toastTimer);
+        $("#toast-text").textContent = message;
+        $("#toast").hidden = false;
+        $("#undo").hidden = !undo;
+        lastUndo = undo;
+        toastTimer = setTimeout(() => {
+          $("#toast").hidden = true;
+          lastUndo = null;
+        }, 7000);
+      }
+      $("#undo").onclick = () => {
+        if (lastUndo) lastUndo();
+        lastUndo = null;
+        $("#toast").hidden = true;
+      };
+      function matches(c) {
+        return (
+          c.name
+            .toLocaleLowerCase("tr")
+            .includes($("#search").value.toLocaleLowerCase("tr")) &&
+          (!onlyUnread || c.unread > 0)
+        );
+      }
+      function row(c, section) {
+        const voice = c.kind === "voice";
+        return `<div class="row ${selected === c.id ? "selected" : ""} ${c.unread ? "unread" : ""} ${voice ? (c.people ? "voice-live" : "voice-empty") : ""}" data-id="${c.id}" data-section="${section}"><span class="grip" draggable="true" aria-hidden="true" title="Sürükleyerek sırala">${icon("grip")}</span><button class="row-main ${voice ? "voice-main" : ""}" data-select="${c.id}" ${selected === c.id ? 'aria-current="page"' : ""}><span class="row-icon">${icon(voice ? "voice" : "hash")}</span>${voice ? `<span class="voice-copy"><span class="row-name">${c.name}</span><span class="voice-meta">${c.people ? '<span class="tiny-avatar">DK</span><span class="tiny-avatar lilac">EY</span><span class="tiny-avatar sand">CA</span><span class="live-label">3 kişi odada</span>' : ""}</span></span>` : `<span class="row-name">${c.name}</span>`}</button>${c.unread ? `<span class="count green row-count" aria-label="${c.unread} okunmamış mesaj">${c.unread}</span>` : ""}<button class="row-action" data-menu="${c.id}" aria-label="${c.name} kanal işlemleri" aria-haspopup="menu">${icon("more")}</button></div>`;
+      }
+      function render() {
+        if (accountOnly) return;
+        const sections = [
+          ["favorites", "Favoriler"],
+          ["text", "Kanallar"],
+          ["voice", "Sesli odalar"],
+        ];
+        $("#channel-sections").innerHTML = sections
+          .map(([kind, label]) => {
+            const ids = state[kind],
+              rows = ids
+                .map((id) => channels.find((c) => c.id === id))
+                .filter((c) => c && matches(c));
+            if (!rows.length) return "";
+            const closed = state.collapsed.includes(kind),
+              unread = rows.reduce((n, c) => n + (c.unread || 0), 0);
+            return `<section class="section ${closed ? "closed" : ""}"><div class="section-head"><button class="section-toggle" data-collapse="${kind}" aria-expanded="${!closed}">${icon("chevron")}${label}${closed && unread ? `<span class="count collapsed-count">${unread}</span>` : ""}</button><button class="section-more" data-section-menu="${kind}" aria-label="${label} bölüm işlemleri" aria-haspopup="menu">${icon("more")}</button>${kind !== "favorites" ? `<button class="section-more" data-demo="${kind === "voice" ? "Sesli oda" : "Kanal"} oluşturma penceresi açılır." aria-label="${kind === "voice" ? "Sesli oda" : "Kanal"} oluştur">${icon("plus")}</button>` : ""}</div><div class="section-list">${rows.map((c) => row(c, kind)).join("")}</div></section>`;
+          })
+          .join("");
+        const dmClosed = state.collapsed.includes("dms");
+        $("#dm-section").classList.toggle("closed", dmClosed);
+        $('[data-collapse="dms"]').setAttribute(
+          "aria-expanded",
+          String(!dmClosed),
+        );
+        let dmCount = 0;
+        $$(".dm-row").forEach((el) => {
+          el.hidden =
+            !el.dataset.person
+              .toLocaleLowerCase("tr")
+              .includes($("#search").value.toLocaleLowerCase("tr")) ||
+            (onlyUnread && el.dataset.person !== "Deniz Kaya");
+          if (!el.hidden) dmCount++;
+        });
+        $("#dm-section").hidden = !dmCount;
+        $("#no-results").hidden =
+          !!$("#channel-sections").textContent.trim() || !!dmCount;
+        $("#total-count").textContent = channels.reduce(
+          (n, c) => n + (c.unread || 0),
+          2,
+        );
+        $("#unread-filter").classList.toggle("active-filter", onlyUnread);
+        $("#unread-filter").setAttribute("aria-pressed", String(onlyUnread));
+      }
+      function closeMenu(restore = false) {
+        $("#popover").hidden = true;
+        $("#workspace-trigger").setAttribute("aria-expanded", "false");
+        if (restore && menuOrigin?.isConnected) menuOrigin.focus();
+      }
+      function openMenu(el, html) {
+        closeMenu();
+        menuOrigin = el;
+        const pop = $("#popover");
+        pop.innerHTML = html;
+        pop.hidden = false;
+        const rect = el.getBoundingClientRect();
+        pop.style.left =
+          Math.max(10, Math.min(rect.left, innerWidth - pop.offsetWidth - 10)) +
+          "px";
+        pop.style.top =
+          Math.max(
+            10,
+            Math.min(rect.bottom + 6, innerHeight - pop.offsetHeight - 10),
+          ) + "px";
+        pop.querySelector("button:not(:disabled)")?.focus();
+      }
+      const menuButton = (text, ico, attr, disabled = false) =>
+        `<button class="menu-action" role="menuitem" ${attr} ${disabled ? "disabled" : ""}>${icon(ico)}${text}</button>`;
+      function showWorkspaceMenu(el) {
+        openMenu(
+          el,
+          `<div class="popover-title"><strong>${workspace}</strong><small>Çalışma alanı sahibi</small></div>${menuButton("Çalışma alanını değiştir", "users", 'data-switch="true"')}${menuButton("Üyeler ve davetler", "users", 'data-demo="Çalışma alanı üyeleri ve davetleri açılır; gizli kanal üyeliği ayrı yönetilir."')}${menuButton("Çalışma alanı ayarları", "settings", 'data-workspace-settings="true"')}<div class="menu-divider"></div>${menuButton("Sahipliği devret", "exit", 'data-demo="Mevcut sahiplik devri akışı açılır. Sahip çalışma alanından ayrılmadan önce devretmelidir."')}<div class="menu-caption">Üyeler bu menüden çalışma alanından ayrılabilir.</div>`,
+        );
+        $("#workspace-trigger").setAttribute("aria-expanded", "true");
+      }
+      function showChannelMenu(el, id, section) {
+        const c = channels.find((c) => c.id === id),
+          ids = state[section],
+          index = ids.indexOf(id);
+        openMenu(
+          el,
+          `<div class="popover-title"><strong>${c.name}</strong><small>Kişisel kanal düzeni</small></div>${menuButton(state.favorites.includes(id) ? "Favorilerden çıkar" : "Favorilere ekle", "star", `data-favorite="${id}"`)}${menuButton("Yukarı taşı", "up", `data-move="${id}" data-direction="-1" data-list="${section}"`, index === 0)}${menuButton("Aşağı taşı", "down", `data-move="${id}" data-direction="1" data-list="${section}"`, index === ids.length - 1)}<div class="menu-divider"></div>${menuButton("Okundu olarak işaretle", "check", `data-read="${id}"`)}${menuButton("Kanal hakkında", "users", 'data-demo="Mevcut kanal hakkında penceresi açılır; üyeler ve erişim buradan yönetilir."')}${menuButton("Kanalı düzenle", "settings", 'data-demo="Mevcut ad, açıklama ve kanal yönetimi akışı açılır."')}<div class="menu-caption">Bu sıralama yalnız senin menünü etkiler.</div>`,
+        );
+      }
+      function changeOrder(id, section, next) {
+        const before = structuredClone(state);
+        state[section] = next;
+        save();
+        render();
+        toast(`${channels.find((c) => c.id === id).name} taşındı.`, () => {
+          state = before;
+          save();
+          render();
+        });
+      }
+      function panel(name) {
+        $$("[data-panel]").forEach((b) => {
+          b.setAttribute("aria-selected", String(b.dataset.panel === name));
+          b.tabIndex = b.dataset.panel === name ? 0 : -1;
+        });
+        $$(".plan-panel").forEach((p) => (p.hidden = p.id !== `panel-${name}`));
+      }
+      function deletePreview() {
+        deleteReturn = document.activeElement.closest("#popover")
+          ? $("#workspace-trigger")
+          : document.activeElement;
+        closeMenu();
+        $("#delete-title").textContent = `${workspace} silinsin mi?`;
+        $("#confirm-name").textContent = workspace;
+        $("#delete-name").value = "";
+        $("#confirm-delete").disabled = true;
+        $("#delete-dialog").showModal();
+        $("#delete-name").focus();
+      }
+      document.addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        if (
+          !b.closest("#popover") &&
+          !b.matches("#workspace-trigger,[data-menu],[data-section-menu]")
+        )
+          closeMenu();
+        if (b.dataset.demo) {
+          toast(b.dataset.demo);
+          return;
+        }
+        if (b.id === "workspace-trigger" || b.id === "rail-workspace") {
+          showWorkspaceMenu(b);
+          return;
+        }
+        if (b.dataset.menu) {
+          showChannelMenu(
+            b,
+            b.dataset.menu,
+            b.closest("[data-section]").dataset.section,
+          );
+          return;
+        }
+        if (b.dataset.sectionMenu) {
+          openMenu(
+            b,
+            `${menuButton("Bölümü daralt", "chevron", `data-collapse="${b.dataset.sectionMenu}"`)}${menuButton("Arşivlenmiş kanallar", "inbox", 'data-demo="Mevcut arşivlenmiş kanallar listesi açılır."')}<div class="menu-caption">Satırları tutamaktan sürükleyebilir veya kanal menüsünden taşıyabilirsin.</div>`,
+          );
+          return;
+        }
+        if (b.dataset.collapse) {
+          const id = b.dataset.collapse;
+          state.collapsed = state.collapsed.includes(id)
+            ? state.collapsed.filter((x) => x !== id)
+            : [...state.collapsed, id];
+          save();
+          closeMenu();
+          render();
+          $(`[data-collapse="${id}"]`)?.focus();
+          return;
+        }
+        if (b.dataset.select) {
+          selected = b.dataset.select;
+          const c = channels.find((c) => c.id === selected);
+          if (c.kind === "voice") {
+            toast(
+              `${c.name}: ürün akışında mikrofon ön kontrolüyle odaya katılırsın.`,
+            );
+            $("#call-status").hidden = false;
+            $("#call-status p").innerHTML =
+              `${c.name}<small>Sesli görüşmedesin · Önizleme</small>`;
+          } else {
+            c.unread = 0;
+          }
+          $("#selected-channel").textContent = c.name;
+          render();
+          $(`[data-select="${selected}"]`)?.focus();
+          return;
+        }
+        if (b.dataset.favorite) {
+          const id = b.dataset.favorite;
+          state.favorites = state.favorites.includes(id)
+            ? state.favorites.filter((x) => x !== id)
+            : [...state.favorites, id];
+          save();
+          render();
+          closeMenu();
+          $(`[data-menu="${id}"]`)?.focus();
+          toast(
+            state.favorites.includes(id)
+              ? "Favorilere eklendi."
+              : "Favorilerden çıkarıldı.",
+          );
+          return;
+        }
+        if (b.dataset.move) {
+          const id = b.dataset.move,
+            section = b.dataset.list,
+            next = [...state[section]],
+            i = next.indexOf(id),
+            j = i + Number(b.dataset.direction);
+          if (j >= 0 && j < next.length) {
+            [next[i], next[j]] = [next[j], next[i]];
+            changeOrder(id, section, next);
+          }
+          closeMenu();
+          $(`.row[data-section="${section}"] [data-menu="${id}"]`)?.focus();
+          return;
+        }
+        if (b.dataset.read) {
+          channels.find((c) => c.id === b.dataset.read).unread = 0;
+          render();
+          closeMenu();
+          toast("Kanal okundu olarak işaretlendi.");
+          return;
+        }
+        if (b.dataset.workspaceSettings) {
+          closeMenu();
+          panel("workspace");
+          openMenu(
+            $("#workspace-trigger"),
+            `<div class="popover-title"><strong>Çalışma alanı ayarları</strong><small>${workspace}</small></div>${menuButton("Çalışma alanı adını düzenle", "settings", 'data-demo="Mevcut çalışma alanı ayarları açılır."')}<div class="menu-divider"></div><button role="menuitem" class="menu-action danger-text" id="menu-delete">${icon("trash")}Çalışma alanını sil</button><div class="menu-caption">Yalnız çalışma alanı sahibi silebilir.</div>`,
+          );
+          return;
+        }
+        if (b.id === "menu-delete" || b.id === "preview-delete") {
+          deletePreview();
+          return;
+        }
+        if (b.dataset.panel) {
+          panel(b.dataset.panel);
+          return;
+        }
+        if (b.dataset.switch || b.id === "other-workspace") {
+          workspace = workspace === "Asil-O" ? "ASO-2" : "Asil-O";
+          $("#workspace-name").textContent = workspace;
+          $("#workspace-meta").textContent = "8 üye · 3 çevrimiçi";
+          closeMenu();
+          toast(
+            `${workspace} önizlemesine geçildi. Üründe her alanın düzeni ayrı saklanır.`,
+          );
+          return;
+        }
+      });
+      $("#workspace-trigger").addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          showWorkspaceMenu(e.currentTarget);
+        }
+      });
+      $("#channel-sections").addEventListener("contextmenu", (e) => {
+        const row = e.target.closest(".row");
+        if (row) {
+          e.preventDefault();
+          showChannelMenu(
+            row.querySelector("[data-menu]"),
+            row.dataset.id,
+            row.dataset.section,
+          );
+        }
+      });
+      $("#channel-sections").addEventListener("keydown", (e) => {
+        if (e.shiftKey && e.key === "F10") {
+          const row = e.target.closest(".row");
+          if (row) {
+            e.preventDefault();
+            showChannelMenu(
+              row.querySelector("[data-menu]"),
+              row.dataset.id,
+              row.dataset.section,
+            );
+          }
+        }
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeMenu(true);
+        if (
+          e.key === "/" &&
+          !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) &&
+          !$("#delete-dialog").open &&
+          !accountOnly
+        ) {
+          e.preventDefault();
+          $("#search").focus();
+        }
+        if (
+          !$("#popover").hidden &&
+          ["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)
+        ) {
+          e.preventDefault();
+          const buttons = $$("#popover button:not(:disabled)"),
+            i = buttons.indexOf(document.activeElement);
+          buttons[
+            e.key === "Home"
+              ? 0
+              : e.key === "End"
+                ? buttons.length - 1
+                : (i + (e.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+                  buttons.length
+          ]?.focus();
+        }
+      });
+      document.addEventListener("pointerdown", (e) => {
+        if (
+          !e.target.closest(
+            "#popover,#workspace-trigger,[data-menu],[data-section-menu],#rail-workspace",
+          )
+        )
+          closeMenu();
+      });
+      $(".design-tabs").addEventListener("keydown", (e) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+        e.preventDefault();
+        const tabs = $$("[data-panel]"),
+          i = tabs.indexOf(document.activeElement),
+          next =
+            tabs[
+              e.key === "Home"
+                ? 0
+                : e.key === "End"
+                  ? tabs.length - 1
+                  : (i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) %
+                    tabs.length
+            ];
+        panel(next.dataset.panel);
+        next.focus();
+      });
+      $("#search").addEventListener("input", render);
+      $("#unread-filter").onclick = () => {
+        onlyUnread = !onlyUnread;
+        render();
+        toast(
+          onlyUnread
+            ? "Okunmamış konuşmalar gösteriliyor."
+            : "Tüm konuşmalar gösteriliyor.",
+        );
+      };
+      $("#leave-call").onclick = () => {
+        $("#call-status").hidden = true;
+        toast("Örnek görüşmeden ayrıldın.");
+      };
+      $("#sample-event").onclick = () => {
+        channels.find((c) => c.id === "duyurular").unread++;
+        render();
+        toast("Örnek olay: duyurular kanalına yeni mesaj geldi.");
+      };
+      $("#delete-name").oninput = (e) =>
+        ($("#confirm-delete").disabled = e.target.value !== workspace);
+      $("#cancel-delete").onclick = () => $("#delete-dialog").close();
+      $("#delete-dialog").addEventListener("close", () => {
+        if (!accountOnly) deleteReturn?.focus();
+      });
+      $("#delete-form").onsubmit = (e) => {
+        e.preventDefault();
+        if ($("#delete-name").value !== workspace) return;
+        accountOnly = true;
+        $("#delete-dialog").close();
+        $("#sample-event").disabled = true;
+        $("#preview-delete").disabled = true;
+        $("#workspace-name").textContent = "Çalışma alanların";
+        $("#workspace-meta").textContent = "Hesabın korunur";
+        $(".nav-scroll").innerHTML =
+          '<div class="empty-workspace"><strong>Birlikte çalışmaya başla.</strong>Son çalışma alanını sildin. Hesabın ve profilin burada.<button data-demo="Yeni bir çalışma alanı oluşturma akışı açılır.">Çalışma alanı oluştur</button><button data-demo="Davet bağlantısıyla katılma akışı açılır.">Davet ile katıl</button></div>';
+        $(".search").hidden = true;
+        $("#call-status").hidden = true;
+        $("#workspace-trigger").disabled = true;
+        $("#other-workspace").disabled = true;
+        $("#rail-workspace").disabled = true;
+        toast(
+          "Son çalışma alanı silindikten sonraki ekran. Yalnız önizleme. Sıfırla ile geri dönebilirsin.",
+        );
+      };
+      $("#reset").onclick = () => {
+        try {
+          localStorage.removeItem(storageKey);
+        } catch {}
+        location.reload();
+      };
+      $("#channel-sections").addEventListener("dragstart", (e) => {
+        const grip = e.target.closest(".grip"),
+          row = grip?.closest(".row");
+        if (!row) {
+          e.preventDefault();
+          return;
+        }
+        drag = { id: row.dataset.id, section: row.dataset.section };
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", drag.id);
+        row.classList.add("dragging");
+        closeMenu();
+      });
+      $("#channel-sections").addEventListener("dragover", (e) => {
+        const row = e.target.closest(".row");
+        $$(".drop-before,.drop-after").forEach((x) =>
+          x.classList.remove("drop-before", "drop-after"),
+        );
+        if (
+          !drag ||
+          !row ||
+          row.dataset.section !== drag.section ||
+          row.dataset.id === drag.id
+        )
+          return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const r = row.getBoundingClientRect();
+        row.classList.add(
+          e.clientY < r.top + r.height / 2 ? "drop-before" : "drop-after",
+        );
+      });
+      $("#channel-sections").addEventListener("drop", (e) => {
+        e.preventDefault();
+        const row = e.target.closest(".row");
+        if (
+          !drag ||
+          !row ||
+          row.dataset.section !== drag.section ||
+          row.dataset.id === drag.id
+        )
+          return;
+        const after = row.classList.contains("drop-after"),
+          next = state[drag.section].filter((id) => id !== drag.id),
+          index = next.indexOf(row.dataset.id);
+        next.splice(index + (after ? 1 : 0), 0, drag.id);
+        changeOrder(drag.id, drag.section, next);
+        drag = null;
+      });
+      $("#channel-sections").addEventListener("dragend", () => {
+        drag = null;
+        $$(".dragging,.drop-before,.drop-after").forEach((x) =>
+          x.classList.remove("dragging", "drop-before", "drop-after"),
+        );
+      });
+      render();
+    </script>
+  </body>
+</html>

@@ -58,7 +58,8 @@ test('a delayed authorized search response cannot restore revoked message conten
 test('channel revocation removes an open integration key and list entry', async ({ page, browser }) => fixture(page, browser, async ({ viewer, revoke }) => {
   const bootstrap = await (await viewer.request.get('/api/auth/me')).json() as Bootstrap;
   const target = bootstrap.channels.find(channel => channel.name === 'restricted-plans')!;
-  await viewer.getByRole('button', { name: 'Entegrasyonlar', exact: true }).click();
+  await viewer.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true }).click();
+  await viewer.getByRole('menu', { name: 'Çalışma alanı menüsü', exact: true }).getByRole('menuitem', { name: 'Entegrasyonlar', exact: true }).click();
   const dialog = viewer.getByRole('dialog', { name: 'Entegrasyonlar', exact: true });
   await dialog.getByRole('button', { name: 'Entegrasyon ekle', exact: true }).click();
   await dialog.getByRole('radio', { name: /Gelen webhook/ }).check();
@@ -79,7 +80,8 @@ test('delayed integration creation cannot display a secret after its channel is 
     const response = await route.fetch(); captured(); await gate; await route.fulfill({ response });
   });
   try {
-    await viewer.getByRole('button', { name: 'Entegrasyonlar', exact: true }).click();
+    await viewer.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true }).click();
+    await viewer.getByRole('menu', { name: 'Çalışma alanı menüsü', exact: true }).getByRole('menuitem', { name: 'Entegrasyonlar', exact: true }).click();
     const dialog = viewer.getByRole('dialog', { name: 'Entegrasyonlar', exact: true });
     await dialog.getByRole('button', { name: 'Entegrasyon ekle', exact: true }).click();
     await dialog.getByRole('radio', { name: /Gelen webhook/ }).check();

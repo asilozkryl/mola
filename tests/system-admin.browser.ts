@@ -335,3 +335,163 @@ test("mobile global admin can suspend its own workspace and retain management ac
   ).toBe(true);
   await page.screenshot({ path: "artifacts/admin-system-mobile.png" });
 });
+
+test("an administrator without a workspace retains global management while a regular account has no entry", async ({
+  page,
+  browser,
+}) => {
+  const isolatedSuffix = randomUUID();
+  const adminClient = await client();
+  const standaloneAdmin = await register(
+    adminClient,
+    "Alansız Yönetici",
+    `account-only-admin-${isolatedSuffix}@example.invalid`,
+    `Silinecek Yönetici Alanı ${isolatedSuffix.slice(0, 6)}`,
+  );
+  // Grant a separate fixture through the real operator CLI, preserving the
+  // administrator and workspaces used by the other global-management tests.
+  const directory = resolve(process.env.MOLA_ADMIN_E2E_DATA_DIR!);
+  if (
+    !directory.startsWith(resolve(tmpdir()) + sep) ||
+    !basename(directory).startsWith("mola-admin-e2e-")
+  )
+    throw new Error(
+      "Admin fixtures require their isolated temporary test directory.",
+    );
+  const database = new DatabaseSync(join(directory, "mola.sqlite"));
+  try {
+    database.exec("PRAGMA busy_timeout=5000");
+    database
+      .prepare("UPDATE users SET email_verified=1 WHERE id=?")
+      .run(standaloneAdmin.user.id);
+  } finally {
+    database.close();
+  }
+  execFileSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "server/admin-cli.ts",
+      "grant",
+      "--email",
+      standaloneAdmin.user.email,
+    ],
+    {
+      cwd: process.cwd(),
+      env: { ...process.env, DATA_DIR: directory },
+      timeout: 15_000,
+      stdio: "pipe",
+    },
+  );
+  expect((await adminClient.get("/api/auth/me")).status()).toBe(401);
+  await page.addInitScript(() =>
+    sessionStorage.setItem("mola:logged-out", "true"),
+  );
+  await page.goto("/");
+  await page
+    .getByLabel("E-posta adresin", { exact: true })
+    .fill(standaloneAdmin.user.email);
+  await page.getByLabel("Parola", { exact: true }).fill(password);
+  await page
+    .getByRole("button", { name: "Giriş yap", exact: true })
+    .last()
+    .click();
+  await expect(
+    page.getByText("Her şey güncel", { exact: true }),
+  ).toBeAttached();
+  const removed = await page.request.delete(
+    `/api/workspaces/${standaloneAdmin.workspace.id}`,
+    {
+      headers: {
+        Origin: origin,
+        "X-Workspace-Id": standaloneAdmin.workspace.id,
+        "X-User-Id": standaloneAdmin.user.id,
+      },
+      data: { confirmName: standaloneAdmin.workspace.name, password },
+    },
+  );
+  expect(removed.status(), await removed.text()).toBe(200);
+  const account = await removed.json();
+  expect(account.accountOnly).toBe(true);
+  expect(account.workspace).toBeNull();
+  expect(account.workspaces).toEqual([]);
+  expect(account.user.id).toBe(standaloneAdmin.user.id);
+  expect(account.user.siteAdmin).toBe(true);
+  await expect(
+    page.getByRole("heading", {
+      name: "Birlikte çalışmaya başla.",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const entry = page.getByRole("button", {
+    name: "Uygulama yönetimi",
+    exact: true,
+  });
+  await expect(entry).toBeVisible();
+  await checkAxe(page);
+  await entry.click();
+  const dialog = page.getByRole("dialog", {
+    name: "Uygulama yönetimi",
+    exact: true,
+  });
+  await expect(dialog.locator(".system-admin-table")).toBeVisible();
+  await search(page, otherWorkspace.workspace.name);
+  await expect(dialog.locator("tbody > tr")).toHaveCount(1);
+  await expect(
+    dialog.getByText(otherWorkspace.workspace.name, { exact: true }),
+  ).toBeVisible();
+  expect((await page.request.get("/api/admin/system")).status()).toBe(200);
+  await checkAxe(page);
+  // A populated native search input consumes Escape to clear its query first.
+  const close = dialog
+    .locator(".modal-heading")
+    .getByRole("button", { name: "Kapat", exact: true });
+  await close.focus();
+  await expect(close).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(entry).toBeFocused();
+  await page.reload();
+  await expect(entry).toBeVisible();
+  await entry.click();
+  await expect(dialog.locator(".system-admin-table")).toBeVisible();
+
+  const regularClient = await client();
+  const regular = await register(
+    regularClient,
+    "Alansız Üye",
+    `account-only-member-${isolatedSuffix}@example.invalid`,
+    `Silinecek Üye Alanı ${isolatedSuffix.slice(0, 6)}`,
+  );
+  const regularDeletion = await regularClient.delete(
+    `/api/workspaces/${regular.workspace.id}`,
+    { data: { confirmName: regular.workspace.name, password } },
+  );
+  expect(regularDeletion.status(), await regularDeletion.text()).toBe(200);
+  expect((await regularDeletion.json()).accountOnly).toBe(true);
+  expect((await regularClient.get("/api/admin/system")).status()).toBe(403);
+  const regularContext = await browser.newContext({
+    baseURL: origin,
+    storageState: await regularClient.storageState(),
+  });
+  try {
+    const regularPage = await regularContext.newPage();
+    await regularPage.goto("/");
+    await expect(
+      regularPage.getByRole("heading", {
+        name: "Birlikte çalışmaya başla.",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      regularPage.getByRole("button", {
+        name: "Uygulama yönetimi",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(regularPage.locator(".system-admin")).toHaveCount(0);
+  } finally {
+    await regularContext.close();
+  }
+});

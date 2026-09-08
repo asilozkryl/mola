@@ -64,7 +64,13 @@ function notificationUrl(value) {
     const safe = new URL("/", self.location.origin);
     for (const key of ["workspace", "message"]) {
       const id = url.searchParams.get(key);
-      if (id && /^[a-f0-9-]{36}$/i.test(id)) safe.searchParams.set(key, id);
+      if (
+        id &&
+        /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
+          id,
+        )
+      )
+        safe.searchParams.set(key, id);
     }
     return safe.href;
   } catch {
@@ -98,13 +104,30 @@ self.addEventListener("notificationclick", (event) => {
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then(async (clients) => {
-        const existing = clients.find(
-          (client) => new URL(client.url).origin === self.location.origin,
-        );
+        const appClients = clients.filter((client) => {
+          try {
+            const candidate = new URL(client.url);
+            return (
+              candidate.origin === self.location.origin &&
+              candidate.pathname === "/"
+            );
+          } catch {
+            return false;
+          }
+        });
+        const existing =
+          appClients.find((client) => client.focused) ||
+          appClients.find((client) => client.visibilityState === "visible") ||
+          appClients[0];
         if (existing) {
-          // Let the open application navigate without restarting an ongoing call.
-          existing.postMessage({ type: "mola:notification-open", url });
-          return existing.focus();
+          try {
+            // A local test only focuses the app; keep its current conversation/call.
+            if (event.notification.data?.test !== true)
+              existing.postMessage({ type: "mola:notification-open", url });
+            return await existing.focus();
+          } catch {
+            /* A tab may close between enumeration and focusing. */
+          }
         }
         return self.clients.openWindow(url);
       }),

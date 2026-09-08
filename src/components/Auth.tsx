@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Check, Eye, EyeOff } from "lucide-react";
-import type { Bootstrap } from "../../shared/types";
+import type { SessionBootstrap } from "../../shared/types";
 import type { TwoFactorChallenge } from "../../shared/security-types";
 import { ApiError, post } from "../lib/api";
 import { IconButton, Spinner } from "./ui";
@@ -13,7 +13,7 @@ export function Auth({
   emailDeliveryAvailable = true,
   registrationAvailable = true,
 }: {
-  onLogin: (data: Bootstrap) => void;
+  onLogin: (data: SessionBootstrap) => void;
   demoEnabled: boolean;
   emailDeliveryAvailable?: boolean;
   registrationAvailable?: boolean;
@@ -34,7 +34,7 @@ export function Auth({
     setError("");
     const values = Object.fromEntries(new FormData(e.currentTarget));
     try {
-      const result = await post<Bootstrap | TwoFactorChallenge>(
+      const result = await post<SessionBootstrap | TwoFactorChallenge>(
         `/auth/${mode}`,
         {
           ...values,
@@ -68,7 +68,7 @@ export function Auth({
     setError("");
     const values = new FormData(event.currentTarget);
     try {
-      const result = await post<Bootstrap>("/auth/2fa/challenge", {
+      const result = await post<SessionBootstrap>("/auth/2fa/challenge", {
         code: values.get("code"),
       });
       sessionStorage.removeItem("mola:logged-out");
@@ -90,7 +90,7 @@ export function Auth({
     setBusy(true);
     setError("");
     try {
-      onLogin(await post<Bootstrap>("/auth/demo"));
+      onLogin(await post<SessionBootstrap>("/auth/demo"));
       sessionStorage.removeItem("mola:logged-out");
     } catch (e) {
       setError((e as Error).message);

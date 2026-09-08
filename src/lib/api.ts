@@ -1,4 +1,4 @@
-import type { Bootstrap } from "../../shared/types";
+import type { SessionBootstrap } from "../../shared/types";
 import { readAuthLink } from "./auth-links";
 let activeWorkspaceId: string | undefined;
 export function setApiWorkspace(workspaceId?: string) {
@@ -45,13 +45,13 @@ export async function api<T>(
 }
 export const post = <T>(path: string, body: unknown = {}) =>
   api<T>(path, { method: "POST", body: JSON.stringify(body) });
-export async function bootstrap(): Promise<Bootstrap | null> {
+export async function bootstrap(): Promise<SessionBootstrap | null> {
   if (readAuthLink()) {
     sessionStorage.setItem("mola:logged-out", "true");
     return null;
   }
   try {
-    return await api<Bootstrap>("/auth/me");
+    return await api<SessionBootstrap>("/auth/me");
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 401) throw error;
     const config = await api<{ demoEnabled: boolean }>("/config");
@@ -62,7 +62,7 @@ export async function bootstrap(): Promise<Bootstrap | null> {
       !new URLSearchParams(location.search).has("profile") &&
       !new URLSearchParams(location.search).has("invite")
     )
-      return post<Bootstrap>("/auth/demo");
+      return post<SessionBootstrap>("/auth/demo");
     return null;
   }
 }

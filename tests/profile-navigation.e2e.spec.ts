@@ -124,7 +124,7 @@ test("a profile link selects its workspace and a manual workspace switch clears 
   expect((await snapshot(page)).workspace.id).toBe(home.workspace.id);
   await expect(
     page.getByRole("button", {
-      name: "Çalışma alanlarını değiştir",
+      name: "Çalışma alanı menüsü",
       exact: true,
     }),
   ).toContainText(home.workspace.name);
@@ -171,7 +171,7 @@ test("an external session workspace switch closes the old profile without switch
   await expect(profile).toHaveCount(0);
   await expect(
     page.getByRole("button", {
-      name: "Çalışma alanlarını değiştir",
+      name: "Çalışma alanı menüsü",
       exact: true,
     }),
   ).toContainText(other.workspace.name);

@@ -11,7 +11,8 @@ test('incoming webhook setup delivers as a scoped bot and rotates credentials fr
   const channel = bootstrap.channels.find(channel => channel.kind === 'text')!;
   await page.goto('/');
   await expect(page.getByText('Her şey güncel', { exact: true })).toBeAttached();
-  await page.getByRole('button', { name: 'Entegrasyonlar', exact: true }).click();
+  await page.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true }).click();
+  await page.getByRole('menu', { name: 'Çalışma alanı menüsü', exact: true }).getByRole('menuitem', { name: 'Entegrasyonlar', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Entegrasyonlar', exact: true });
   await dialog.getByRole('button', { name: 'Entegrasyon ekle', exact: true }).click();
   await dialog.getByRole('radio', { name: /Gelen webhook/ }).check();
@@ -59,7 +60,8 @@ test('incoming webhook setup delivers as a scoped bot and rotates credentials fr
 test('GitHub setup supplies repository-specific instructions and a secret only on creation', async ({ page }) => {
   const response = await page.request.post('/api/auth/register', { headers: { Origin: origin }, data: { name: 'GitHub Yöneticisi', email: `github-ui-${randomUUID()}@example.invalid`, password: 'github-browser-password', workspaceName: 'GitHub Ekibi' } });
   expect(response.status()).toBe(200); await page.goto('/');
-  await page.getByRole('button', { name: 'Entegrasyonlar', exact: true }).click();
+  await page.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true }).click();
+  await page.getByRole('menu', { name: 'Çalışma alanı menüsü', exact: true }).getByRole('menuitem', { name: 'Entegrasyonlar', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Entegrasyonlar', exact: true });
   await dialog.getByRole('button', { name: 'Entegrasyon ekle', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'GitHub deposu', exact: true }).fill('mola-test/project');

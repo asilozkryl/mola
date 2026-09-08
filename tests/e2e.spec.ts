@@ -154,7 +154,10 @@ test('an owner can invite a second real user and exchange private messages in tw
     await invited.getByLabel('Parola', { exact: true }).fill('a-strong-invited-password');
     await invited.getByRole('button', { name: 'Hesap oluştur', exact: true }).last().click();
     await expect(invited.getByRole('textbox', { name: '#genel kanalına mesaj yaz', exact: true })).toBeVisible();
-    await page.locator('.dm-nav').filter({ hasText: 'Davetli Arkadaş' }).click();
+    await expect(page.locator('.dm-nav').filter({ hasText: 'Davetli Arkadaş' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Yeni direkt mesaj', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Yeni direkt mesaj', exact: true }).getByLabel('Ekip arkadaşını ara', { exact: true }).fill('Davetli');
+    await page.getByRole('button', { name: 'Davetli Arkadaş ile mesajlaş', exact: true }).click();
     await page.getByRole('textbox', { name: '#Davetli Arkadaş kanalına mesaj yaz', exact: true }).fill('Bu konuşma yalnızca ikimizin arasında.');
     await page.getByRole('button', { name: 'Mesaj gönder', exact: true }).click();
     await invited.locator('.dm-nav').filter({ hasText: 'Ekip Sahibi' }).click();

@@ -230,7 +230,7 @@ export default function SystemAdmin({
   onNotice,
   onChanged,
 }: {
-  currentUser: User;
+  currentUser: Pick<User, "id">;
   onNotice: (text: string) => void;
   onChanged: () => void;
 }) {
@@ -770,11 +770,9 @@ export default function SystemAdmin({
                               <span className="system-admin-secondary">
                                 {item.email}
                               </span>
-                              {item.workspaceName && (
-                                <span className="system-admin-user-workspace">
-                                  {item.workspaceName}
-                                </span>
-                              )}
+                              <span className="system-admin-user-workspace">
+                                {item.workspaceName || "Çalışma alanı yok"}
+                              </span>
                             </span>
                           </div>
                         </td>
@@ -787,9 +785,11 @@ export default function SystemAdmin({
                             {item.siteAdmin && <ShieldCheck size={14} />}
                             {item.siteAdmin
                               ? "Sistem yöneticisi"
-                              : item.role === "owner"
-                                ? "Alan sahibi"
-                                : "Üye"}
+                              : !item.workspaceId
+                                ? "Hesap"
+                                : item.role === "owner"
+                                  ? "Alan sahibi"
+                                  : "Üye"}
                           </span>
                         </td>
                         <td data-label="Katılım">

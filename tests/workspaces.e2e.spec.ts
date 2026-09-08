@@ -46,7 +46,8 @@ async function message(page: Page, content: string) {
 }
 
 async function workspaceDialog(page: Page) {
-  await page.getByRole('button', { name: 'Çalışma alanlarını değiştir', exact: true }).click();
+  await page.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Çalışma alanlarını değiştir', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Çalışma alanların', exact: true });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -231,8 +232,8 @@ test('voice room sidebars show both accounts and update remote microphone and de
     await ownerPage.getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
     await expect(ownerPage.getByRole('button', { name: 'Mikrofonu kapat', exact: true })).toBeVisible();
     await ownerPage.getByRole('button', { name: 'Görüşmeyi küçült', exact: true }).click();
-    await expect(ownerRoster.getByText(owner.data.user.name, { exact: true })).toBeVisible();
-    await expect(guestRoster.getByText(owner.data.user.name, { exact: true })).toBeVisible();
+    await expect(ownerRoster.getByRole('listitem', { name: owner.data.user.name, exact: true })).toBeVisible();
+    await expect(guestRoster.getByRole('listitem', { name: owner.data.user.name, exact: true })).toBeVisible();
 
     await guestPage.getByRole('button', { name: voice.name, exact: true }).click();
     await guestPage.getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
@@ -240,18 +241,18 @@ test('voice room sidebars show both accounts and update remote microphone and de
     await guestPage.getByRole('button', { name: 'Görüşmeyi küçült', exact: true }).click();
     for (const roster of [ownerRoster, guestRoster]) {
       await expect(roster.getByRole('listitem')).toHaveCount(2);
-      await expect(roster.getByText(owner.data.user.name, { exact: true })).toBeVisible();
-      await expect(roster.getByText(guest.data.user.name, { exact: true })).toBeVisible();
+      await expect(roster.getByRole('listitem', { name: owner.data.user.name, exact: true })).toBeVisible();
+      await expect(roster.getByRole('listitem', { name: guest.data.user.name, exact: true })).toBeVisible();
     }
     await guestPage.getByRole('region', { name: 'Devam eden görüşme', exact: true })
       .getByRole('button', { name: 'Mikrofonu kapat', exact: true }).click();
-    const remoteGuest = ownerRoster.getByRole('listitem').filter({ hasText: guest.data.user.name });
-    await expect(remoteGuest.getByLabel(/mikrofon kapalı/i)).toBeVisible();
+    const remoteGuest = ownerRoster.getByRole('listitem', { name: guest.data.user.name, exact: true });
+    await expect(remoteGuest.getByLabel(`${guest.data.user.name}: mikrofon kapalı`, { exact: true })).toBeVisible();
     await captureResponsive(ownerPage, 'voice-sidebar', true);
     await guestPage.getByRole('region', { name: 'Devam eden görüşme', exact: true })
       .getByRole('button', { name: 'Görüşmeden ayrıl', exact: true }).click();
     await expect(ownerRoster.getByRole('listitem')).toHaveCount(1);
-    await expect(ownerRoster.getByText(guest.data.user.name, { exact: true })).toHaveCount(0);
+    await expect(ownerRoster.getByRole('listitem', { name: guest.data.user.name, exact: true })).toHaveCount(0);
     await expect(guestRoster.getByRole('listitem')).toHaveCount(1);
     await ownerPage.getByRole('region', { name: 'Devam eden görüşme', exact: true })
       .getByRole('button', { name: 'Görüşmeden ayrıl', exact: true }).click();
@@ -323,7 +324,7 @@ test('switching during a voice call asks first, then releases media and updates 
     await expect(page.getByRole('button', { name: 'Mikrofonu kapat', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Görüşmeyi küçült', exact: true }).click();
     await expect(sibling.getByRole('list', { name: `${voice.name} katılımcıları`, exact: true })
-      .getByText(account.data.user.name, { exact: true })).toBeVisible();
+      .getByRole('listitem', { name: account.data.user.name, exact: true })).toBeVisible();
 
     const rail = page.getByRole('complementary', { name: 'Çalışma alanları', exact: true });
     await rail.getByRole('button', { name: `${created.workspace.name} alanına geç`, exact: true }).click();
@@ -340,7 +341,7 @@ test('switching during a voice call asks first, then releases media and updates 
     await expect(confirmation).toHaveCount(0);
     for (const tab of [page, sibling]) {
       await ready(tab);
-      await expect(tab.getByRole('button', { name: 'Çalışma alanlarını değiştir', exact: true })).toContainText(created.workspace.name);
+      await expect(tab.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true })).toContainText(created.workspace.name);
       await expect(tab.getByRole('region', { name: 'Devam eden görüşme', exact: true })).toHaveCount(0);
       expect((await snapshot(tab)).workspace.id).toBe(created.workspace.id);
       await expect(tab.getByRole('list', { name: `${voice.name} katılımcıları`, exact: true }).getByRole('listitem')).toHaveCount(0);

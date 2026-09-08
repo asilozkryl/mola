@@ -202,12 +202,14 @@ test("live presence respects private and direct conversation membership and reco
       await expect(
         third.getByRole("button", { name: "özel-akış", exact: true }),
       ).toHaveCount(0);
-      await page.locator(".dm-nav").filter({ hasText: "Deniz Akış" }).click();
+      await page.getByRole("button", { name: "Yeni direkt mesaj", exact: true }).click();
+      await page.getByRole("button", { name: "Deniz Akış ile mesajlaş", exact: true }).click();
       await expect(
         page.getByRole("heading", { name: "Deniz Akış", exact: true }),
       ).toBeVisible();
       await expect(status).toHaveText("2 çevrimiçi");
-      await peer.locator(".dm-nav").filter({ hasText: "Ece Akış" }).click();
+      await peer.getByRole("button", { name: "Yeni direkt mesaj", exact: true }).click();
+      await peer.getByRole("button", { name: "Ece Akış ile mesajlaş", exact: true }).click();
       await peer
         .getByRole("textbox", { name: /kanalına mesaj yaz/ })
         .fill("Birazdan paylaşacağım");
@@ -226,7 +228,7 @@ test("live presence respects private and direct conversation membership and reco
       await expect(status).toHaveAttribute("data-connected", "true");
       await expect(status).toHaveText("2 çevrimiçi");
       await expect(page.locator(".connection-banner")).toHaveCount(0);
-      await expect(page.locator(".rail-profile .presence-dot")).toHaveCount(1);
+      await expect(page.locator(".sidebar-account-profile .presence-dot")).toHaveCount(1);
       await expect(page.locator(".typing-indicator")).toBeEmpty();
     } finally {
       await page.context().setOffline(false);

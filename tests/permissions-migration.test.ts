@@ -37,10 +37,10 @@ function legacy(path: string) {
 test('v4 to v5 preserves memberships, sessions and history while adding role, privacy, security and collaboration schema', () => {
   const directory = mkdtempSync(join(tmpdir(), 'mola-v5-migration-')); const path = join(directory, 'mola.sqlite'); let repo: Repository | undefined;
   try {
-    const fixture = legacy(path); const previousMembers = fixture.db.prepare('SELECT * FROM workspace_members ORDER BY workspace_id,user_id').all(); const session = fixture.db.prepare('SELECT * FROM sessions').get(); fixture.db.close();
+    const fixture = legacy(path); const previousMembers = fixture.db.prepare('SELECT workspace_id,user_id,role,joined_at,suspended_at,removed_at FROM workspace_members ORDER BY workspace_id,user_id').all(); const session = fixture.db.prepare('SELECT * FROM sessions').get(); fixture.db.close();
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get('PRAGMA user_version')!.user_version, 6);
-    assert.deepEqual(repo.all('SELECT * FROM workspace_members ORDER BY workspace_id,user_id'), previousMembers);
+    assert.equal(repo.get('PRAGMA user_version')!.user_version, 7);
+    assert.deepEqual(repo.all('SELECT workspace_id,user_id,role,joined_at,suspended_at,removed_at FROM workspace_members ORDER BY workspace_id,user_id'), previousMembers);
     assert.deepEqual(repo.get('SELECT * FROM sessions'), session);
     assert.equal(repo.get('SELECT content FROM messages WHERE id=?', fixture.message)!.content, 'History survives permissions migration.');
     assert.equal(repo.get('SELECT password_hash FROM users WHERE id=?', fixture.owner)!.password_hash, 'preserved-secret-hash');
@@ -52,7 +52,7 @@ test('v4 to v5 preserves memberships, sessions and history while adding role, pr
     assert.throws(() => repo!.run("UPDATE workspace_members SET role='superuser' WHERE user_id=?", fixture.member), /CHECK/);
     assert.deepEqual(repo.all('PRAGMA foreign_key_check'), []);
     repo.close(); repo = new Repository(openDatabase(path));
-    assert.deepEqual(repo.all('SELECT * FROM workspace_members ORDER BY workspace_id,user_id'), previousMembers, 'opening again must preserve migrated rows');
+    assert.deepEqual(repo.all('SELECT workspace_id,user_id,role,joined_at,suspended_at,removed_at FROM workspace_members ORDER BY workspace_id,user_id'), previousMembers, 'opening again must preserve migrated rows');
   } finally { repo?.close(); rmSync(directory, { recursive: true, force: true }); }
 });
 

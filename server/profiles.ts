@@ -57,7 +57,7 @@ const profileInput = z
     "Kaydetmek için profil bilgilerinizi düzenleyin.",
   );
 
-/** Installed after the authenticated, verified and active-workspace API gate. */
+/** Account profile actions precede the workspace gate; member reads require it. */
 export function installProfileRoutes(
   app: Express,
   {
@@ -99,7 +99,7 @@ export function installProfileRoutes(
         "Hesabınızın bu çalışma alanına erişimi etkin değil.",
         current.suspended_at ? "ACCOUNT_SUSPENDED" : "MEMBERSHIP_SUSPENDED",
       );
-    if (repo.workspace(current.workspace_id).suspended)
+    if (current.workspace_id && repo.workspace(current.workspace_id).suspended)
       throw new HttpError(
         403,
         "Bu çalışma alanı askıya alındı.",
@@ -113,6 +113,14 @@ export function installProfileRoutes(
       );
     return current;
   };
+  const workspaceActor = (req: Request) => {
+    const current = actor(req);
+    if (!current.workspace_id) throw new HttpError(403, 'Önce bir çalışma alanı seçin.', 'WORKSPACE_REQUIRED');
+    return current;
+  };
+  const updatedUser = (current: Row) => current.workspace_id
+    ? repo.user(repo.member(current.id, current.workspace_id)!)
+    : repo.accountUser(repo.get('SELECT * FROM users WHERE id=?', current.id)!);
   const profileMember = (id: unknown, workspaceId: string) => {
     const member = uuid.safeParse(id).success
       ? repo.member(String(id), workspaceId)
@@ -146,7 +154,7 @@ export function installProfileRoutes(
   };
 
   app.get("/api/members/:id/profile", (req, res) => {
-    const current = actor(req);
+    const current = workspaceActor(req);
     const member = profileMember(req.params.id, current.workspace_id);
     const existingDm =
       current.id !== member.id &&
@@ -190,7 +198,7 @@ export function installProfileRoutes(
         input.location ?? current.location,
         current.id,
       );
-      return repo.user(repo.member(current.id, current.workspace_id)!);
+      return updatedUser(current);
     });
     publish(user.id);
     res.json(user);
@@ -284,7 +292,7 @@ export function installProfileRoutes(
           version,
           current.id,
         );
-        return repo.user(repo.member(current.id, current.workspace_id)!);
+        return updatedUser(current);
       });
     } catch (error) {
       if (written) removeFile(version);
@@ -300,7 +308,7 @@ export function installProfileRoutes(
       const current = actor(req);
       repo.run("UPDATE users SET avatar_version=NULL WHERE id=?", current.id);
       return {
-        user: repo.user(repo.member(current.id, current.workspace_id)!),
+        user: updatedUser(current),
         previous: current.avatar_version,
       };
     });
@@ -312,7 +320,7 @@ export function installProfileRoutes(
   app.get(
     "/api/workspaces/:workspaceId/members/:id/avatar/:version",
     (req, res, next) => {
-      const current = actor(req);
+      const current = workspaceActor(req);
       if (
         req.params.workspaceId !== current.workspace_id ||
         !uuid.safeParse(req.params.version).success
@@ -336,6 +344,18 @@ export function installProfileRoutes(
       );
     },
   );
+
+  app.get('/api/account/avatar/:version', (req, res, next) => {
+    const current = actor(req);
+    if (!uuid.safeParse(req.params.version).success || !current.avatar_version || current.avatar_version !== req.params.version) throw new HttpError(404, 'Profil fotoğrafı bulunamadı.');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Type', 'image/webp');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.sendFile(join(avatarDir, `${current.avatar_version}.webp`), error => {
+      if (error) next(new HttpError(404, 'Profil fotoğrafı bulunamadı.'));
+    });
+  });
 
   return {
     cleanup() {

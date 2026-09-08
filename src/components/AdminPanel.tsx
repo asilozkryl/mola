@@ -83,14 +83,20 @@ export default function AdminPanel({
   data,
   onClose,
   onChanged,
+  initialSection,
+  onDeleteWorkspace,
 }: {
   data: Bootstrap;
   onClose: () => void;
   onChanged: () => void;
+  initialSection?: "settings";
+  onDeleteWorkspace?: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [section, setSection] = useState<Section>(
-    data.workspace.suspended && data.user.siteAdmin ? "system" : "members",
+    data.workspace.suspended && data.user.siteAdmin
+      ? "system"
+      : initialSection || "members",
   );
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [error, setError] = useState("");
@@ -103,10 +109,15 @@ export default function AdminPanel({
   const [editing, setEditing] = useState<Channel | "new">();
   const [accessChannel, setAccessChannel] = useState<Channel>();
   const [deletingChannelId, setDeletingChannelId] = useState<string>();
-  const deletingChannel = snapshot?.channels.find((channel) => channel.id === deletingChannelId);
+  const deletingChannel = snapshot?.channels.find(
+    (channel) => channel.id === deletingChannelId,
+  );
   const [inviteUrl, setInviteUrl] = useState("");
   const [showArchived, setShowArchived] = useState(false);
-  const canManage = data.user.role === "owner" || data.user.role === "admin" || data.user.siteAdmin;
+  const canManage =
+    data.user.role === "owner" ||
+    data.user.role === "admin" ||
+    data.user.siteAdmin;
   const canManageAdmins = data.user.role === "owner" || data.user.siteAdmin;
   const changedRef = useRef(onChanged);
   changedRef.current = onChanged;
@@ -445,16 +456,46 @@ export default function AdminPanel({
                                     </div>
                                   </td>
                                   <td>
-                                    {member.role === "owner" || member.id === data.user.id || member.siteAdmin || member.isBot || (member.role === "admin" && !canManageAdmins)
-                                      ? member.isBot ? "Ekip botu" : roleNames[member.role]
-                                      : <select className="adm-role-select" aria-label={`${member.name} rolü`} value={member.role} disabled={busy} onChange={e => confirm({
-                                        title: "Üye rolünü değiştir",
-                                        description: `${member.name} için ${roleNames[e.target.value as keyof typeof roleNames]} rolü uygulanacak.${e.target.value === "guest" ? " Yalnızca atandığı kanalları görebilecek. Kanal erişimi bölümünden atamaları düzenleyebilirsin." : ""}`,
-                                        label: "Rolü değiştir", path: `/admin/workspace/members/${member.id}/role`, method: "PATCH", body: { role: e.target.value },
-                                      })}>
-                                        {canManageAdmins && <option value="admin">Yönetici</option>}
-                                        <option value="moderator">Moderatör</option><option value="member">Üye</option><option value="guest">Misafir</option>
-                                      </select>}
+                                    {member.role === "owner" ||
+                                    member.id === data.user.id ||
+                                    member.siteAdmin ||
+                                    member.isBot ||
+                                    (member.role === "admin" &&
+                                      !canManageAdmins) ? (
+                                      member.isBot ? (
+                                        "Ekip botu"
+                                      ) : (
+                                        roleNames[member.role]
+                                      )
+                                    ) : (
+                                      <select
+                                        className="adm-role-select"
+                                        aria-label={`${member.name} rolü`}
+                                        value={member.role}
+                                        disabled={busy}
+                                        onChange={(e) =>
+                                          confirm({
+                                            title: "Üye rolünü değiştir",
+                                            description: `${member.name} için ${roleNames[e.target.value as keyof typeof roleNames]} rolü uygulanacak.${e.target.value === "guest" ? " Yalnızca atandığı kanalları görebilecek. Kanal erişimi bölümünden atamaları düzenleyebilirsin." : ""}`,
+                                            label: "Rolü değiştir",
+                                            path: `/admin/workspace/members/${member.id}/role`,
+                                            method: "PATCH",
+                                            body: { role: e.target.value },
+                                          })
+                                        }
+                                      >
+                                        {canManageAdmins && (
+                                          <option value="admin">
+                                            Yönetici
+                                          </option>
+                                        )}
+                                        <option value="moderator">
+                                          Moderatör
+                                        </option>
+                                        <option value="member">Üye</option>
+                                        <option value="guest">Misafir</option>
+                                      </select>
+                                    )}
                                   </td>
                                   <td>
                                     <span
@@ -468,7 +509,12 @@ export default function AdminPanel({
                                       member.id !== data.user.id && (
                                         <button
                                           className="secondary-button"
-                                          disabled={busy || member.siteAdmin || (member.role === "admin" && !canManageAdmins)}
+                                          disabled={
+                                            busy ||
+                                            member.siteAdmin ||
+                                            (member.role === "admin" &&
+                                              !canManageAdmins)
+                                          }
                                           onClick={() =>
                                             confirm({
                                               title: member.suspended
@@ -542,11 +588,18 @@ export default function AdminPanel({
                                   {channel.kind === "voice"
                                     ? "Sesli oda"
                                     : "Yazılı kanal"}
-                                  {channel.visibility === "private" && " · Özel"}
+                                  {channel.visibility === "private" &&
+                                    " · Özel"}
                                 </small>
                               </div>
                               <div className="adm-actions">
-                                <button className="secondary-button" aria-label={`${channel.name} kanal erişimi`} onClick={() => setAccessChannel(channel)}>Erişim</button>
+                                <button
+                                  className="secondary-button"
+                                  aria-label={`${channel.name} kanal erişimi`}
+                                  onClick={() => setAccessChannel(channel)}
+                                >
+                                  Erişim
+                                </button>
                                 <button
                                   className="secondary-button"
                                   onClick={() => {
@@ -587,7 +640,15 @@ export default function AdminPanel({
                                     {channel.name}
                                   </span>
                                 </button>
-                                <button className="adm-text-button danger-text" aria-label={`${channel.name} kanalını sil`} onClick={() => setDeletingChannelId(channel.id)}>Sil</button>
+                                <button
+                                  className="adm-text-button danger-text"
+                                  aria-label={`${channel.name} kanalını sil`}
+                                  onClick={() =>
+                                    setDeletingChannelId(channel.id)
+                                  }
+                                >
+                                  Sil
+                                </button>
                               </div>
                             </div>
                           ))}
@@ -827,6 +888,26 @@ export default function AdminPanel({
                             </form>
                           )}
                         </section>
+                        {data.user.role === "owner" &&
+                          !data.workspace.isDemo &&
+                          onDeleteWorkspace && (
+                            <section className="adm-settings-section workspace-danger-zone">
+                              <h2>Çalışma alanını sil</h2>
+                              <p>
+                                Kanallar, mesajlar ve dosyalar tüm ekip için
+                                kalıcı olarak silinir. Hesaplar ve diğer çalışma
+                                alanları korunur.
+                              </p>
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                disabled={busy}
+                                onClick={onDeleteWorkspace}
+                              >
+                                Çalışma alanını sil
+                              </button>
+                            </section>
+                          )}
                         <div className="adm-storage">
                           <strong>
                             {snapshot.stats.messages.toLocaleString("tr-TR")}{" "}
@@ -963,13 +1044,30 @@ export default function AdminPanel({
               />
             </label>
             {editing === "new" && (
-              <><label>
-                Kanal türü
-                <select name="kind" defaultValue="text">
-                  <option value="text">Yazılı kanal</option>
-                  <option value="voice">Sesli oda</option>
-                </select>
-              </label><label>Kanal görünürlüğü<select name="visibility" aria-label="Kanal görünürlüğü" defaultValue="public"><option value="public">Herkese açık</option><option value="private">Özel kanal</option></select></label><p className="channel-access-note">Özel kanal ilk olarak yalnızca sana açılır. Oluşturduktan sonra Erişim bölümünden üyeleri seçebilirsin.</p></>
+              <>
+                <label>
+                  Kanal türü
+                  <select name="kind" defaultValue="text">
+                    <option value="text">Yazılı kanal</option>
+                    <option value="voice">Sesli oda</option>
+                  </select>
+                </label>
+                <label>
+                  Kanal görünürlüğü
+                  <select
+                    name="visibility"
+                    aria-label="Kanal görünürlüğü"
+                    defaultValue="public"
+                  >
+                    <option value="public">Herkese açık</option>
+                    <option value="private">Özel kanal</option>
+                  </select>
+                </label>
+                <p className="channel-access-note">
+                  Özel kanal ilk olarak yalnızca sana açılır. Oluşturduktan
+                  sonra Erişim bölümünden üyeleri seçebilirsin.
+                </p>
+              </>
             )}
             {actionError && (
               <p className="form-error" role="alert">
@@ -998,8 +1096,31 @@ export default function AdminPanel({
           </form>
         </Modal>
       )}
-      {accessChannel && <ChannelAccessDialog channel={accessChannel} currentUserId={data.user.id} onClose={() => setAccessChannel(undefined)} onChanged={() => { setAccessChannel(undefined); void changed("Kanal erişimi güncellendi."); }} />}
-      {deletingChannel && <ChannelActionsDialog channel={deletingChannel} mode="delete" workspaceId={data.workspace.id} userId={data.user.id} onClose={() => setDeletingChannelId(undefined)} onChanged={() => {}} onDeleted={() => { setDeletingChannelId(undefined); void changed("Kanal ve içeriği kalıcı olarak silindi."); }} />}
+      {accessChannel && (
+        <ChannelAccessDialog
+          channel={accessChannel}
+          currentUserId={data.user.id}
+          onClose={() => setAccessChannel(undefined)}
+          onChanged={() => {
+            setAccessChannel(undefined);
+            void changed("Kanal erişimi güncellendi.");
+          }}
+        />
+      )}
+      {deletingChannel && (
+        <ChannelActionsDialog
+          channel={deletingChannel}
+          mode="delete"
+          workspaceId={data.workspace.id}
+          userId={data.user.id}
+          onClose={() => setDeletingChannelId(undefined)}
+          onChanged={() => {}}
+          onDeleted={() => {
+            setDeletingChannelId(undefined);
+            void changed("Kanal ve içeriği kalıcı olarak silindi.");
+          }}
+        />
+      )}
     </dialog>
   );
 }

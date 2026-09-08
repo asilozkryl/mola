@@ -47,6 +47,16 @@ function channelButton(page: Page, name: string) {
     .filter({ hasText: name });
 }
 
+async function openArchives(page: Page) {
+  await page
+    .getByRole("button", { name: "Kanallar bölüm işlemleri", exact: true })
+    .click();
+  await page
+    .getByRole("menu", { name: "Bölüm işlemleri", exact: true })
+    .getByRole("menuitem", { name: "Arşivlenmiş kanallar", exact: true })
+    .click();
+}
+
 async function menu(page: Page, channel: Channel) {
   await channelButton(page, channel.name).click({ button: "right" });
   const result = page.getByRole("menu", {
@@ -260,7 +270,7 @@ test("archived history and saved messages survive reload and the archive directo
     .click();
   await expect(archive).toHaveCount(0);
   await expect(channelButton(page, channel.name)).toHaveCount(0);
-  await page.getByRole("button", { name: /Arşivlenmiş kanallar/ }).click();
+  await openArchives(page);
   const directory = page.getByRole("dialog", {
     name: "Arşivlenmiş kanallar",
     exact: true,
@@ -276,7 +286,7 @@ test("archived history and saved messages survive reload and the archive directo
     page.getByRole("textbox", { name: /kanalına mesaj yaz/ }),
   ).toHaveCount(0);
   await page.reload();
-  await page.getByRole("button", { name: /Arşivlenmiş kanallar/ }).click();
+  await openArchives(page);
   await directory
     .getByRole("button", {
       name: `${channel.name} kanal işlemleri`,
@@ -314,7 +324,7 @@ test("archived history and saved messages survive reload and the archive directo
     "Arşivden güncellenen açıklama",
   );
   await expect(article).toBeVisible();
-  await page.getByRole("button", { name: /Arşivlenmiş kanallar/ }).click();
+  await openArchives(page);
   await directory
     .getByRole("button", {
       name: `${channel.name} arşivden çıkar`,
