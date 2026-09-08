@@ -55,6 +55,7 @@ export function ContextMenu({
       (document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null);
+    const anchorBounds = returnFocus?.getBoundingClientRect();
 
     function place() {
       if (!menu || !position) return;
@@ -78,12 +79,26 @@ export function ContextMenu({
 
     function dismissOnScroll(event: Event) {
       if (event.target instanceof Node && menu?.contains(event.target)) return;
+      // A conversation can finish scrolling while a sidebar menu opens.
+      // Only moving the menu's own anchor makes its position stale.
+      const currentBounds = returnFocus?.getBoundingClientRect();
+      if (
+        anchorBounds &&
+        currentBounds &&
+        returnFocus?.isConnected &&
+        Math.abs(anchorBounds.left - currentBounds.left) < 1 &&
+        Math.abs(anchorBounds.top - currentBounds.top) < 1
+      )
+        return;
       closeRef.current();
     }
 
     place();
-    menu.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
-    if (!menu.contains(document.activeElement)) menu.focus();
+    menu
+      .querySelector<HTMLButtonElement>("button:not(:disabled)")
+      ?.focus({ preventScroll: true });
+    if (!menu.contains(document.activeElement))
+      menu.focus({ preventScroll: true });
     const observer = new ResizeObserver(place);
     observer.observe(menu);
     document.addEventListener("pointerdown", dismissOutside);

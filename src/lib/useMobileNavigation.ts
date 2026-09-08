@@ -48,10 +48,7 @@ export function useMobileNavigation(
           'dialog[open], [role="dialog"][aria-modal="true"]',
         ),
       ].some(
-        (element) =>
-          element !== sidebar &&
-          !sidebar.contains(element) &&
-          element.getClientRects().length > 0,
+        (element) => element !== sidebar && element.getClientRects().length > 0,
       );
 
     // Let the newly visible drawer receive its styles before moving focus.

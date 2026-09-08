@@ -69,7 +69,8 @@ import type {
 import { api, bootstrap, post, ApiError, setApiWorkspace } from "./lib/api";
 import { WorkspaceNavigation } from "./components/WorkspaceNavigation";
 import { useSidebarPreferences } from "./lib/useSidebarPreferences";
-import type { SidebarOrder } from "../shared/sidebar";
+import type { SidebarOrder, SidebarChannelGroup } from "../shared/sidebar";
+import { ChannelGroupMove } from "./components/ChannelGroupMove";
 import {
   AccountOnlyHome,
   WorkspaceLifecycleDialog,
@@ -110,7 +111,8 @@ import { usePushSubscription } from "./lib/usePushSubscription";
 import { CallPanel } from "./components/CallPanel";
 import { CallSetup } from "./components/CallSetup";
 import ChannelAccessDialog from "./components/ChannelAccessDialog";
-import { NotificationsInbox } from "./components/NotificationsInbox";
+import { ActivityCenter } from "./components/ActivityCenter";
+import { DirectMessagesCenter } from "./components/DirectMessagesCenter";
 import IntegrationsDialog from "./components/IntegrationsDialog";
 import { NotificationSettings } from "./components/NotificationSettings";
 import type { NotificationState } from "../shared/collaboration-types";
@@ -139,8 +141,9 @@ type Dialog =
   | "notifications"
   | "integrations"
   | "archives"
+  | "move-channel"
   | null;
-type View = "channel" | "saved" | "inbox" | "profile";
+type View = "channel" | "saved" | "inbox" | "profile" | "messages";
 let initialBootstrap: Promise<SessionBootstrap | null> | undefined;
 const uniqueMessages = (list: Message[]) =>
   [...new Map(list.map((m) => [m.id, m])).values()].sort((a, b) =>
@@ -193,6 +196,7 @@ export default function App() {
   const [collectionVersion, setCollectionVersion] = useState(0);
   const [savedOwner, setSavedOwner] = useState("");
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [channelToMove, setChannelToMove] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("list");
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
   const [workspaceTarget, setWorkspaceTarget] = useState<string>();
@@ -265,6 +269,8 @@ export default function App() {
     scope: string;
     section: SidebarOrder;
     ids: string[];
+    groups?: SidebarChannelGroup[];
+    notice?: string;
   } | null>(null);
   const [quiet, setQuiet] = useState(
     localStorage.getItem("mola:quiet") === "true",
@@ -577,7 +583,7 @@ export default function App() {
   }, [toast]);
   useEffect(() => {
     if (
-      dialog ||
+      (dialog && dialog !== "move-channel") ||
       adminOpen ||
       voicePreviewId ||
       callSetupChannel ||
@@ -1300,6 +1306,30 @@ export default function App() {
     }
   }
   const channel = data?.channels.find((c) => c.id === channelId);
+  async function updateChannelGroups(
+    groups: SidebarChannelGroup[],
+    textOrder?: string[],
+    notice = "Kanal bölümleri kaydedildi.",
+  ) {
+    const scope = sidebarScope;
+    const previous = sidebar.preferences.channelGroups || [];
+    const previousOrder = sidebar.preferences.textOrder;
+    if (!(await sidebar.setChannelGroups(groups, textOrder))) return false;
+    if (
+      !dataRef.current ||
+      dataRef.current.user.id + ":" + dataRef.current.workspace.id !== scope
+    )
+      return false;
+    setSidebarUndo({
+      scope,
+      section: "text",
+      ids: previousOrder,
+      groups: previous,
+      notice,
+    });
+    notify(notice);
+    return true;
+  }
   const threadChannel = data?.channels.find((c) => c.id === thread?.channelId);
   const userMap = useMemo(
     () => new Map(data?.members.map((u) => [u.id, u]) || []),
@@ -1444,13 +1474,26 @@ export default function App() {
   }
   const menuOrderSection =
     channelMenu?.section || (menuChannel?.kind === "voice" ? "voice" : "text");
-  const menuOrder = (
-    menuOrderSection === "favorites"
-      ? sidebar.favoriteChannels
-      : menuOrderSection === "voice"
-        ? sidebar.orderedVoiceChannels
-        : sidebar.orderedTextChannels
-  ).map((c) => c.id);
+  const menuGroup =
+    menuOrderSection === "text"
+      ? sidebar.preferences.channelGroups?.find((group) =>
+          group.channelIds.includes(menuChannel?.id || ""),
+        )
+      : undefined;
+  const groupedChannelIds = new Set(
+    sidebar.preferences.channelGroups?.flatMap((group) => group.channelIds) ||
+      [],
+  );
+  const menuOrder = menuGroup
+    ? menuGroup.channelIds
+    : (menuOrderSection === "favorites"
+        ? sidebar.favoriteChannels
+        : menuOrderSection === "voice"
+          ? sidebar.orderedVoiceChannels
+          : sidebar.orderedTextChannels.filter(
+              (c) => !groupedChannelIds.has(c.id),
+            )
+      ).map((c) => c.id);
   const menuOrderIndex = menuOrder.indexOf(menuChannel?.id || "");
   const channelMenuItems = menuChannel
     ? [
@@ -1513,9 +1556,30 @@ export default function App() {
                     next[target],
                     next[menuOrderIndex],
                   ];
-                  void reorderSidebar(menuOrderSection, next);
+                  if (menuGroup)
+                    void updateChannelGroups(
+                      (sidebar.preferences.channelGroups || []).map((group) =>
+                        group.id === menuGroup.id
+                          ? { ...group, channelIds: next }
+                          : group,
+                      ),
+                    );
+                  else void reorderSidebar(menuOrderSection, next);
                 },
               })),
+            ]
+          : []),
+        ...(menuChannel.kind === "text" && !menuChannel.archived
+          ? [
+              {
+                label: "Bölüme taşı",
+                icon: <ArrowRight size={16} />,
+                disabled: sidebar.loading || sidebar.saving,
+                onSelect: () => {
+                  setChannelToMove(menuChannel.id);
+                  setDialog("move-channel");
+                },
+              },
             ]
           : []),
         {
@@ -1694,6 +1758,8 @@ export default function App() {
     clearProfileAddress("push");
     setProfileId(null);
     setView(next);
+    setThread(null);
+    setChannelMenu(null);
   }
   function updateOwnProfile(user: User) {
     if (
@@ -2221,6 +2287,11 @@ export default function App() {
           currentId={channelId}
           view={view}
           savedCount={saved.length}
+          activityCount={
+            notificationState?.workspaceId === data.workspace.id
+              ? notificationState.unreadNotifications
+              : 0
+          }
           canManage={canManage}
           canCreate={canCreate}
           voiceChannels={voiceChannels}
@@ -2237,6 +2308,7 @@ export default function App() {
           onCallOpen={() => setShowCall(true)}
           onMenu={openChannelMenu}
           onReorder={(section, ids) => void reorderSidebar(section, ids)}
+          onGroupsChange={updateChannelGroups}
           onProfile={openProfile}
           onWorkspaces={openWorkspaces}
           onSettings={() => setDialog("settings")}
@@ -2285,12 +2357,14 @@ export default function App() {
               {view === "saved"
                 ? "Kaydedilenler"
                 : view === "inbox"
-                  ? "Gelen kutusu"
-                  : view === "profile"
-                    ? "Profil"
-                    : channel?.kind === "dm"
-                      ? "Direkt mesajlar"
-                      : "Kanallar"}
+                  ? "Aktivite"
+                  : view === "messages"
+                    ? "Özel mesajlar"
+                    : view === "profile"
+                      ? "Profil"
+                      : channel?.kind === "dm"
+                        ? "Direkt mesajlar"
+                        : "Kanallar"}
             </span>
           </div>
           <button
@@ -2385,6 +2459,8 @@ export default function App() {
                       <Bookmark size={23} />
                     ) : view === "inbox" ? (
                       <Bell size={23} />
+                    ) : view === "messages" ? (
+                      <MessageCircle size={23} />
                     ) : channel?.kind === "dm" ? (
                       <MessageCircle size={24} />
                     ) : (
@@ -2396,8 +2472,10 @@ export default function App() {
                       {view === "saved"
                         ? "Kaydedilenler"
                         : view === "inbox"
-                          ? "Gelen kutusu"
-                          : channelName}
+                          ? "Aktivite"
+                          : view === "messages"
+                            ? "Özel mesajlar"
+                            : channelName}
                       {view === "channel" && channel?.archived && (
                         <span className="channel-archived-label">
                           <Archive size={12} /> Arşivde
@@ -2408,9 +2486,11 @@ export default function App() {
                       {view === "saved"
                         ? "Tekrar dönmek istediğin mesajlar, elinin altında."
                         : view === "inbox"
-                          ? "Sen yokken neler oldu?"
-                          : channel?.description ||
-                            "Ekibinle aynı yerde, aynı sohbette."}
+                          ? "Bahsetmeler, yanıtlar ve sana ulaşan bildirimler."
+                          : view === "messages"
+                            ? "Ekibinle bire bir konuşmaların, tek bir yerde."
+                            : channel?.description ||
+                              "Ekibinle aynı yerde, aynı sohbette."}
                     </p>
                   </div>
                   {view === "channel" && (
@@ -2565,7 +2645,7 @@ export default function App() {
                 )}
                 <div
                   id="channel-content"
-                  className="message-scroll"
+                  className={`message-scroll ${view === "messages" || view === "inbox" ? "hub-scroll" : ""}`}
                   ref={scrollRef}
                   role={view === "channel" ? "tabpanel" : undefined}
                   aria-labelledby={
@@ -2608,31 +2688,55 @@ export default function App() {
                         />
                       )}
                     </>
+                  ) : view === "messages" ? (
+                    <DirectMessagesCenter
+                      key={sidebarScope}
+                      data={data}
+                      unread={unread}
+                      state={notificationState}
+                      refreshToken={JSON.stringify(sidebar.conversations)}
+                      socket={socket}
+                      connected={connected}
+                      onSelect={selectChannel}
+                      onNewMessage={() => openMembers("dm")}
+                      onProfile={openProfile}
+                    />
                   ) : view === "inbox" ? (
-                    <NotificationsInbox
+                    <ActivityCenter
+                      key={sidebarScope}
+                      socket={socket}
+                      workspaceId={data.workspace.id}
+                      userId={data.user.id}
                       state={notificationState}
                       channels={data.channels}
-                      error={notificationError}
-                      loading={notificationsLoading}
+                      members={data.members}
+                      connected={connected}
                       onSettings={() => setDialog("notifications")}
-                      onChannel={selectChannel}
-                      onReadAll={() => {
-                        void post("/notifications/read")
-                          .then(() => api<NotificationState>("/notifications"))
-                          .then((next) => {
-                            if (
-                              next.workspaceId === dataRef.current?.workspace.id
-                            ) {
-                              setNotificationState(next);
-                              setUnread(next.unreadByChannel);
-                            }
-                          })
-                          .catch((e) => setNotificationError(e.message));
+                      onState={(next) => {
+                        if (
+                          dataRef.current?.user.id === data.user.id &&
+                          next.workspaceId === dataRef.current?.workspace.id
+                        ) {
+                          setNotificationState(next);
+                          setUnread(next.unreadByChannel);
+                        }
                       }}
-                      onOpen={(id) => {
-                        void api<Message>(`/messages/${id}`)
-                          .then(navigateMessage)
-                          .catch((e) => fail(e.message));
+                      onOpen={async (id) => {
+                        const message = await api<Message>(
+                          `/messages/${encodeURIComponent(id)}`,
+                          {
+                            headers: {
+                              "X-Workspace-Id": data.workspace.id,
+                              "X-User-Id": data.user.id,
+                            },
+                          },
+                        );
+                        if (
+                          dataRef.current?.user.id === data.user.id &&
+                          dataRef.current?.workspace.id === data.workspace.id &&
+                          viewRef.current === "inbox"
+                        )
+                          await navigateMessage(message);
                       }}
                     />
                   ) : messagesLoading || collectionLoading ? (
@@ -3287,6 +3391,37 @@ export default function App() {
           </div>
         </Modal>
       )}
+      {dialog === "move-channel" &&
+        data.channels.some(
+          (c) => c.id === channelToMove && c.kind === "text" && !c.archived,
+        ) && (
+          <ChannelGroupMove
+            key={sidebarScope + channelToMove}
+            name={data.channels.find((c) => c.id === channelToMove)!.name}
+            channelId={channelToMove!}
+            groups={sidebar.preferences.channelGroups || []}
+            error={sidebar.error}
+            onClose={() => setDialog(null)}
+            onMove={async (target) => {
+              const groups = (sidebar.preferences.channelGroups || []).map(
+                (group) => ({
+                  ...group,
+                  channelIds: group.channelIds.filter(
+                    (id) => id !== channelToMove,
+                  ),
+                }),
+              );
+              const destination = groups.find((group) => group.id === target);
+              if (target && !destination) return false;
+              if (destination) destination.channelIds.push(channelToMove!);
+              return updateChannelGroups(
+                groups,
+                undefined,
+                "Kanal yeni bölümüne taşındı.",
+              );
+            }}
+          />
+        )}
       {dialog === "members" && (
         <Modal
           title={
@@ -3646,7 +3781,7 @@ export default function App() {
           {toastError ? <Info size={18} /> : <Check size={18} />}
           <span>{toast}</span>
           {!toastError &&
-            toast === "Kanal sıralaman kaydedildi." &&
+            toast === (sidebarUndo?.notice || "Kanal sıralaman kaydedildi.") &&
             sidebarUndo?.scope === sidebarScope && (
               <button
                 className="sidebar-undo"
@@ -3654,7 +3789,11 @@ export default function App() {
                 onClick={() => {
                   const undo = sidebarUndo;
                   setSidebarUndo(null);
-                  void sidebar.setOrder(undo.section, undo.ids).then((ok) => {
+                  void (
+                    undo.groups
+                      ? sidebar.setChannelGroups(undo.groups, undo.ids)
+                      : sidebar.setOrder(undo.section, undo.ids)
+                  ).then((ok) => {
                     if (ok) notify("Önceki sıralamaya dönüldü.");
                   });
                 }}

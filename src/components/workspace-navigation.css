@@ -143,6 +143,78 @@
 .live-sidebar .live-channel-row.is-selected {
   background: var(--active-surface);
 }
+.live-channel-row[draggable="true"] > .channel-nav {
+  cursor: grab;
+}
+.live-channel-row[draggable="true"] > .channel-nav:active {
+  cursor: grabbing;
+}
+.live-channel-row.is-dragging {
+  opacity: 0.45;
+}
+.sidebar-channel-group {
+  border-radius: 6px;
+  outline: 1px solid transparent;
+  outline-offset: 2px;
+}
+.sidebar-channel-group.is-drop-target {
+  background: var(--active-surface);
+  outline-color: var(--green);
+}
+.sidebar-group-dropzone {
+  margin: 3px 3px 4px;
+  padding: 12px 9px;
+  min-height: 40px;
+  border: 1px dashed var(--line);
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.is-drop-target .sidebar-group-dropzone {
+  border-color: var(--green);
+  color: var(--green);
+}
+.sidebar-group-form {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 12px;
+}
+.sidebar-group-form p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.sidebar-group-form label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.sidebar-group-form input {
+  width: 100%;
+  min-width: 0;
+}
+.sidebar-group-name-count {
+  margin-top: -8px;
+  text-align: right;
+  font-size: 10px;
+  color: var(--muted);
+}
+.sidebar-group-form .sidebar-group-error {
+  color: #a73737;
+  font-size: 12px;
+}
+.sidebar-group-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
 .live-sidebar .live-channel-row > .channel-nav {
   flex: 1;
   min-width: 0;
@@ -427,7 +499,7 @@
 }
 .toast .sidebar-undo {
   padding: 5px;
-  color: var(--green);
+  color: #e1f2e7;
   font-weight: 700;
   font-size: 12px;
   white-space: nowrap;

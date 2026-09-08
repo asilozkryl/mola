@@ -321,8 +321,9 @@ test("member search respects a private channel and resets when opening the works
   await directory.getByRole("button", { name: "Kapat", exact: true }).click();
 
   await page
-    .getByRole("button", { name: "Yeni direkt mesaj", exact: true })
+    .getByRole("button", { name: "Çalışma alanı menüsü", exact: true })
     .click();
+  await page.getByRole("menuitem", { name: "Üyeler", exact: true }).click();
   await expect(search).toHaveValue("");
   await expect(
     directory.getByText(excluded.name, { exact: true }),

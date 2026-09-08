@@ -4,6 +4,7 @@ import type { Channel } from "../../shared/types";
 import {
   normalizeSidebarPreferences,
   type SidebarConversation,
+  type SidebarChannelGroup,
   type SidebarConversationsState,
   type SidebarOrder,
   type SidebarPreferences,
@@ -340,6 +341,15 @@ export function useSidebarPreferences({
     (width: number) => update((preferences) => ({ ...preferences, width })),
     [update],
   );
+  const setChannelGroups = useCallback(
+    (channelGroups: SidebarChannelGroup[], textOrder?: string[]) =>
+      update((preferences) => ({
+        ...preferences,
+        channelGroups,
+        ...(textOrder ? { textOrder } : {}),
+      })),
+    [update],
+  );
 
   const current = view.scope === scope ? view : emptyView(scope);
   const preferences = normalizeSidebarPreferences(
@@ -368,6 +378,7 @@ export function useSidebarPreferences({
     toggleFavorite,
     toggleSection,
     setWidth,
+    setChannelGroups,
     reload,
   };
 }

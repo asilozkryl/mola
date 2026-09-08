@@ -14,10 +14,36 @@ async function register(page: Page, name: string, inviteToken?: string) {
   return { email, data: await response.json() };
 }
 async function panel(page: Page) {
-  await page.getByRole('button', { name: 'Yönetim paneli', exact: true }).click();
-  const admin = page.getByRole('dialog', { name: 'Yönetim paneli', exact: true });
-  await expect(admin.getByRole('heading', { name: 'Üyeler', exact: true })).toBeVisible();
-  await expect(admin.getByRole('table')).toBeVisible();
+  const mobileNavigation = page.getByRole("button", {
+    name: "Gezinmeyi aç",
+    exact: true,
+  });
+  const management = page.getByRole("button", {
+    name: "Yönetim paneli",
+    exact: true,
+  });
+  const mobile = !(await management.isVisible());
+  if (mobile) {
+    const workspaceMenu = page.getByRole("button", {
+      name: "Çalışma alanı menüsü",
+      exact: true,
+    });
+    if (!(await workspaceMenu.isVisible())) await mobileNavigation.click();
+    await workspaceMenu.click();
+    await page
+      .getByRole("menuitem", { name: "Çalışma alanı ayarları", exact: true })
+      .click();
+  } else await management.click();
+  const admin = page.getByRole("dialog", {
+    name: "Yönetim paneli",
+    exact: true,
+  });
+  if (mobile)
+    await admin.getByRole("button", { name: "Üyeler", exact: true }).click();
+  await expect(
+    admin.getByRole("heading", { name: "Üyeler", exact: true }),
+  ).toBeVisible();
+  await expect(admin.getByRole("table")).toBeVisible();
   return admin;
 }
 async function joinedMember(owner: Page, browser: Browser) {

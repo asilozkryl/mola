@@ -121,8 +121,15 @@ export function Modal({
           !opener.closest("[inert], [hidden]") &&
           opener.getClientRects().length > 0 &&
           getComputedStyle(opener).visibility !== "hidden" &&
-          !document.querySelector(
-            'dialog[open], [role="dialog"][aria-modal="true"]',
+          ![
+            ...document.querySelectorAll<HTMLElement>(
+              'dialog[open], [role="dialog"][aria-modal="true"]',
+            ),
+          ].some(
+            (modal) =>
+              modal !== dialog &&
+              !modal.contains(opener) &&
+              modal.getClientRects().length > 0,
           )
         )
           opener.focus({ preventScroll: true });
@@ -134,6 +141,49 @@ export function Modal({
       aria-label={title}
       ref={ref}
       className={`modal ${wide ? "modal-wide" : ""}`}
+      onKeyDown={(event) => {
+        if (
+          event.defaultPrevented ||
+          (event.target instanceof Element &&
+            event.target.closest("dialog[open]") !== event.currentTarget)
+        )
+          return;
+        if (event.key === "Escape") {
+          // The native cancel event closes this dialog; parent shortcuts
+          // must not also close the drawer or conversation underneath it.
+          event.stopPropagation();
+          return;
+        }
+        if (event.key !== "Tab") return;
+        const dialog = event.currentTarget;
+        const items = [
+          ...dialog.querySelectorAll<HTMLElement>(
+            'a[href], button, input, select, textarea, [tabindex], [contenteditable="true"]',
+          ),
+        ].filter(
+          (element) =>
+            (element.tabIndex >= 0 ||
+              (element.isContentEditable &&
+                !element.hasAttribute("tabindex"))) &&
+            !element.matches(":disabled") &&
+            !element.closest("[inert]") &&
+            element.getClientRects().length > 0 &&
+            getComputedStyle(element).visibility !== "hidden",
+        );
+        const first = items[0],
+          last = items.at(-1);
+        // Native dialogs can send boundary Tab presses to browser chrome.
+        // Keep keyboard navigation in the active application dialog.
+        if (
+          !first ||
+          (event.shiftKey
+            ? document.activeElement === first
+            : document.activeElement === last)
+        ) {
+          event.preventDefault();
+          (event.shiftKey ? last || dialog : first || dialog).focus();
+        }
+      }}
       onCancel={(event) => {
         event.preventDefault();
         event.stopPropagation();

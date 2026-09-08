@@ -162,7 +162,7 @@ test("mentions persist through reload, open their message and synchronize read s
       },
     );
     expect(registration.status()).toBe(200);
-    await page.getByRole("button", { name: /Gelen kutusu/ }).click();
+    await page.getByRole("button", { name: "Aktivite", exact: true }).click();
     const content = "@DenizTaslak teslim planına bakabilir misin?";
     expect(
       (
@@ -173,16 +173,18 @@ test("mentions persist through reload, open their message and synchronize read s
       ).status(),
     ).toBe(201);
     await expect(
-      page.locator(".notification-item").filter({ hasText: content }),
+      page.locator(".activity-open").filter({ hasText: content }),
     ).toBeVisible();
     await expect(
-      page.getByText("1 okunmamış bildirim", { exact: true }),
-    ).toBeVisible();
+      page
+        .getByRole("region", { name: "Aktivite akışı", exact: true })
+        .getByRole("button", { name: "Okunmamış", exact: true }),
+    ).toContainText("1");
     await page.reload();
     await expect(composer(page)).toBeVisible();
-    await page.getByRole("button", { name: /Gelen kutusu/ }).click();
+    await page.getByRole("button", { name: "Aktivite", exact: true }).click();
     await expect(
-      page.locator(".notification-item").filter({ hasText: content }),
+      page.locator(".activity-open").filter({ hasText: content }),
     ).toBeVisible();
     await audit(page);
     await page.screenshot({
@@ -195,10 +197,7 @@ test("mentions persist through reload, open their message and synchronize read s
       path: "artifacts/notifications-mobile.png",
       animations: "disabled",
     });
-    await page
-      .locator(".notification-item")
-      .filter({ hasText: content })
-      .click();
+    await page.locator(".activity-open").filter({ hasText: content }).click();
     await expect(
       page.locator(".message-text").filter({ hasText: content }),
     ).toBeVisible();

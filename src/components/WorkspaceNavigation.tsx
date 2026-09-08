@@ -1,12 +1,22 @@
-import { useId, useRef, useState, type DragEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 import {
   Archive,
+  ArrowDown,
+  ArrowUp,
   AudioLines,
   Bell,
   Bookmark,
   ChevronDown,
   ChevronRight,
   CircleHelp,
+  FolderPlus,
   GripVertical,
   Hash,
   ListFilter,
@@ -14,20 +24,23 @@ import {
   LogOut,
   MoreHorizontal,
   MicOff,
+  MessageCircle,
+  Pencil,
   Plus,
   Plug,
   Search,
   Settings2,
   ShieldCheck,
   Star,
+  Trash2,
   Users,
   Volume2,
   X,
 } from "lucide-react";
 import type { Bootstrap, CallPeer, Channel } from "../../shared/types";
-import type { SidebarSection } from "../../shared/sidebar";
+import type { SidebarChannelGroup, SidebarSection } from "../../shared/sidebar";
 import type { useSidebarPreferences } from "../lib/useSidebarPreferences";
-import { Avatar, IconButton } from "./ui";
+import { Avatar, IconButton, Modal } from "./ui";
 import {
   ContextMenu,
   type ContextMenuItem,
@@ -47,6 +60,7 @@ type Props = {
   currentId: string;
   view: string;
   savedCount: number;
+  activityCount: number;
   canManage: boolean;
   canCreate: boolean;
   voiceChannels: Map<string, CallPeer[]>;
@@ -69,6 +83,11 @@ type Props = {
     section?: OrderSection,
   ) => void;
   onReorder: (section: OrderSection, ids: string[]) => void;
+  onGroupsChange: (
+    groups: SidebarChannelGroup[],
+    textOrder?: string[],
+    notice?: string,
+  ) => Promise<boolean>;
   onProfile: (id: string) => void;
   onWorkspaces: (mode?: WorkspaceMode) => void;
   onSettings: () => void;
@@ -82,7 +101,7 @@ type Props = {
   onIntegrations: () => void;
   onSearch: () => void;
   onArchives: () => void;
-  onView: (view: "inbox" | "saved") => void;
+  onView: (view: "inbox" | "saved" | "messages") => void;
   onCreate: (kind: "text" | "voice") => void;
   onVoicePreview: (id: string) => void;
 };
@@ -95,6 +114,9 @@ function Section({
   actions,
   children,
   className = "",
+  groupId,
+  onDragOver,
+  onDrop,
 }: {
   title: string;
   collapsed: boolean;
@@ -103,15 +125,24 @@ function Section({
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
+  groupId?: string;
+  onDragOver?: (event: DragEvent<HTMLElement>) => void;
+  onDrop?: (event: DragEvent<HTMLElement>) => void;
 }) {
   const id = useId();
   return (
-    <section className={`nav-section ${className}`}>
+    <section
+      className={`nav-section ${className}`}
+      data-sidebar-group={groupId}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       <div className="nav-section-title">
         <button
           className="nav-section-toggle"
           aria-expanded={!collapsed}
           aria-controls={id}
+          aria-label={title}
           onClick={onToggle}
         >
           {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
@@ -146,13 +177,52 @@ export function WorkspaceNavigation(p: Props) {
     id: string;
     after: boolean;
     section: OrderSection;
+    groupId?: string;
   } | null>(null);
-  const drag = useRef<{ id: string; section: OrderSection } | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropGroup, setDropGroup] = useState<string | null>(null);
+  const [groupDialog, setGroupDialog] = useState<{
+    kind: "create" | "rename" | "remove";
+    groupId?: string;
+    scope: string;
+  } | null>(null);
+  const [groupName, setGroupName] = useState("");
+  const [groupError, setGroupError] = useState("");
+  const [groupSaving, setGroupSaving] = useState(false);
+  const groupPending = useRef(false);
+  const scope = `${data.user.id}:${data.workspace.id}`;
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const mounted = useRef(true);
+  const drag = useRef<{
+    id: string;
+    section: OrderSection;
+    scope: string;
+  } | null>(null);
+  const pointerTarget = useRef<EventTarget | null>(null);
+  const suppressClickUntil = useRef(0);
   const resize = useRef<{ x: number; width: number; value: number } | null>(
     null,
   );
   const filterRef = useRef<HTMLInputElement>(null);
-  const busy = prefs.loading || prefs.saving;
+  const busy = prefs.loading || prefs.saving || groupSaving;
+  const groups = prefs.preferences.channelGroups || [];
+  const groupedIds = new Set(groups.flatMap((group) => group.channelIds));
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    setGroupDialog(null);
+    setGroupError("");
+    setMenu(null);
+    drag.current = null;
+    setDragging(null);
+    setDrop(null);
+    setDropGroup(null);
+  }, [scope]);
   const onlineCount = data.members.filter(
     (u) => !u.suspended && data.onlineIds.includes(u.id),
   ).length;
@@ -164,6 +234,7 @@ export function WorkspaceNavigation(p: Props) {
   const textChannels = prefs.orderedTextChannels.filter((c) =>
     matches(c.name, c.id),
   );
+  const defaultChannels = textChannels.filter((c) => !groupedIds.has(c.id));
   const voiceChannels = prefs.orderedVoiceChannels.filter((c) =>
     matches(c.name, c.id),
   );
@@ -227,60 +298,221 @@ export function WorkspaceNavigation(p: Props) {
     setMenu(null);
     p.onMenu(c, anchor, position, section);
   }
+  async function saveGroups(
+    next: SidebarChannelGroup[],
+    textOrder?: string[],
+    notice?: string,
+  ) {
+    if (groupPending.current || prefs.loading || prefs.saving) return false;
+    const requestScope = scope;
+    groupPending.current = true;
+    setGroupSaving(true);
+    setGroupError("");
+    try {
+      const saved = await p.onGroupsChange(next, textOrder, notice);
+      if (!saved && mounted.current && scopeRef.current === requestScope)
+        setGroupError("Bölüm düzeni kaydedilemedi. Yeniden deneyebilirsin.");
+      return saved;
+    } catch (error) {
+      if (mounted.current && scopeRef.current === requestScope)
+        setGroupError(
+          error instanceof Error
+            ? error.message
+            : "Bölüm düzeni kaydedilemedi.",
+        );
+      return false;
+    } finally {
+      groupPending.current = false;
+      if (mounted.current) setGroupSaving(false);
+    }
+  }
+  function openGroupDialog(
+    kind: "create" | "rename" | "remove",
+    group?: SidebarChannelGroup,
+  ) {
+    setGroupName(group?.name || "");
+    setGroupError("");
+    setGroupDialog({ kind, groupId: group?.id, scope });
+  }
+  async function submitGroup() {
+    if (!groupDialog || groupDialog.scope !== scope || busy) return;
+    const dialog = groupDialog;
+    const name = groupName.trim();
+    if (dialog.kind !== "remove" && !name) {
+      setGroupError("Bir bölüm adı yaz.");
+      return;
+    }
+    const current = groups.find((group) => group.id === dialog.groupId);
+    if (dialog.kind !== "create" && !current) {
+      setGroupError("Bu bölüm artık bulunmuyor.");
+      return;
+    }
+    if (dialog.kind === "create" && groups.length >= 20) {
+      setGroupError("En fazla 20 kişisel bölüm oluşturabilirsin.");
+      return;
+    }
+    const next =
+      dialog.kind === "create"
+        ? [
+            ...groups,
+            { id: crypto.randomUUID(), name, channelIds: [], collapsed: false },
+          ]
+        : dialog.kind === "rename"
+          ? groups.map((group) =>
+              group.id === dialog.groupId ? { ...group, name } : group,
+            )
+          : groups.filter((group) => group.id !== dialog.groupId);
+    const notice =
+      dialog.kind === "create"
+        ? `${name} bölümü oluşturuldu.`
+        : dialog.kind === "rename"
+          ? "Bölüm adı güncellendi."
+          : "Bölüm kaldırıldı. Kanalların korundu.";
+    if (await saveGroups(next, undefined, notice)) {
+      if (mounted.current && scopeRef.current === dialog.scope)
+        setGroupDialog((active) => (active === dialog ? null : active));
+    }
+  }
+  function endDrag() {
+    if (drag.current) suppressClickUntil.current = Date.now() + 300;
+    drag.current = null;
+    setDragging(null);
+    setDrop(null);
+    setDropGroup(null);
+  }
+  function canDrop(section: OrderSection) {
+    return (
+      !!drag.current &&
+      drag.current.scope === scope &&
+      drag.current.section === section &&
+      !busy &&
+      !query &&
+      !unreadOnly
+    );
+  }
+  function scrollForDrag(event: DragEvent<HTMLElement>) {
+    const scroller = event.currentTarget.closest(".sidebar-content");
+    if (!scroller) return;
+    const bounds = scroller.getBoundingClientRect();
+    if (event.clientY < bounds.top + 40) scroller.scrollTop -= 12;
+    else if (event.clientY > bounds.bottom - 40) scroller.scrollTop += 12;
+  }
+  function moveTextChannel(
+    id: string,
+    groupId: string,
+    anchorId?: string,
+    after = false,
+  ) {
+    if (!prefs.orderedTextChannels.some((channel) => channel.id === id)) return;
+    if (groupId !== "default" && !groups.some((group) => group.id === groupId))
+      return;
+    const nextGroups = groups.map((group) => ({
+      ...group,
+      channelIds: group.channelIds.filter((channelId) => channelId !== id),
+    }));
+    const targetGroup = nextGroups.find((group) => group.id === groupId);
+    const nextOrder = order("text").filter((channelId) => channelId !== id);
+    const targetIds =
+      targetGroup?.channelIds ||
+      nextOrder.filter(
+        (channelId) =>
+          !nextGroups.some((group) => group.channelIds.includes(channelId)),
+      );
+    const groupIndex = anchorId
+      ? targetIds.indexOf(anchorId)
+      : targetIds.length;
+    const previousLast = targetIds.at(-1);
+    if (targetGroup) {
+      targetGroup.channelIds.splice(
+        groupIndex < 0
+          ? targetIds.length
+          : groupIndex + (anchorId && after ? 1 : 0),
+        0,
+        id,
+      );
+      targetGroup.collapsed = false;
+    }
+    const globalAnchor = anchorId || previousLast;
+    const globalIndex = globalAnchor ? nextOrder.indexOf(globalAnchor) : -1;
+    nextOrder.splice(
+      globalIndex < 0
+        ? nextOrder.length
+        : globalIndex + (!anchorId || after ? 1 : 0),
+      0,
+      id,
+    );
+    if (
+      JSON.stringify(nextGroups) === JSON.stringify(groups) &&
+      nextOrder.join("\n") === order("text").join("\n")
+    )
+      return;
+    const sourceGroup = groups.find((group) => group.channelIds.includes(id));
+    const notice =
+      (sourceGroup?.id || "default") === groupId
+        ? "Kanal sırası güncellendi."
+        : `Kanal ${targetGroup?.name || "Kanallar"} bölümüne taşındı.`;
+    void saveGroups(nextGroups, nextOrder, notice);
+  }
   function dragOver(
     event: DragEvent<HTMLElement>,
     c: Channel,
     section: OrderSection,
+    groupId?: string,
   ) {
-    if (
-      !drag.current ||
-      drag.current.section !== section ||
-      drag.current.id === c.id ||
-      busy ||
-      query ||
-      unreadOnly
-    )
-      return;
+    event.stopPropagation();
+    if (!canDrop(section) || drag.current?.id === c.id) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     const r = event.currentTarget.getBoundingClientRect();
-    setDrop({ id: c.id, section, after: event.clientY > r.top + r.height / 2 });
-    const scroller = event.currentTarget.closest(".sidebar-content");
-    if (scroller) {
-      const bounds = scroller.getBoundingClientRect();
-      if (event.clientY < bounds.top + 40) scroller.scrollTop -= 12;
-      else if (event.clientY > bounds.bottom - 40) scroller.scrollTop += 12;
-    }
+    setDrop({
+      id: c.id,
+      section,
+      groupId,
+      after: event.clientY > r.top + r.height / 2,
+    });
+    setDropGroup(null);
+    scrollForDrag(event);
   }
   function dropped(
     event: DragEvent<HTMLElement>,
     c: Channel,
     section: OrderSection,
+    groupId?: string,
   ) {
+    event.stopPropagation();
     event.preventDefault();
-    if (
-      !drag.current ||
-      drag.current.section !== section ||
-      drag.current.id === c.id ||
-      busy ||
-      query ||
-      unreadOnly
-    ) {
-      drag.current = null;
-      setDrop(null);
+    if (!canDrop(section) || !drag.current || drag.current.id === c.id) {
+      endDrag();
       return;
     }
+    const r = event.currentTarget.getBoundingClientRect();
+    const after = event.clientY > r.top + r.height / 2;
     const id = drag.current.id,
       next = order(section).filter((x) => x !== id),
       index = next.indexOf(c.id);
-    if (index >= 0) {
-      next.splice(index + (drop?.id === c.id && drop.after ? 1 : 0), 0, id);
+    if (section === "text")
+      moveTextChannel(id, groupId || "default", c.id, after);
+    else if (index >= 0) {
+      next.splice(index + (after ? 1 : 0), 0, id);
       p.onReorder(section, next);
     }
-    drag.current = null;
-    setDrop(null);
+    endDrag();
   }
-  function channelRow(c: Channel, section: OrderSection) {
+  function groupDragOver(event: DragEvent<HTMLElement>, groupId: string) {
+    if (!canDrop("text")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDrop(null);
+    setDropGroup(groupId);
+    scrollForDrag(event);
+  }
+  function groupDropped(event: DragEvent<HTMLElement>, groupId: string) {
+    event.preventDefault();
+    if (canDrop("text") && drag.current)
+      moveTextChannel(drag.current.id, groupId);
+    endDrag();
+  }
+  function channelRow(c: Channel, section: OrderSection, groupId?: string) {
     const peers = p.connected ? p.voiceChannels.get(c.id) || [] : [];
     const voice = c.kind === "voice",
       inCall = (p.call.joined || p.call.joining) && p.call.channelId === c.id;
@@ -292,7 +524,44 @@ export function WorkspaceNavigation(p: Props) {
         key={c.id}
         data-channel-id={c.id}
         data-order-section={section}
-        className={`live-channel-row ${voice ? "live-voice-row" : "channel-nav-row"} ${selected ? "is-selected" : ""} ${drop?.id === c.id && drop.section === section ? (drop.after ? "drop-after" : "drop-before") : ""}`}
+        draggable={!busy && !query && !unreadOnly}
+        className={`live-channel-row ${voice ? "live-voice-row" : "channel-nav-row"} ${selected ? "is-selected" : ""} ${dragging === `${section}:${c.id}` ? "is-dragging" : ""} ${drop?.id === c.id && drop.section === section && drop.groupId === groupId ? (drop.after ? "drop-after" : "drop-before") : ""}`}
+        onPointerDownCapture={(e) => {
+          pointerTarget.current = e.target;
+          if (!drag.current) suppressClickUntil.current = 0;
+        }}
+        onClickCapture={(e) => {
+          if (Date.now() < suppressClickUntil.current) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+        onDragStart={(e) => {
+          const target =
+            pointerTarget.current instanceof Element
+              ? pointerTarget.current
+              : e.target instanceof Element
+                ? e.target
+                : null;
+          if (
+            busy ||
+            query ||
+            unreadOnly ||
+            target?.closest(
+              ".channel-row-menu, .live-voice-details, .profile-identity",
+            )
+          ) {
+            e.preventDefault();
+            return;
+          }
+          drag.current = { id: c.id, section, scope };
+          setDragging(`${section}:${c.id}`);
+          setMenu(null);
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", c.id);
+          e.dataTransfer.setDragImage(e.currentTarget, 30, 15);
+        }}
+        onDragEnd={endDrag}
         onContextMenu={(e) => {
           e.preventDefault();
           rowMenu(
@@ -303,8 +572,8 @@ export function WorkspaceNavigation(p: Props) {
             { x: e.clientX, y: e.clientY },
           );
         }}
-        onDragOver={(e) => dragOver(e, c, section)}
-        onDrop={(e) => dropped(e, c, section)}
+        onDragOver={(e) => dragOver(e, c, section, groupId)}
+        onDrop={(e) => dropped(e, c, section, groupId)}
       >
         <button
           className="channel-drag-handle"
@@ -314,23 +583,13 @@ export function WorkspaceNavigation(p: Props) {
           disabled={busy || Boolean(query) || unreadOnly}
           draggable={!busy && !query && !unreadOnly}
           onClick={(e) => rowMenu(c, e.currentTarget, section)}
-          onDragStart={(e) => {
-            drag.current = { id: c.id, section };
-            setMenu(null);
-            e.dataTransfer.effectAllowed = "move";
-            e.dataTransfer.setData("text/plain", c.id);
-            e.dataTransfer.setDragImage(e.currentTarget.parentElement!, 30, 15);
-          }}
-          onDragEnd={() => {
-            drag.current = null;
-            setDrop(null);
-          }}
         >
           <GripVertical size={13} />
         </button>
         <button
           className={`channel-nav ${voice ? "voice-nav" : ""} ${selected ? "selected" : ""} ${voice && p.call.joined && inCall ? "voice-active" : ""}`}
           aria-label={c.name}
+          draggable={!busy && !query && !unreadOnly}
           aria-current={selected ? "page" : undefined}
           data-unread={(p.unread[c.id] || 0) > 0}
           title={c.description ? `${c.name} — ${c.description}` : c.name}
@@ -435,6 +694,16 @@ export function WorkspaceNavigation(p: Props) {
             showMenu(
               e.currentTarget,
               [
+                ...(kind === "text"
+                  ? [
+                      {
+                        label: "Bölüm oluştur",
+                        icon: <FolderPlus size={16} />,
+                        onSelect: () => openGroupDialog("create"),
+                        disabled: busy || groups.length >= 20,
+                      },
+                    ]
+                  : []),
                 {
                   label: "Arşivlenmiş kanallar",
                   icon: <Archive size={16} />,
@@ -461,6 +730,59 @@ export function WorkspaceNavigation(p: Props) {
         >
           <Plus size={16} />
         </IconButton>
+      </div>
+    );
+  }
+  function groupActions(group: SidebarChannelGroup, index: number) {
+    const moveGroup = (offset: number) => {
+      const next = [...groups];
+      next.splice(index, 1);
+      next.splice(index + offset, 0, group);
+      void saveGroups(next, undefined, "Bölüm sırası güncellendi.");
+    };
+    return (
+      <div className="live-section-actions">
+        <button
+          type="button"
+          className="icon-button"
+          aria-label={`${group.name} bölüm işlemleri`}
+          aria-haspopup="menu"
+          onClick={(e) =>
+            showMenu(
+              e.currentTarget,
+              [
+                {
+                  label: "Bölüm adını düzenle",
+                  icon: <Pencil size={15} />,
+                  disabled: busy,
+                  onSelect: () => openGroupDialog("rename", group),
+                },
+                {
+                  label: "Bölümü yukarı taşı",
+                  icon: <ArrowUp size={15} />,
+                  disabled: busy || index === 0,
+                  onSelect: () => moveGroup(-1),
+                },
+                {
+                  label: "Bölümü aşağı taşı",
+                  icon: <ArrowDown size={15} />,
+                  disabled: busy || index === groups.length - 1,
+                  onSelect: () => moveGroup(1),
+                },
+                {
+                  label: "Bölümü kaldır",
+                  icon: <Trash2 size={15} />,
+                  disabled: busy,
+                  separatorBefore: true,
+                  onSelect: () => openGroupDialog("remove", group),
+                },
+              ],
+              `${group.name} bölüm işlemleri`,
+            )
+          }
+        >
+          <MoreHorizontal size={15} />
+        </button>
       </div>
     );
   }
@@ -569,16 +891,33 @@ export function WorkspaceNavigation(p: Props) {
         </button>
         <nav className="primary-nav" aria-label="Kişisel alanın">
           <button
+            className={p.view === "messages" ? "selected" : ""}
+            aria-label="Özel mesajlar"
+            aria-current={p.view === "messages" ? "page" : undefined}
+            onClick={() => p.onView("messages")}
+          >
+            <MessageCircle size={18} />
+            <span>Özel mesajlar</span>
+            {data.channels
+              .filter((c) => c.kind === "dm")
+              .reduce((n, c) => n + (p.unread[c.id] || 0), 0) > 0 && (
+              <span className="count-badge">
+                {data.channels
+                  .filter((c) => c.kind === "dm")
+                  .reduce((n, c) => n + (p.unread[c.id] || 0), 0)}
+              </span>
+            )}
+          </button>
+          <button
             className={p.view === "inbox" ? "selected" : ""}
+            aria-label="Aktivite"
             aria-current={p.view === "inbox" ? "page" : undefined}
             onClick={() => p.onView("inbox")}
           >
             <Bell size={18} />
-            <span>Gelen kutusu</span>
-            {Object.values(p.unread).reduce((n, c) => n + c, 0) > 0 && (
-              <span className="count-badge">
-                {Object.values(p.unread).reduce((n, c) => n + c, 0)}
-              </span>
+            <span>Aktivite</span>
+            {p.activityCount > 0 && (
+              <span className="count-badge">{p.activityCount}</span>
             )}
           </button>
           <button
@@ -655,6 +994,11 @@ export function WorkspaceNavigation(p: Props) {
             <button onClick={() => void prefs.reload()}>Yeniden dene</button>
           </div>
         )}
+        {groupError && !groupDialog && !prefs.error && (
+          <p className="sidebar-feedback" role="alert">
+            {groupError}
+          </p>
+        )}
         {favoriteChannels.length > 0 && (
           <Section
             title="Favoriler"
@@ -668,16 +1012,65 @@ export function WorkspaceNavigation(p: Props) {
         )}
         <Section
           title="Kanallar"
+          groupId="default"
+          className={`sidebar-channel-group ${dropGroup === "default" ? "is-drop-target" : ""}`}
+          onDragOver={(e) => groupDragOver(e, "default")}
+          onDrop={(e) => groupDropped(e, "default")}
           collapsed={collapsed("channels")}
           onToggle={() => void prefs.toggleSection("channels")}
-          count={total(textChannels)}
+          count={total(defaultChannels)}
           actions={sectionActions("text")}
         >
-          {textChannels.map((c) => channelRow(c, "text"))}
-          {!textChannels.length && !query && !unreadOnly && (
-            <p className="sidebar-empty-note">Henüz metin kanalı yok.</p>
+          {defaultChannels.map((c) => channelRow(c, "text", "default"))}
+          {!defaultChannels.length && !query && !unreadOnly && (
+            <p className="sidebar-group-dropzone">
+              {groups.length
+                ? "Kanalları buraya sürükle"
+                : "Henüz metin kanalı yok."}
+            </p>
           )}
         </Section>
+        {groups.map((group, index) => {
+          const channels = group.channelIds.flatMap((id) => {
+            const channel = textChannels.find((item) => item.id === id);
+            return channel ? [channel] : [];
+          });
+          if ((query || unreadOnly) && !channels.length) return null;
+          return (
+            <Section
+              key={group.id}
+              title={group.name}
+              groupId={group.id}
+              className={`sidebar-channel-group ${dropGroup === group.id ? "is-drop-target" : ""}`}
+              collapsed={group.collapsed}
+              count={total(channels)}
+              onToggle={() => {
+                if (!busy)
+                  void saveGroups(
+                    groups.map((item) =>
+                      item.id === group.id
+                        ? { ...item, collapsed: !item.collapsed }
+                        : item,
+                    ),
+                    undefined,
+                    group.collapsed
+                      ? `${group.name} bölümü açıldı.`
+                      : `${group.name} bölümü daraltıldı.`,
+                  );
+              }}
+              actions={groupActions(group, index)}
+              onDragOver={(e) => groupDragOver(e, group.id)}
+              onDrop={(e) => groupDropped(e, group.id)}
+            >
+              {channels.map((channel) => channelRow(channel, "text", group.id))}
+              {!channels.length && (
+                <p className="sidebar-group-dropzone">
+                  Kanalları buraya sürükle
+                </p>
+              )}
+            </Section>
+          );
+        })}
         <Section
           title="Sesli odalar"
           className="voice-section"
@@ -745,9 +1138,9 @@ export function WorkspaceNavigation(p: Props) {
           {conversations.length > 5 && (
             <button
               className="add-channel"
-              onClick={() => setShowAllDms(!showAllDms)}
+              onClick={() => p.onView("messages")}
             >
-              {showAllDms ? "Daha az göster" : "Tüm konuşmalar"}
+              Tüm konuşmalar
             </button>
           )}
           {!conversations.length && !prefs.conversationsLoading && (
@@ -904,6 +1297,94 @@ export function WorkspaceNavigation(p: Props) {
         label={menu?.label}
         onClose={() => setMenu(null)}
       />
+      {groupDialog?.scope === scope && (
+        <Modal
+          title={
+            groupDialog.kind === "create"
+              ? "Bölüm oluştur"
+              : groupDialog.kind === "rename"
+                ? "Bölüm adını düzenle"
+                : "Bölümü kaldır"
+          }
+          onClose={() => {
+            if (!groupSaving) setGroupDialog(null);
+          }}
+        >
+          <form
+            className="sidebar-group-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submitGroup();
+            }}
+          >
+            {groupDialog.kind === "remove" ? (
+              <p>
+                <strong>
+                  {
+                    groups.find((group) => group.id === groupDialog.groupId)
+                      ?.name
+                  }
+                </strong>{" "}
+                bölümü yalnız senin kenar çubuğundan kaldırılacak. Kanallar ve
+                mesajlar korunur; bu bölümdeki kanallar{" "}
+                <strong>Kanallar</strong> bölümüne döner.
+              </p>
+            ) : (
+              <>
+                <p>
+                  Kanallarını sana uygun başlıklar altında topla. Bu düzen
+                  yalnız sana görünür.
+                </p>
+                <label>
+                  Bölüm adı
+                  <input
+                    data-autofocus
+                    value={groupName}
+                    maxLength={48}
+                    required
+                    onChange={(e) => setGroupName(e.target.value)}
+                    placeholder="Örn. Ürün ekibi"
+                    disabled={groupSaving}
+                  />
+                </label>
+                <span className="sidebar-group-name-count" aria-hidden="true">
+                  {groupName.length}/48
+                </span>
+              </>
+            )}
+            {groupError && (
+              <p className="sidebar-group-error" role="alert">
+                {groupError}
+              </p>
+            )}
+            <div className="sidebar-group-form-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={groupSaving}
+                onClick={() => setGroupDialog(null)}
+              >
+                Vazgeç
+              </button>
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={
+                  busy || (groupDialog.kind !== "remove" && !groupName.trim())
+                }
+              >
+                {groupSaving
+                  ? "Kaydediliyor…"
+                  : groupDialog.kind === "create"
+                    ? "Oluştur"
+                    : groupDialog.kind === "rename"
+                      ? "Kaydet"
+                      : "Bölümü kaldır"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </>
   );
 }

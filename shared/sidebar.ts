@@ -2,12 +2,19 @@ import type { Channel } from "./types";
 
 export type SidebarSection = "favorites" | "channels" | "voice" | "dms";
 export type SidebarOrder = "text" | "voice" | "favorites";
+export interface SidebarChannelGroup {
+  id: string;
+  name: string;
+  channelIds: string[];
+  collapsed: boolean;
+}
 export interface SidebarPreferences {
   textOrder: string[];
   voiceOrder: string[];
   favoriteIds: string[];
   collapsedSections: SidebarSection[];
   width?: number;
+  channelGroups?: SidebarChannelGroup[];
 }
 export interface SidebarPreferencesState {
   userId: string;
@@ -53,6 +60,29 @@ export function normalizeSidebarPreferences(
     ];
   };
   const allowed = new Set(active.map((channel) => channel.id));
+  const textIds = new Set(
+    active
+      .filter((channel) => channel.kind === "text")
+      .map((channel) => channel.id),
+  );
+  const groupedIds = new Set<string>();
+  const groupIds = new Set<string>();
+  const channelGroups = value.channelGroups?.slice(0, 20).flatMap((group) => {
+    const name = group.name.trim().slice(0, 48);
+    if (!name || groupIds.has(group.id)) return [];
+    groupIds.add(group.id);
+    return [
+      {
+        ...group,
+        name,
+        channelIds: group.channelIds.filter((id) => {
+          if (!textIds.has(id) || groupedIds.has(id)) return false;
+          groupedIds.add(id);
+          return true;
+        }),
+      },
+    ];
+  });
   return {
     textOrder: order(value.textOrder, "text"),
     voiceOrder: order(value.voiceOrder, "voice"),
@@ -65,5 +95,6 @@ export function normalizeSidebarPreferences(
     ...(typeof value.width === "number" && Number.isFinite(value.width)
       ? { width: Math.min(340, Math.max(240, Math.round(value.width))) }
       : {}),
+    ...(channelGroups !== undefined ? { channelGroups } : {}),
   };
 }

@@ -231,7 +231,16 @@ export function installCollaborationData(
     res.json({ ok: true });
   });
   app.post("/api/notifications/read", (req, res) => {
-    const input = parse(z.object({ id: uuid.optional() }).strict(), req.body);
+    const input = parse(
+      z
+        .object({
+          id: uuid.optional(),
+          notificationsOnly: z.literal(true).optional(),
+        })
+        .strict()
+        .refine((value) => !(value.id && value.notificationsOnly)),
+      req.body,
+    );
     repo.transaction(() => {
       if (input.id) {
         const n = repo.get(
@@ -253,18 +262,20 @@ export function installCollaborationData(
             !repo.canAccessChannel(req.auth!.id, c.id, req.auth!.workspace_id)
           )
             continue;
-          markRead(
-            req.auth!.id,
-            c.id,
-            repo.get(
-              "SELECT MAX(o.sequence) AS rowid FROM messages m JOIN message_order o ON o.message_id=m.id WHERE m.channel_id=?",
+          if (!input.notificationsOnly)
+            markRead(
+              req.auth!.id,
               c.id,
-            )?.rowid || 0,
-          );
+              repo.get(
+                "SELECT MAX(o.sequence) AS rowid FROM messages m JOIN message_order o ON o.message_id=m.id WHERE m.channel_id=?",
+                c.id,
+              )?.rowid || 0,
+            );
           repo.run(
-            "UPDATE notifications SET read_at=? WHERE user_id=? AND channel_id=?",
+            "UPDATE notifications SET read_at=? WHERE user_id=? AND workspace_id=? AND channel_id=?",
             new Date().toISOString(),
             req.auth!.id,
+            req.auth!.workspace_id,
             c.id,
           );
         }

@@ -488,3 +488,194 @@ test("inactive workspace memberships cannot read or mutate sidebar state", async
       0,
     );
   }));
+
+test("personal channel groups keep ordering, empty sections and collapse while older clients preserve them", async () =>
+  fixture(async ({ owner, member, state, request }) => {
+    const initial = await state(owner);
+    assert.equal(initial.preferences.channelGroups, undefined);
+    const channelIds = initial.preferences.textOrder.slice(0, 2).reverse();
+    const groups = [
+      {
+        id: randomUUID(),
+        name: "  Günlük işler  ",
+        channelIds,
+        collapsed: true,
+      },
+      { id: randomUUID(), name: "Sonra", channelIds: [], collapsed: false },
+    ];
+    const first = await save(request, owner, initial, {
+      channelGroups: groups,
+      textOrder: [...initial.preferences.textOrder].reverse(),
+    });
+    assert.equal(first.status, 200);
+    const saved = await state(owner);
+    assert.deepEqual(saved.preferences.channelGroups, [
+      { ...groups[0], name: "Günlük işler" },
+      groups[1],
+    ]);
+    assert.deepEqual(
+      saved.preferences.textOrder,
+      [...initial.preferences.textOrder].reverse(),
+    );
+    assert.equal((await state(member)).preferences.channelGroups, undefined);
+    assert.equal(
+      (await save(request, owner, initial, { channelGroups: [] })).status,
+      409,
+      "a stale client cannot clear newer group changes",
+    );
+    const { channelGroups: _groups, ...legacyPreferences } = saved.preferences;
+    const legacy = await request(owner, "/sidebar-preferences", "PATCH", {
+      revision: saved.revision,
+      preferences: { ...legacyPreferences, width: 300 },
+    });
+    assert.equal(legacy.status, 200);
+    const afterLegacy = await state(owner);
+    assert.deepEqual(
+      afterLegacy.preferences.channelGroups,
+      saved.preferences.channelGroups,
+    );
+    assert.equal(afterLegacy.preferences.width, 300);
+    assert.equal(
+      (await save(request, owner, afterLegacy, { channelGroups: [] })).status,
+      200,
+    );
+    assert.deepEqual(
+      (await state(owner)).preferences.channelGroups,
+      [],
+      "explicit empty groups remove the personal sections",
+    );
+  }));
+
+test("group validation rejects duplicate identities, duplicate channel placement, invalid names and non-text or inaccessible channels", async () =>
+  fixture(
+    async ({ runtime, owner, member, other, channel, state, request }) => {
+      const current = await state(owner);
+      const group = {
+        id: randomUUID(),
+        name: "Valid",
+        channelIds: [current.preferences.textOrder[0]],
+        collapsed: false,
+      };
+      const malformed = [
+        [{ ...group, id: "invalid-id" }],
+        [{ ...group, name: "   " }],
+        [{ ...group, name: "a".repeat(49) }],
+        [group, { ...group, channelIds: [] }],
+        [group, { ...group, id: randomUUID() }],
+        [{ ...group, channelIds: [...group.channelIds, ...group.channelIds] }],
+        Array.from({ length: 21 }, () => ({
+          ...group,
+          id: randomUUID(),
+          channelIds: [],
+        })),
+      ];
+      for (const channelGroups of malformed)
+        assert.equal(
+          (await save(request, owner, current, { channelGroups })).status,
+          400,
+        );
+      const privateId = channel(
+        "Secret group target",
+        "text",
+        [member.id],
+        "private",
+      );
+      const foreignId = channel(
+        "Foreign group target",
+        "text",
+        [],
+        "public",
+        other.workspaceId,
+      );
+      const voiceId = channel("Voice group target", "voice");
+      const dmId = channel("DM group target", "dm", [owner.id, member.id]);
+      const archivedId = channel("Archived group target");
+      runtime.repo.run(
+        "UPDATE channels SET archived_at=? WHERE id=?",
+        new Date().toISOString(),
+        archivedId,
+      );
+      for (const id of [
+        privateId,
+        foreignId,
+        voiceId,
+        dmId,
+        archivedId,
+        randomUUID(),
+      ])
+        assert.equal(
+          (
+            await save(request, owner, current, {
+              channelGroups: [{ ...group, channelIds: [id] }],
+            })
+          ).status,
+          404,
+        );
+      assert.equal((await state(owner)).revision, 0);
+      assert.equal((await state(owner)).preferences.channelGroups, undefined);
+    },
+  ));
+
+test("group reads prune revoked, archived and deleted channels without removing the user's empty group", async () =>
+  fixture(
+    async ({ runtime, owner, other, session, channel, state, request }) => {
+      const privateId = channel(
+        "Personal private",
+        "text",
+        [owner.id],
+        "private",
+      );
+      const archivedId = channel("Personal archived");
+      const deletedId = channel("Personal deleted");
+      const current = await state(owner);
+      const group = {
+        id: randomUUID(),
+        name: "Kişisel bölüm",
+        channelIds: [privateId, archivedId, deletedId],
+        collapsed: true,
+      };
+      assert.equal(
+        (await save(request, owner, current, { channelGroups: [group] }))
+          .status,
+        200,
+      );
+      runtime.repo.run(
+        "DELETE FROM channel_members WHERE channel_id=? AND user_id=?",
+        privateId,
+        owner.id,
+      );
+      runtime.repo.run(
+        "UPDATE channels SET archived_at=? WHERE id=?",
+        new Date().toISOString(),
+        archivedId,
+      );
+      runtime.repo.run("DELETE FROM channels WHERE id=?", deletedId);
+      const added = channel("New default channel");
+      const pruned = await state(owner);
+      assert.deepEqual(pruned.preferences.channelGroups, [
+        { ...group, channelIds: [] },
+      ]);
+      assert.equal(pruned.preferences.textOrder.at(-1), added);
+      runtime.repo.run(
+        "INSERT INTO workspace_members(workspace_id,user_id,role,joined_at) VALUES(?,?,'member',?)",
+        other.workspaceId,
+        owner.id,
+        new Date().toISOString(),
+      );
+      assert.equal(
+        (await state(session(owner.id, other.workspaceId))).preferences
+          .channelGroups,
+        undefined,
+      );
+      const { channelGroups: _groups, ...legacyPreferences } =
+        pruned.preferences;
+      const legacy = await request(owner, "/sidebar-preferences", "PATCH", {
+        revision: pruned.revision,
+        preferences: legacyPreferences,
+      });
+      assert.equal(legacy.status, 200);
+      assert.deepEqual((await state(owner)).preferences.channelGroups, [
+        { ...group, channelIds: [] },
+      ]);
+    },
+  ));

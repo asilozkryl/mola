@@ -31,8 +31,41 @@ const preferencesSchema = z
       .array(z.enum(["favorites", "channels", "voice", "dms"]))
       .max(4),
     width: z.number().int().min(240).max(340).optional(),
+    channelGroups: z
+      .array(
+        z
+          .object({
+            id: z.string().uuid(),
+            name: z.string().trim().min(1).max(48),
+            channelIds: ids,
+            collapsed: z.boolean(),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((preferences, context) => {
+    const groupIds = new Set<string>(),
+      channelIds = new Set<string>();
+    for (const group of preferences.channelGroups || []) {
+      if (groupIds.has(group.id))
+        context.addIssue({
+          code: "custom",
+          message: "Bölüm kimlikleri benzersiz olmalı.",
+        });
+      groupIds.add(group.id);
+      for (const id of group.channelIds) {
+        if (channelIds.has(id))
+          context.addIssue({
+            code: "custom",
+            message: "Bir kanal yalnızca bir kişisel bölümde bulunabilir.",
+          });
+        channelIds.add(id);
+      }
+    }
+  });
 const updateSchema = z
   .object({
     revision: z
@@ -131,12 +164,19 @@ export function installSidebarRoutes(
       const available = new Map(
         channels.map((channel) => [channel.id, channel]),
       );
+      const submitted = {
+        ...parsed.data.preferences,
+        ...(parsed.data.preferences.channelGroups === undefined &&
+        current.preferences.channelGroups !== undefined
+          ? { channelGroups: current.preferences.channelGroups }
+          : {}),
+      };
       for (const [key, kind] of [
         ["textOrder", "text"],
         ["voiceOrder", "voice"],
         ["favoriteIds", undefined],
       ] as const) {
-        for (const id of parsed.data.preferences[key]) {
+        for (const id of submitted[key]) {
           const channel = available.get(id);
           if (!channel || (kind && channel.kind !== kind))
             throw new HttpError(
@@ -145,10 +185,16 @@ export function installSidebarRoutes(
             );
         }
       }
-      const preferences = normalizeSidebarPreferences(
-        parsed.data.preferences,
-        channels,
-      );
+      for (const group of submitted.channelGroups || []) {
+        for (const id of group.channelIds) {
+          if (available.get(id)?.kind !== "text")
+            throw new HttpError(
+              404,
+              "Kanal bulunamadı. Kanal listesini yenileyip tekrar deneyin.",
+            );
+        }
+      }
+      const preferences = normalizeSidebarPreferences(submitted, channels);
       const revision = current.revision + 1;
       repo.run(
         `INSERT INTO sidebar_preferences(user_id,workspace_id,revision,state_json,updated_at) VALUES(?,?,?,?,?)
