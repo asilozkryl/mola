@@ -189,9 +189,6 @@ export default function App() {
     scrollTop: number;
   } | null>(null);
   const [tab, setTab] = useState<"chat" | "files" | "pins">("chat");
-  const [details, setDetails] = useState(
-    () => localStorage.getItem("mola:details") === "true",
-  );
   const [mobileNav, setMobileNav] = useState(false);
   const { isMobile, sidebarRef, triggerRef } = useMobileNavigation(
     mobileNav,
@@ -480,9 +477,6 @@ export default function App() {
     const timer = setTimeout(() => setToast(""), 6000);
     return () => clearTimeout(timer);
   }, [toast]);
-  useEffect(() => {
-    localStorage.setItem("mola:details", String(details));
-  }, [details]);
   useEffect(() => {
     if (
       dialog ||
@@ -2571,20 +2565,17 @@ export default function App() {
                         <Headphones size={17} />
                         <span>Bir araya gel</span>
                       </button>
-                      <IconButton
-                        label="Kanal bilgisi"
-                        pressed={details && !thread && !isMobile}
-                        onClick={() => {
-                          if (window.matchMedia("(max-width:1100px)").matches) {
-                            setDialog("info");
-                            return;
-                          }
-                          setDetails(!details);
-                          setThread(null);
-                        }}
+                      <button
+                        type="button"
+                        className="icon-button"
+                        title="Kanal bilgisi"
+                        aria-label="Kanal bilgisi"
+                        aria-haspopup="dialog"
+                        disabled={!channel}
+                        onClick={() => setDialog("info")}
                       >
                         <Info size={20} />
-                      </IconButton>
+                      </button>
                       {channel && channel.kind !== "dm" && (
                         <button
                           type="button"
@@ -3034,134 +3025,7 @@ export default function App() {
                     />
                   )}
                 </aside>
-              ) : (
-                details &&
-                view === "channel" && (
-                  <aside className="details-panel">
-                    <div className="details-heading">
-                      <h2>Kanal hakkında</h2>
-                      <IconButton
-                        label="Kanal bilgisini kapat"
-                        onClick={() => setDetails(false)}
-                      >
-                        <X size={18} />
-                      </IconButton>
-                    </div>
-                    <div className="details-body">
-                      <div className="channel-detail-mark" aria-hidden="true">
-                        {channel?.kind === "dm" ? (
-                          <MessageCircle size={23} />
-                        ) : channel?.visibility === "private" ? (
-                          <Lock size={23} />
-                        ) : (
-                          <Hash size={23} />
-                        )}
-                      </div>
-                      <h3>{channelName}</h3>
-                      <p className="channel-about">
-                        {channel?.description ||
-                          "Ekibinin fikirlerini ve günlük sohbetini paylaştığı yer."}
-                      </p>
-                      <div className="channel-detail-meta">
-                        <span>
-                          <Users size={14} />
-                          {conversationMembers.length} üye
-                        </span>
-                        <span>
-                          <ShieldCheck size={14} />
-                          {channel?.kind === "dm"
-                            ? "Özel sohbet"
-                            : channel?.visibility === "private"
-                              ? "Özel kanal"
-                              : "Ekip kanalı"}
-                        </span>
-                      </div>
-                      <div className="detail-divider" />
-                      <div className="huddle-card">
-                        <h4>Birlikte üzerinden geçin</h4>
-                        <p>Sesli konuş, gerekirse ekranını paylaş.</p>
-                        <button
-                          disabled={!channel || channel.archived}
-                          onClick={() => startCall()}
-                        >
-                          <Headphones size={16} />
-                          Sesli sohbet başlat
-                        </button>
-                      </div>
-                      <div className="detail-divider" />
-                      <div className="detail-section-title">
-                        <h4>
-                          Kanal üyeleri{" "}
-                          <span>{conversationMembers.length}</span>
-                        </h4>
-                        <button onClick={() => openMembers("channel")}>
-                          Tümü
-                        </button>
-                      </div>
-                      <div className="detail-members">
-                        {conversationMembers.slice(0, 5).map((user) => (
-                          <ProfileIdentity
-                            key={user.id}
-                            user={user}
-                            online={data.onlineIds.includes(user.id)}
-                            connected={connected}
-                            selfId={data.user.id}
-                            onOpen={openProfile}
-                          >
-                            <Avatar
-                              user={user}
-                              size="small"
-                              online={
-                                connected && data.onlineIds.includes(user.id)
-                              }
-                            />
-                            <span>
-                              <strong>
-                                {user.name}
-                                {user.id === data.user.id && (
-                                  <small> (sen)</small>
-                                )}
-                              </strong>
-                              <small>
-                                {user.status ||
-                                  (!connected
-                                    ? "Durum güncellenemiyor"
-                                    : data.onlineIds.includes(user.id)
-                                      ? "Çevrimiçi"
-                                      : "Çevrimdışı")}
-                              </small>
-                            </span>
-                            {user.role === "owner" && (
-                              <span
-                                className="owner-badge"
-                                title="Çalışma alanı sahibi"
-                              >
-                                ✦
-                              </span>
-                            )}
-                          </ProfileIdentity>
-                        ))}
-                      </div>
-                      <button
-                        className="detail-invite"
-                        disabled={!canManage}
-                        onClick={() => setDialog("invite")}
-                      >
-                        <Plus size={15} />
-                        Ekibe birini davet et
-                      </button>
-                      {channel && channel.kind !== "dm" && (
-                        <button
-                          className="detail-invite"
-                          onClick={() => setChannelAccess(channel)}
-                        >
-                          <ShieldCheck size={15} /> Kanal erişimi ve üyeler
-                        </button>
-                      )}
-                    </div>
-                  </aside>
-                )
-              )}
+              ) : null}
             </>
           )}
         </main>
@@ -3315,51 +3179,137 @@ export default function App() {
           }}
         />
       )}
-      {dialog === "info" && (
+      {dialog === "info" && channel && (
         <Modal
-          title={`#${channelName} hakkında`}
+          title={channel.kind === "dm" ? "Sohbet hakkında" : "Kanal hakkında"}
           onClose={() => setDialog(null)}
         >
-          <p className="modal-description">
-            {channel?.description || "Ekibinle aynı yerde, aynı sohbette."}
-          </p>
-          <p className="modal-description">
-            {conversationMembers.length} üye ·{" "}
-            {channel?.kind === "dm"
-              ? "Özel sohbet"
-              : channel?.visibility === "private"
-                ? "Özel kanal"
-                : "Ekip kanalı"}
-          </p>
-          {channel && channel.kind !== "dm" && (
-            <button
-              className="secondary-button full-width channel-access-button"
-              onClick={() => {
-                setDialog(null);
-                setChannelAccess(channel);
-              }}
-            >
-              <ShieldCheck size={17} />
-              Kanal erişimi ve üyeler
-            </button>
-          )}
-          <button
-            className="secondary-button full-width channel-members-button"
-            onClick={() => openMembers("channel")}
-          >
-            <Users size={17} /> Kanal üyelerini gör
-          </button>
-          <button
-            className="primary-button full-width"
-            disabled={channel?.archived || !channel}
-            onClick={() => {
-              setDialog(null);
-              startCall();
-            }}
-          >
-            <Headphones size={18} />
-            Bir araya gel
-          </button>
+          <div className="channel-info-content">
+            <div className="channel-info-summary">
+              <span className="channel-detail-mark" aria-hidden="true">
+                {channel.kind === "dm" ? (
+                  <MessageCircle size={21} />
+                ) : channel.visibility === "private" ? (
+                  <Lock size={21} />
+                ) : (
+                  <Hash size={21} />
+                )}
+              </span>
+              <div>
+                <h3>{channelName}</h3>
+                <div className="channel-detail-meta">
+                  <span>
+                    <Users size={14} />
+                    {conversationMembers.length} üye
+                  </span>
+                  <span>
+                    <ShieldCheck size={14} />
+                    {channel.kind === "dm"
+                      ? "Özel sohbet"
+                      : channel.visibility === "private"
+                        ? "Özel kanal"
+                        : "Ekip kanalı"}
+                  </span>
+                  {channel.archived && (
+                    <span>
+                      <Archive size={14} />
+                      Arşivlenmiş
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <p className="channel-about">
+              {channel.description || "Ekibinle aynı yerde, aynı sohbette."}
+            </p>
+            <div className="channel-info-members">
+              <div className="detail-section-title">
+                <h4>
+                  {channel.kind === "dm" ? "Sohbettekiler" : "Kanal üyeleri"}
+                </h4>
+                <button
+                  aria-label="Kanal üyelerini gör"
+                  onClick={() => openMembers("channel")}
+                >
+                  Tümünü gör
+                </button>
+              </div>
+              <div className="detail-members">
+                {conversationMembers.slice(0, 5).map((user) => (
+                  <ProfileIdentity
+                    key={user.id}
+                    user={user}
+                    online={data.onlineIds.includes(user.id)}
+                    connected={connected}
+                    selfId={data.user.id}
+                    onOpen={openProfile}
+                  >
+                    <Avatar
+                      user={user}
+                      size="small"
+                      online={connected && data.onlineIds.includes(user.id)}
+                    />
+                    <span>
+                      <strong>
+                        {user.name}
+                        {user.id === data.user.id && <small> (sen)</small>}
+                      </strong>
+                      <small>
+                        {user.status ||
+                          (!connected
+                            ? "Durum güncellenemiyor"
+                            : data.onlineIds.includes(user.id)
+                              ? "Çevrimiçi"
+                              : "Çevrimdışı")}
+                      </small>
+                    </span>
+                    {user.role === "owner" && (
+                      <span
+                        className="owner-badge"
+                        title="Çalışma alanı sahibi"
+                      >
+                        ✦
+                      </span>
+                    )}
+                  </ProfileIdentity>
+                ))}
+              </div>
+            </div>
+            <div className="channel-info-actions">
+              {channel.kind !== "dm" && (
+                <button
+                  className="secondary-button full-width"
+                  onClick={() => {
+                    setDialog(null);
+                    setChannelAccess(channel);
+                  }}
+                >
+                  <ShieldCheck size={16} />
+                  Kanal erişimi ve üyeler
+                </button>
+              )}
+              {canManage && (
+                <button
+                  className="secondary-button full-width"
+                  onClick={() => setDialog("invite")}
+                >
+                  <Plus size={16} />
+                  Ekibe birini davet et
+                </button>
+              )}
+              <button
+                className="primary-button full-width"
+                disabled={channel.archived}
+                onClick={() => {
+                  setDialog(null);
+                  startCall();
+                }}
+              >
+                <Headphones size={17} />
+                Bir araya gel
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
       {dialog === "archives" && (

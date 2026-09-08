@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { randomUUID } from "node:crypto";
 import type { Bootstrap } from "../shared/types";
 
@@ -12,39 +13,81 @@ async function openWorkspace(page: Page) {
   ).toBeAttached();
 }
 
-test("channel details start closed and remember both open and closed preferences", async ({
+test("channel information opens as a popup without resizing chat or losing the reply draft", async ({
   page,
 }) => {
+  await page.addInitScript(() => localStorage.setItem("mola:details", "true"));
   await openWorkspace(page);
-  const details = page.locator(".details-panel");
+  const details = page.getByRole("dialog", {
+    name: "Kanal hakkında",
+    exact: true,
+  });
   const toggle = page.getByRole("button", {
     name: "Kanal bilgisi",
     exact: true,
   });
   await expect(details).toHaveCount(0);
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(toggle).toHaveAttribute("aria-haspopup", "dialog");
+  await expect(page.locator(".details-panel")).toHaveCount(0);
+
+  const message = page.locator("article[data-message-id]").first();
+  await message.hover();
+  await message
+    .getByRole("button", { name: "Mesajı yanıtla", exact: true })
+    .click();
+  const reply = page.getByRole("textbox", {
+    name: "Yanıtını yaz",
+    exact: true,
+  });
+  await reply.fill("Popup kapanınca bu taslak burada kalmalı.");
+  const conversation = page.locator(".conversation-panel");
+  const before = await conversation.boundingBox();
 
   await toggle.click();
+  await expect(details).toBeVisible();
+  expect(await conversation.boundingBox()).toEqual(before);
+  const close = details.getByRole("button", { name: "Kapat", exact: true });
+  await expect(close).toBeFocused();
+  await page.locator(".thread-panel textarea").evaluate((node) => node.focus());
+  await expect(close).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(
-    details.getByRole("heading", { name: "Kanal hakkında", exact: true }),
-  ).toBeVisible();
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await page.reload();
-  await expect(
-    details.getByRole("heading", { name: "Kanal hakkında", exact: true }),
-  ).toBeVisible();
+    details.getByRole("button", { name: "Kanal üyelerini gör", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(close).toBeFocused();
+  const audit = await new AxeBuilder({ page })
+    .include("dialog[open]")
+    .analyze();
+  expect(
+    audit.violations.filter(
+      (item) => item.impact === "serious" || item.impact === "critical",
+    ),
+  ).toEqual([]);
+  await page.screenshot({
+    path: "artifacts/channel-info-desktop.png",
+    animations: "disabled",
+  });
 
-  await details
-    .getByRole("button", { name: "Kanal bilgisini kapat", exact: true })
-    .click();
+  await page.keyboard.press("Escape");
   await expect(details).toHaveCount(0);
+  await expect(toggle).toBeFocused();
+  await expect(reply).toHaveValue("Popup kapanınca bu taslak burada kalmalı.");
+  await toggle.click();
+  await close.click();
+  await expect(toggle).toBeFocused();
+  await toggle.click();
+  await page.mouse.click(5, 5);
+  await expect(details).toHaveCount(0);
+  await expect(toggle).toBeFocused();
+
+  await toggle.click();
   await page.reload();
   await expect(toggle).toBeVisible();
   await expect(details).toHaveCount(0);
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
 });
 
-for (const width of [390, 768]) {
+for (const width of [320, 390, 768]) {
   test(`navigation at ${width}px keeps keyboard focus inside until Escape and exposes channel information`, async ({
     page,
   }) => {
@@ -93,6 +136,24 @@ for (const width of [390, 768]) {
         exact: true,
       }),
     ).toBeVisible();
+    expect(
+      await information.evaluate(
+        (node) => node.scrollWidth <= node.clientWidth,
+      ),
+    ).toBe(true);
+    const audit = await new AxeBuilder({ page })
+      .include("dialog[open]")
+      .analyze();
+    expect(
+      audit.violations.filter(
+        (item) => item.impact === "serious" || item.impact === "critical",
+      ),
+    ).toEqual([]);
+    if (width === 320)
+      await page.screenshot({
+        path: "artifacts/channel-info-mobile.png",
+        animations: "disabled",
+      });
     await page.keyboard.press("Escape");
     await expect(information).toHaveCount(0);
     await composer.focus();
@@ -216,11 +277,14 @@ test("member search respects a private channel and resets when opening the works
   await page
     .getByRole("button", { name: "Kanal bilgisi", exact: true })
     .click();
-  const details = page.locator(".details-panel");
+  const details = page.getByRole("dialog", {
+    name: "Kanal hakkında",
+    exact: true,
+  });
   await expect(details.getByText("2 üye", { exact: true })).toBeVisible();
   await expect(details.getByText("Özel kanal", { exact: true })).toBeVisible();
 
-  await page
+  await details
     .getByRole("button", { name: "Kanal üyelerini gör", exact: true })
     .click();
   const directory = page.getByRole("dialog", {

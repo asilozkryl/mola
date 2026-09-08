@@ -17,14 +17,14 @@ Mola, ekibin gün boyunca açık tuttuğu bir sohbet alanı. Tasarımın önceli
 | Yardımcı metin | `#66716B` |
 | Sakin yüzey | `#F5F7F4` |
 
-Masaüstünde sol alanlar sabit, sohbet esnek; kanal bilgisi kullanıcı açtığında görünür. 800 px ve altında gezinme bir menü olarak açılır. Dekorasyonu küçültürken metinleri küçültmek yerine mesajları 14 px, sık kullanılan gezinme öğelerini 12–13 px tutuyoruz. Dokunmatik ekranlarda düğme hedefleri ayrıca ele alınıyor.
+Masaüstünde sol alanlar sabit, sohbet esnek; kanal bilgisi tüm ekran boyutlarında kullanıcı açtığında ortalanmış bir popup olarak görünür. Mevcut Manrope, orman yeşili ve beyaz yüzey korunur; kanal özeti, üyeler ve eylemler sola hizalı tek sütunda sıralanır. Açık mesaj dizisi ve taslak popup arkasında korunur, sohbet genişliği değişmez. 800 px ve altında gezinme bir menü olarak açılır. Dekorasyonu küçültürken metinleri küçültmek yerine mesajları 14 px, sık kullanılan gezinme öğelerini 12–13 px tutuyoruz. Dokunmatik ekranlarda düğme hedefleri ayrıca ele alınıyor.
 
 ## Bulunan sorunlar ve uygulanan çözümler
 
 | Bulgu | Yeni davranış |
 | --- | --- |
 | Üst alan ve kanal açılışı sohbetten fazla yer alıyordu. | 1440 px masaüstünde üst alan + kanal başlığı + sekmeler 199 px yerine 160 px. Karşılama simgesi yaklaşık 64 px yerine 38 px. |
-| Sağ panel ilk açılışta sohbeti daraltıyordu. | Başlangıçta kapalı; kullanıcının açma/kapama tercihi bu tarayıcıda hatırlanıyor. |
+| Kanal bilgisi sağda açılıp sohbeti daraltıyordu. | Her ekran boyutunda popup açılır. Escape, kapatma düğmesi veya dışarı tıklama ile kapanır; klavye odağı açan düğmeye döner. Eski panel tercihi popup'ı sayfa yenilendiğinde otomatik açmaz. |
 | Davet ve sesli görüşme süslemeleri gereğinden büyüktü. | Davet tek düğmeye, görüşme kartı kısa açıklama ve eyleme dönüştürüldü. Giriş ekranı görselleri de küçültüldü. |
 | Bölüm başlıklarındaki oklar bir işlem yapmıyordu. | Kanallar, sesli odalar ve direkt mesaj bölümleri açılıp kapanabiliyor. |
 | Mobilde kanal bilgisi ve kullanım rehberi gizleniyordu. | Kanal bilgisi başlıkta, rehber gezinme menüsünde erişilebilir. Kanal üye listesi bilgi penceresinden de açılıyor. |
@@ -47,6 +47,7 @@ Masaüstünde sol alanlar sabit, sohbet esnek; kanal bilgisi kullanıcı açtı�
 
 ## Doğrulama
 
+- Kanal bilgisi popup güncellemesinde sekiz arayüz senaryosu geçti: masaüstü açma/kapama, odak dönüşü, sohbet genişliği ve yanıt taslağının korunması, 320/390/768 px görünüm ve özel kanal üyeleri. Popup için axe denetimi ve üretim derlemesi başarılı; görseller `artifacts/channel-info-desktop.png` ve `artifacts/channel-info-mobile.png` içinde.
 - `npm run build`: TypeScript denetimi ve üretim derlemesi başarılı.
 - Toplam 38 farklı tarayıcı senaryosu başarılı olarak doğrulandı. Mobil odak hataları düzeltildikten sonra ilgili yedi arayüz testi yeniden çalıştırıldı ve tamamı geçti. Yeni dokunmatik mesaj menüsü ve düzenleme testleri de 2/2 geçti.
 - Mevcut mesajlaşma, dosya indirme, kayıt/giriş, özel kanal, taslak senkronizasyonu, çalışma alanı değişimi ve sesli oda görünürlüğü akışları tarayıcı testleriyle kontrol edildi.

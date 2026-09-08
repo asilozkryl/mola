@@ -556,10 +556,67 @@
   font-variant-numeric: tabular-nums;
 }
 
-.details-panel {
-  width: 260px;
-  min-width: 260px;
-  background: #fafbfc;
+.channel-info-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.channel-info-summary > div {
+  min-width: 0;
+}
+.channel-info-summary h3 {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.channel-info-summary .channel-detail-mark {
+  flex-shrink: 0;
+  margin: 0;
+  background: var(--active-surface);
+  color: var(--forest);
+}
+.channel-info-summary .channel-detail-meta {
+  margin-top: 6px;
+  gap: 6px 12px;
+  color: var(--muted);
+}
+.channel-info-content .channel-about {
+  max-width: none;
+  margin: 16px 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.channel-info-members {
+  padding: 14px 0;
+  border-block: 1px solid var(--line);
+}
+.channel-info-content .detail-members {
+  gap: 4px;
+}
+.channel-info-content .detail-members > button {
+  min-height: 40px;
+  padding: 4px;
+  border-radius: 6px;
+}
+.channel-info-content .detail-members > button:hover {
+  background: var(--active-surface);
+}
+.channel-info-content .detail-members > button > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+.channel-info-content .detail-members strong,
+.channel-info-content .detail-members small {
+  overflow-wrap: anywhere;
+}
+.channel-info-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.channel-info-actions > button {
+  min-height: 38px;
+  margin: 0;
+  white-space: normal;
 }
 .details-heading {
   min-height: 56px;
