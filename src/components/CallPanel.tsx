@@ -6,6 +6,7 @@ import {
   Headphones,
   LoaderCircle,
   Maximize2,
+  Minimize2,
   Mic,
   MicOff,
   MonitorUp,
@@ -366,12 +367,14 @@ export function CallPanel({
   const [elapsed, setElapsed] = useState(0);
   const [selectedSharing, setSelectedSharing] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [roomExpanded, setRoomExpanded] = useState(false);
   const [expandedScreen, setExpandedScreen] = useState(false);
   const [fullscreenScreen, setFullscreenScreen] = useState(false);
   const [screenError, setScreenError] = useState("");
   const [outputError, setOutputError] = useState(false);
   const settingsButton = useRef<HTMLButtonElement>(null);
   const expandButton = useRef<HTMLButtonElement>(null);
+  const roomExpandButton = useRef<HTMLButtonElement>(null);
   const escapeCallback = useRef<() => void>(() => {});
   const outputErrorCallback = useRef(() => setOutputError(true));
   const blockedCallback = useRef(() => setAudioBlocked(true));
@@ -393,9 +396,24 @@ export function CallPanel({
     } else if (settingsOpen) {
       setSettingsOpen(false);
       settingsButton.current?.focus();
+    } else if (roomExpanded) {
+      setRoomExpanded(false);
+      roomExpandButton.current?.focus();
     } else closeCallback.current();
   };
   const visible = !minimized && Boolean(call.channelId || call.error);
+  useEffect(() => {
+    setRoomExpanded(false);
+  }, [call.channelId]);
+  useEffect(() => {
+    const mobile = window.matchMedia("(max-width: 560px)");
+    const update = () => {
+      if (mobile.matches) setRoomExpanded(false);
+    };
+    update();
+    mobile.addEventListener("change", update);
+    return () => mobile.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     const update = () =>
       setFullscreenScreen(
@@ -669,7 +687,7 @@ export function CallPanel({
       ) : (
         <div className="call-backdrop">
           <div
-            className={`call-dialog call-panel ${audioOnly && !activeShare ? "call-panel-audio" : "call-panel-media"}`}
+            className={`call-dialog call-panel ${audioOnly && !activeShare ? "call-panel-audio" : "call-panel-media"}${roomExpanded ? " call-panel-expanded" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="call-heading"
@@ -701,14 +719,36 @@ export function CallPanel({
                   </p>
                 </div>
               </div>
-              <button
-                className="call-icon-button"
-                aria-label={call.joined ? "Görüşmeyi küçült" : "Kapat"}
-                title={call.joined ? "Görüşmeyi küçült" : "Kapat"}
-                onClick={() => closeCallback.current()}
-              >
-                {call.joined ? <ChevronDown size={21} /> : <X size={21} />}
-              </button>
+              <div className="call-header-actions">
+                <button
+                  type="button"
+                  className="call-icon-button call-room-expand"
+                  aria-label={
+                    roomExpanded ? "Normal görünüme dön" : "Görüşmeyi genişlet"
+                  }
+                  title={
+                    roomExpanded ? "Normal görünüme dön" : "Görüşmeyi genişlet"
+                  }
+                  aria-pressed={roomExpanded}
+                  ref={roomExpandButton}
+                  onClick={() => setRoomExpanded((value) => !value)}
+                >
+                  {roomExpanded ? (
+                    <Minimize2 size={18} />
+                  ) : (
+                    <Maximize2 size={18} />
+                  )}
+                  <span>{roomExpanded ? "Normal görünüm" : "Genişlet"}</span>
+                </button>
+                <button
+                  className="call-icon-button"
+                  aria-label={call.joined ? "Görüşmeyi küçült" : "Kapat"}
+                  title={call.joined ? "Görüşmeyi küçült" : "Kapat"}
+                  onClick={() => closeCallback.current()}
+                >
+                  {call.joined ? <ChevronDown size={21} /> : <X size={21} />}
+                </button>
+              </div>
             </header>
 
             {outputError && (
@@ -898,6 +938,7 @@ export function CallPanel({
                   )}
                   <div
                     className={`call-people call-people-${Math.min(participants.length, 4)} ${audioOnly ? "call-people-audio" : "call-people-video"}`}
+                    data-count={participants.length}
                     aria-label="Görüşmedeki katılımcılar"
                   >
                     {participants.map((peer) => (
@@ -916,8 +957,8 @@ export function CallPanel({
                         </span>
                         <h3>Görüşmedeki ilk kişisiniz</h3>
                         <p>
-                          Ekip arkadaşlarınız bu kanaldan katılabilir. Beklerken
-                          sohbete dönebilirsiniz.
+                          Ekip arkadaşların bu odadan katılabilir. Sohbete
+                          döndüğünde görüşme devam eder.
                         </p>
                         <div className="call-invite-detail">
                           <button
@@ -945,11 +986,16 @@ export function CallPanel({
                     <MessageSquare size={15} />
                     Sohbete dön
                   </button>
+                  <small>Görüşme devam eder</small>
                 </div>
-                <div className="call-controls">
+                <div
+                  className="call-controls"
+                  role="group"
+                  aria-label="Görüşme kontrolleri"
+                >
                   <div className="call-control-wrap">
                     <button
-                      className={`call-control ${!call.mic ? "call-control-off" : ""}`}
+                      className={`call-control ${!call.mic ? "call-control-off" : "call-control-active"}`}
                       aria-label={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
                       aria-pressed={call.mic}
                       onClick={call.toggleMic}
