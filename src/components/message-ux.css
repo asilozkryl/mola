@@ -1,0 +1,92 @@
+.message .file-attachment {
+  min-width: min(220px, 100%);
+  max-width: min(320px, 100%);
+  padding: 8px 10px;
+  gap: 10px;
+}
+
+.message .file-icon {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.message .file-icon img {
+  position: absolute;
+  inset: 0;
+  width: 40px;
+  height: 40px;
+  max-width: 40px;
+  object-fit: cover;
+  background: #f1f4ed;
+}
+
+.message .file-attachment strong {
+  font-size: 12px;
+}
+
+.message .file-attachment small {
+  font-size: 10px;
+}
+
+.message .message-edit-hint {
+  margin: 5px 0 0;
+  color: var(--muted, #66735f);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.message .message-edit-error {
+  margin: 7px 0 0;
+  color: #a03a36;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.message .message-edit textarea:disabled {
+  opacity: 0.7;
+}
+
+.message .message-menu > button {
+  min-height: 36px;
+  font-size: 12px;
+}
+
+.message .message-menu,
+.message .reaction-popover {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.message .message-menu > .message-touch-action {
+  display: none;
+}
+
+.message .message-menu > button > svg {
+  flex-shrink: 0;
+}
+
+.message .reaction-popover {
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: min(332px, calc(100% - 24px));
+}
+
+.message .reaction-popover > button {
+  min-width: 30px;
+  min-height: 30px;
+}
+
+@media (pointer: coarse) {
+  .message .message-menu > .message-touch-action {
+    display: flex;
+  }
+
+  .message .reaction-popover > button,
+  .message .message-menu > button {
+    min-height: 40px;
+    min-width: 40px;
+  }
+}

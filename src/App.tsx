@@ -1,10 +1,12 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { io, type Socket } from "socket.io-client";
 import {
@@ -36,7 +38,6 @@ import {
   Search,
   Settings2,
   ShieldCheck,
-  Sparkles,
   Users,
   Video,
   Volume2,
@@ -74,6 +75,7 @@ import {
 import { Composer } from "./components/Composer";
 import { MessageItem } from "./components/MessageItem";
 import { useCall } from "./lib/useCall";
+import { useMobileNavigation } from "./lib/useMobileNavigation";
 import { usePushSubscription } from "./lib/usePushSubscription";
 import { CallPanel } from "./components/CallPanel";
 import { CallSetup } from "./components/CallSetup";
@@ -131,7 +133,13 @@ export default function App() {
     data?.user.id,
     data?.workspace.id,
     bootstrapRevision,
-    Boolean(data && !verificationPending && !authLink && !data.user.suspended && !data.workspace.suspended),
+    Boolean(
+      data &&
+      !verificationPending &&
+      !authLink &&
+      !data.user.suspended &&
+      !data.workspace.suspended,
+    ),
   );
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -154,8 +162,19 @@ export default function App() {
   const [adminOpen, setAdminOpen] = useState(false);
   const [view, setView] = useState<View>("channel");
   const [tab, setTab] = useState<"chat" | "files" | "pins">("chat");
-  const [details, setDetails] = useState(true);
+  const [details, setDetails] = useState(
+    () => localStorage.getItem("mola:details") === "true",
+  );
   const [mobileNav, setMobileNav] = useState(false);
+  const { isMobile, sidebarRef, triggerRef } = useMobileNavigation(
+    mobileNav,
+    setMobileNav,
+  );
+  const [memberScope, setMemberScope] = useState<"workspace" | "channel">(
+    "workspace",
+  );
+  const [memberQuery, setMemberQuery] = useState("");
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
   const [thread, setThread] = useState<Message | null>(null);
   const [linkedReply, setLinkedReply] = useState<Message | null>(null);
   const [replies, setReplies] = useState<Message[]>([]);
@@ -383,6 +402,50 @@ export default function App() {
     const timer = setTimeout(() => setToast(""), 6000);
     return () => clearTimeout(timer);
   }, [toast]);
+  useEffect(() => {
+    localStorage.setItem("mola:details", String(details));
+  }, [details]);
+  useEffect(() => {
+    if (dialog || adminOpen || voicePreviewId || callSetupChannel)
+      setMobileNav(false);
+  }, [dialog, adminOpen, voicePreviewId, callSetupChannel]);
+  useEffect(() => {
+    if (!dialog || !isMobile) return;
+    return () => {
+      requestAnimationFrame(() => {
+        if (
+          document.querySelector(
+            'dialog[open], [role="dialog"][aria-modal="true"]',
+          )
+        )
+          return;
+        const active = document.activeElement;
+        if (
+          active === document.body ||
+          (active && sidebarRef.current?.contains(active))
+        ) {
+          triggerRef.current?.focus({ preventScroll: true });
+        }
+      });
+    };
+  }, [dialog, isMobile, sidebarRef, triggerRef]);
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const update = () =>
+      setAwayFromLatest(
+        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight >
+          180,
+      );
+    update();
+    scroller.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(scroller);
+    return () => {
+      scroller.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, [loading, channelId, view, tab, messages, messagesLoading]);
   useEffect(() => {
     function key(e: KeyboardEvent) {
       if (adminOpen) return;
@@ -936,8 +999,6 @@ export default function App() {
           (u) => channel.memberIds?.includes(u.id) && u.id !== data.user.id,
         )?.name || channel.name
       : channel?.name || "genel";
-  const onlineMembers =
-    data?.members.filter((m) => data.onlineIds.includes(m.id)) || [];
   const conversationMembers =
     channel?.kind === "dm" || channel?.visibility === "private"
       ? data?.members.filter((m) => channel.memberIds?.includes(m.id)) || []
@@ -946,6 +1007,31 @@ export default function App() {
             !m.suspended &&
             (m.role !== "guest" || channel?.memberIds?.includes(m.id)),
         ) || [];
+  const directMessageMembers =
+    data?.members.filter(
+      (user) =>
+        user.id !== data.user.id &&
+        !user.suspended &&
+        !user.isBot &&
+        ((user.role !== "guest" && data.user.role !== "guest") ||
+          data.channels.some(
+            (c) => c.kind === "dm" && c.memberIds?.includes(user.id),
+          )),
+    ) || [];
+  const listedMembers = (
+    memberScope === "channel" ? conversationMembers : data?.members || []
+  ).filter(
+    (user) =>
+      !user.suspended &&
+      user.name
+        .toLocaleLowerCase("tr-TR")
+        .includes(memberQuery.trim().toLocaleLowerCase("tr-TR")),
+  );
+  function openMembers(scope: "workspace" | "channel" = "workspace") {
+    setMemberScope(scope);
+    setMemberQuery("");
+    setDialog("members");
+  }
   const totalUnread = Object.values(unread).reduce((a, b) => a + b, 0);
   const canManage = Boolean(
     data &&
@@ -1427,13 +1513,29 @@ export default function App() {
         <button
           className="nav-scrim"
           aria-label="Gezinmeyi kapat"
+          tabIndex={-1}
           onClick={() => setMobileNav(false)}
         />
       )}
-      <aside
+      <div
+        id="workspace-navigation"
+        ref={sidebarRef}
         className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}
         aria-label="Çalışma alanı gezinmesi"
+        role={isMobile && mobileNav ? "dialog" : "complementary"}
+        aria-modal={isMobile && mobileNav ? true : undefined}
+        tabIndex={isMobile ? -1 : undefined}
+        inert={isMobile && !mobileNav}
       >
+        <div className="mobile-nav-heading">
+          <span>Çalışma alanın</span>
+          <IconButton
+            label="Gezinme menüsünü kapat"
+            onClick={() => setMobileNav(false)}
+          >
+            <X size={19} />
+          </IconButton>
+        </div>
         <button
           className="workspace-heading"
           aria-label="Çalışma alanlarını değiştir"
@@ -1457,12 +1559,15 @@ export default function App() {
             onClick={() => setDialog("search")}
           >
             <Search size={17} />
-            <span>Bir şeyler ara</span>
-            <kbd>Ctrl K</kbd>
+            <span>Mesajlarda ara</span>
+            <kbd>
+              {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"} K
+            </kbd>
           </button>
           <nav className="primary-nav">
             <button
               className={view === "inbox" ? "selected" : ""}
+              aria-current={view === "inbox" ? "page" : undefined}
               onClick={() => {
                 setView("inbox");
                 setMobileNav(false);
@@ -1476,6 +1581,7 @@ export default function App() {
             </button>
             <button
               className={view === "saved" ? "selected" : ""}
+              aria-current={view === "saved" ? "page" : undefined}
               onClick={() => {
                 setView("saved");
                 setMobileNav(false);
@@ -1486,11 +1592,9 @@ export default function App() {
               {saved.length > 0 && <small>{saved.length}</small>}
             </button>
           </nav>
-          <div className="nav-section">
-            <div className="nav-section-title">
-              <span>
-                <ChevronDown size={14} /> Kanallar
-              </span>
+          <NavigationSection
+            title="Kanallar"
+            action={
               <IconButton
                 label="Kanal oluştur"
                 disabled={!canCreate}
@@ -1498,13 +1602,20 @@ export default function App() {
               >
                 <Plus size={16} />
               </IconButton>
-            </div>
+            }
+          >
             {data.channels
               .filter((c) => c.kind === "text" && !c.archived)
               .map((c) => (
                 <button
                   key={c.id}
                   className={`channel-nav ${channelId === c.id && view === "channel" ? "selected" : ""}`}
+                  aria-current={
+                    channelId === c.id && view === "channel"
+                      ? "page"
+                      : undefined
+                  }
+                  title={c.description || c.name}
                   onClick={() => selectChannel(c.id)}
                 >
                   <>
@@ -1531,14 +1642,12 @@ export default function App() {
               <Plus size={16} />
               Kanal ekle
             </button>
-          </div>
-          <div className="nav-section voice-section">
-            <div className="nav-section-title">
-              <span>
-                <ChevronDown size={14} /> Sesli odalar
-              </span>
-              <AudioLines size={15} />
-            </div>
+          </NavigationSection>
+          <NavigationSection
+            title="Sesli odalar"
+            className="voice-section"
+            action={<AudioLines size={15} />}
+          >
             {data.channels
               .filter((c) => c.kind === "voice" && !c.archived)
               .map((c) => {
@@ -1587,45 +1696,58 @@ export default function App() {
                 ? "Bir odaya gir, sohbete katıl."
                 : "Katılımcı listesi için bağlanılıyor…"}
             </div>
-          </div>
-          <div className="nav-section dm-section">
-            <div className="nav-section-title">
-              <span>
-                <ChevronDown size={14} /> Direkt mesajlar
-              </span>
+          </NavigationSection>
+          <NavigationSection
+            title="Direkt mesajlar"
+            className="dm-section"
+            action={
               <IconButton
                 label="Yeni direkt mesaj"
-                onClick={() => setDialog("members")}
+                onClick={() => openMembers()}
               >
                 <Plus size={16} />
               </IconButton>
-            </div>
-            {data.members
-              .filter(
-                (u) =>
-                  u.id !== data.user.id &&
-                  !u.suspended &&
-                  !u.isBot &&
-                  ((u.role !== "guest" && data.user.role !== "guest") ||
-                    data.channels.some(
-                      (c) => c.kind === "dm" && c.memberIds?.includes(u.id),
-                    )),
-              )
-              .slice(0, 5)
-              .map((user) => (
-                <button
-                  key={user.id}
-                  className={`channel-nav dm-nav ${channel?.kind === "dm" && channel.memberIds?.includes(user.id) && view === "channel" ? "selected" : ""}`}
-                  onClick={() => void openDm(user)}
-                >
-                  <Avatar
-                    user={user}
-                    size="tiny"
-                    online={data.onlineIds.includes(user.id)}
-                  />
-                  <span>{user.name}</span>
-                </button>
-              ))}
+            }
+          >
+            {directMessageMembers.slice(0, 5).map((user) => (
+              <button
+                key={user.id}
+                className={`channel-nav dm-nav ${channel?.kind === "dm" && channel.memberIds?.includes(user.id) && view === "channel" ? "selected" : ""}`}
+                aria-current={
+                  channel?.kind === "dm" &&
+                  channel.memberIds?.includes(user.id) &&
+                  view === "channel"
+                    ? "page"
+                    : undefined
+                }
+                onClick={() => void openDm(user)}
+              >
+                <Avatar
+                  user={user}
+                  size="tiny"
+                  online={data.onlineIds.includes(user.id)}
+                />
+                <span>{user.name}</span>
+                {data.channels
+                  .filter(
+                    (c) =>
+                      c.kind === "dm" &&
+                      c.memberIds?.includes(user.id) &&
+                      (unread[c.id] || 0) > 0,
+                  )
+                  .map((c) => (
+                    <span key={c.id} className="count-badge">
+                      {unread[c.id]}
+                    </span>
+                  ))}
+              </button>
+            ))}
+            {directMessageMembers.length > 5 && (
+              <button className="add-channel" onClick={() => openMembers()}>
+                <Users size={15} /> Tüm kişileri gör (
+                {directMessageMembers.length})
+              </button>
+            )}
             {data.members.length === 1 && (
               <button
                 className="add-channel"
@@ -1636,7 +1758,7 @@ export default function App() {
                 İlk ekip arkadaşını davet et
               </button>
             )}
-          </div>
+          </NavigationSection>
         </div>
         <div className="sidebar-bottom">
           {canManage && (
@@ -1685,18 +1807,21 @@ export default function App() {
               <ChevronRight size={17} />
             </button>
           ) : (
-            <div className="invite-card">
-              <span className="invite-card-icon">
-                <Users size={20} />
-              </span>
-              <strong>Birlikte daha güzel.</strong>
-              <p>Ekibine de bir yer aç.</p>
-              <button disabled={!canManage} onClick={() => setDialog("invite")}>
-                Arkadaşlarını davet et
-                <ArrowRight size={15} />
+            canManage && (
+              <button
+                className="sidebar-invite"
+                onClick={() => setDialog("invite")}
+              >
+                <Plus size={17} /> Arkadaşlarını davet et
               </button>
-            </div>
+            )
           )}
+          <button
+            className="mobile-help-entry sidebar-utility"
+            onClick={() => setDialog("help")}
+          >
+            <CircleHelp size={18} /> Kullanım rehberi
+          </button>
           <div className="sidebar-status">
             <span
               className={
@@ -1707,18 +1832,22 @@ export default function App() {
             <span className="mola-wordmark">mola.</span>
           </div>
         </div>
-      </aside>
+      </div>
 
-      <div className="workspace-main">
+      <div className="workspace-main" inert={isMobile && mobileNav}>
         <header className="topbar">
           <div className="topbar-breadcrumb">
-            <IconButton
-              label="Gezinmeyi aç"
+            <button
+              ref={triggerRef}
+              type="button"
+              aria-label="Gezinmeyi aç"
+              aria-expanded={isMobile && mobileNav}
+              aria-controls="workspace-navigation"
               onClick={() => setMobileNav(true)}
-              className="mobile-menu"
+              className="icon-button mobile-menu"
             >
               <Menu size={21} />
-            </IconButton>
+            </button>
             <span className="workspace-breadcrumb">Çalışma alanı</span>
             <ChevronRight size={14} />
             <span>
@@ -1738,7 +1867,9 @@ export default function App() {
           >
             <Search size={16} />
             <span>{data.workspace.name} içinde ara</span>
-            <kbd>⌘ K</kbd>
+            <kbd>
+              {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"} K
+            </kbd>
           </button>
           <div className="topbar-actions">
             <IconButton
@@ -1769,7 +1900,7 @@ export default function App() {
             korunuyor.
           </div>
         )}
-        <main id="main-content" className="main-content">
+        <main id="main-content" className="main-content" tabIndex={-1}>
           {data.user.suspended || data.workspace.suspended ? (
             <section className="workspace-unavailable">
               <ShieldCheck size={32} />
@@ -1825,7 +1956,7 @@ export default function App() {
                       <button
                         className="member-stack"
                         aria-label="Kanal üyelerini gör"
-                        onClick={() => setDialog("members")}
+                        onClick={() => openMembers("channel")}
                       >
                         {conversationMembers.slice(0, 3).map((u) => (
                           <Avatar key={u.id} user={u} size="tiny" />
@@ -1842,7 +1973,7 @@ export default function App() {
                       </button>
                       <IconButton
                         label="Kanal bilgisi"
-                        pressed={details}
+                        pressed={details && !thread && !isMobile}
                         onClick={() => {
                           if (window.matchMedia("(max-width:1100px)").matches) {
                             setDialog("info");
@@ -1862,9 +1993,32 @@ export default function App() {
                     className="channel-tabs"
                     role="tablist"
                     aria-label="Kanal içeriği"
+                    onKeyDown={(event) => {
+                      const tabs = ["chat", "files", "pins"] as const;
+                      const index = tabs.indexOf(tab);
+                      const next =
+                        event.key === "ArrowRight"
+                          ? (index + 1) % tabs.length
+                          : event.key === "ArrowLeft"
+                            ? (index + tabs.length - 1) % tabs.length
+                            : event.key === "Home"
+                              ? 0
+                              : event.key === "End"
+                                ? tabs.length - 1
+                                : -1;
+                      if (next < 0) return;
+                      event.preventDefault();
+                      setTab(tabs[next]);
+                      event.currentTarget
+                        .querySelectorAll<HTMLButtonElement>('[role="tab"]')
+                        [next]?.focus();
+                    }}
                   >
                     <button
                       role="tab"
+                      id="channel-tab-chat"
+                      aria-controls="channel-content"
+                      tabIndex={tab === "chat" ? 0 : -1}
                       aria-selected={tab === "chat"}
                       className={tab === "chat" ? "active" : ""}
                       onClick={() => setTab("chat")}
@@ -1874,6 +2028,9 @@ export default function App() {
                     </button>
                     <button
                       role="tab"
+                      id="channel-tab-files"
+                      aria-controls="channel-content"
+                      tabIndex={tab === "files" ? 0 : -1}
                       aria-selected={tab === "files"}
                       className={tab === "files" ? "active" : ""}
                       onClick={() => setTab("files")}
@@ -1883,6 +2040,9 @@ export default function App() {
                     </button>
                     <button
                       role="tab"
+                      id="channel-tab-pins"
+                      aria-controls="channel-content"
+                      tabIndex={tab === "pins" ? 0 : -1}
                       aria-selected={tab === "pins"}
                       className={tab === "pins" ? "active" : ""}
                       onClick={() => setTab("pins")}
@@ -1892,11 +2052,25 @@ export default function App() {
                     </button>
                     <div className="channel-tab-end">
                       <span className="small-status-dot" />
-                      {onlineMembers.length} çevrimiçi
+                      {
+                        conversationMembers.filter((user) =>
+                          data.onlineIds.includes(user.id),
+                        ).length
+                      }{" "}
+                      çevrimiçi
                     </div>
                   </div>
                 )}
-                <div className="message-scroll" ref={scrollRef}>
+                <div
+                  id="channel-content"
+                  className="message-scroll"
+                  ref={scrollRef}
+                  role={view === "channel" ? "tabpanel" : undefined}
+                  aria-labelledby={
+                    view === "channel" ? `channel-tab-${tab}` : undefined
+                  }
+                  tabIndex={0}
+                >
                   {view === "saved" ? (
                     <>
                       {saved.length ? (
@@ -1977,7 +2151,7 @@ export default function App() {
                     <>
                       <div className="list-intro">
                         <FileText size={21} />
-                        <h2>Fikirlerin dosya hâli.</h2>
+                        <h2>Paylaşılan dosyalar</h2>
                         <p>Bu kanalda paylaşılan dosyalar.</p>
                       </div>
                       {channelFiles.length ? (
@@ -2006,6 +2180,22 @@ export default function App() {
                           icon={<FileText size={27} />}
                           title="İlk dosyaya yer açtık."
                           text="Mesaj kutusundaki ataş simgesinden dosya paylaşabilirsin."
+                          extra={
+                            !channel?.archived && channel ? (
+                              <button
+                                className="secondary-button"
+                                onClick={() =>
+                                  document
+                                    .querySelector<HTMLInputElement>(
+                                      '.conversation-panel input[type="file"]',
+                                    )
+                                    ?.click()
+                                }
+                              >
+                                <Plus size={16} /> Dosya paylaş
+                              </button>
+                            ) : undefined
+                          }
                         />
                       )}
                     </>
@@ -2013,7 +2203,7 @@ export default function App() {
                     <>
                       <div className="list-intro">
                         <Pin size={20} />
-                        <h2>Göz önünde dursun.</h2>
+                        <h2>Sabitlenen mesajlar</h2>
                         <p>Ekibin için önemli mesajlar.</p>
                       </div>
                       {pins.length ? (
@@ -2023,6 +2213,14 @@ export default function App() {
                           icon={<Pin size={27} />}
                           title="Henüz sabitlenen mesaj yok."
                           text="Mesaj menüsünden “Kanala sabitle” seçeneğiyle önemli notları buraya ekle."
+                          extra={
+                            <button
+                              className="secondary-button"
+                              onClick={() => setTab("chat")}
+                            >
+                              <MessageSquare size={16} /> Sohbete dön
+                            </button>
+                          }
                         />
                       )}
                     </>
@@ -2037,32 +2235,25 @@ export default function App() {
                         </button>
                       ) : (
                         <div className="channel-welcome">
-                          <span className="welcome-hash">
+                          <span className="welcome-hash" aria-hidden="true">
                             {channel?.kind === "dm" ? (
-                              <MessageCircle size={33} />
+                              <MessageCircle size={22} />
                             ) : (
-                              <Hash size={36} />
+                              <Hash size={24} />
                             )}
                           </span>
                           <div>
-                            <div className="welcome-eyebrow">
-                              {channel?.kind === "dm"
-                                ? "Sohbet burada başlıyor"
-                                : "Birlikte düşünmek için bir yer"}
-                            </div>
                             <h2>
                               {channel?.kind === "dm"
                                 ? `${channelName} ile sohbetin`
-                                : `Merhaba, #${channelName} 👋`}
+                                : `#${channelName} kanalının başlangıcı`}
                             </h2>
                             <p>
-                              {channel?.description ||
-                                "Fikirlerini paylaş, bir soru sor ya da sadece merhaba de."}
+                              {channel?.kind === "dm"
+                                ? "Bu konuşmayı yalnızca ikiniz görebilirsiniz."
+                                : "Bir fikir paylaş, soru sor veya ekibine merhaba de."}
                             </p>
                           </div>
-                          <span className="welcome-doodle" aria-hidden="true">
-                            <Sparkles size={29} />
-                          </span>
                         </div>
                       )}
                       {!messages.length && (
@@ -2076,10 +2267,7 @@ export default function App() {
                             dateLabel(messages[index - 1].createdAt) !==
                               dateLabel(message.createdAt)) && (
                             <div className="date-divider">
-                              <span>
-                                {dateLabel(message.createdAt)}
-                                <ChevronDown size={12} />
-                              </span>
+                              <span>{dateLabel(message.createdAt)}</span>
                             </div>
                           )}
                           {renderMessage(message)}
@@ -2088,6 +2276,23 @@ export default function App() {
                     </>
                   )}
                 </div>
+                {view === "channel" &&
+                  tab === "chat" &&
+                  awayFromLatest &&
+                  !messagesLoading && (
+                    <div className="latest-message-bar">
+                      <button
+                        onClick={() =>
+                          scrollRef.current?.scrollTo({
+                            top: scrollRef.current.scrollHeight,
+                            behavior: "smooth",
+                          })
+                        }
+                      >
+                        <ArrowDown size={15} /> Son mesajlara git
+                      </button>
+                    </div>
+                  )}
                 {view === "channel" && (
                   <>
                     <div className="typing-indicator" aria-live="polite">
@@ -2206,9 +2411,14 @@ export default function App() {
                       </IconButton>
                     </div>
                     <div className="details-body">
-                      <div className="channel-detail-mark">
-                        <Hash size={29} />
-                        <span className="detail-star">✳</span>
+                      <div className="channel-detail-mark" aria-hidden="true">
+                        {channel?.kind === "dm" ? (
+                          <MessageCircle size={23} />
+                        ) : channel?.visibility === "private" ? (
+                          <Lock size={23} />
+                        ) : (
+                          <Hash size={23} />
+                        )}
                       </div>
                       <h3>{channelName}</h3>
                       <p className="channel-about">
@@ -2218,63 +2428,33 @@ export default function App() {
                       <div className="channel-detail-meta">
                         <span>
                           <Users size={14} />
-                          {channel?.kind === "dm" ? 2 : data.members.length} üye
+                          {conversationMembers.length} üye
                         </span>
                         <span>
                           <ShieldCheck size={14} />
                           {channel?.kind === "dm"
                             ? "Özel sohbet"
-                            : "Ekip kanalı"}
+                            : channel?.visibility === "private"
+                              ? "Özel kanal"
+                              : "Ekip kanalı"}
                         </span>
                       </div>
                       <div className="detail-divider" />
-                      <div className="detail-section-title">
-                        <h4>Bir mesajdan fazlası</h4>
-                        <span>✦</span>
-                      </div>
                       <div className="huddle-card">
-                        <div className="huddle-art" aria-hidden="true">
-                          <div className="orbit orbit-one" />
-                          <div className="orbit orbit-two" />
-                          <span className="huddle-art-avatar one">
-                            <Avatar user={data.members[0]} size="small" />
-                          </span>
-                          <span className="huddle-art-avatar two">
-                            <Avatar
-                              user={data.members[1] || data.user}
-                              size="small"
-                            />
-                          </span>
-                          <span className="huddle-art-avatar three">
-                            <Avatar
-                              user={data.members[2] || data.user}
-                              size="small"
-                            />
-                          </span>
-                          <span className="huddle-art-center">
-                            <AudioLines size={28} />
-                          </span>
-                          <span className="art-spark spark-one">✧</span>
-                          <span className="art-spark spark-two">✦</span>
-                        </div>
-                        <h4>Bazen konuşmak daha kolay.</h4>
-                        <p>
-                          Bir araya gel, ekranını paylaş.
-                          <br />
-                          Fikri birlikte büyütün.
-                        </p>
+                        <h4>Birlikte üzerinden geçin</h4>
+                        <p>Sesli konuş, gerekirse ekranını paylaş.</p>
                         <button onClick={() => startCall()}>
                           <Headphones size={16} />
                           Sesli sohbet başlat
-                          <ArrowRight size={14} />
                         </button>
                       </div>
                       <div className="detail-divider" />
                       <div className="detail-section-title">
                         <h4>
-                          Ekip arkadaşları <span>{data.members.length}</span>
+                          Kanal üyeleri{" "}
+                          <span>{conversationMembers.length}</span>
                         </h4>
-                        <button onClick={() => setDialog("members")}>
+                        <button onClick={() => openMembers("channel")}>
                           Tümü
                         </button>
                       </div>
@@ -2322,14 +2502,14 @@ export default function App() {
                         <Plus size={15} />
                         Ekibe birini davet et
                       </button>
-                      <div className="quiet-note">
-                        <span>🌿</span>
-                        <p>
-                          İyi fikirlerin biraz
-                          <br />
-                          nefes almaya ihtiyacı var.
-                        </p>
-                      </div>
+                      {channel && channel.kind !== "dm" && (
+                        <button
+                          className="detail-invite"
+                          onClick={() => setChannelAccess(channel)}
+                        >
+                          <ShieldCheck size={15} /> Kanal erişimi ve üyeler
+                        </button>
+                      )}
                     </div>
                   </aside>
                 )
@@ -2488,6 +2668,12 @@ export default function App() {
             </button>
           )}
           <button
+            className="secondary-button full-width channel-members-button"
+            onClick={() => openMembers("channel")}
+          >
+            <Users size={17} /> Kanal üyelerini gör
+          </button>
+          <button
             className="primary-button full-width"
             onClick={() => {
               setDialog(null);
@@ -2502,45 +2688,71 @@ export default function App() {
       {dialog === "members" && (
         <Modal title="Ekibindeki insanlar" onClose={() => setDialog(null)}>
           <p className="modal-description">
-            {data.workspace.name} · {data.members.length} üye
+            {memberScope === "channel"
+              ? `${channelName} sohbetinin üyeleri`
+              : data.workspace.name}{" "}
+            ·{" "}
+            {memberScope === "channel"
+              ? conversationMembers.length
+              : data.members.filter((user) => !user.suspended).length}{" "}
+            üye
           </p>
+          <div className="search-input-wrap member-search">
+            <Search size={18} />
+            <input
+              aria-label="Ekip arkadaşını ara"
+              data-autofocus
+              placeholder="İsme göre ara…"
+              value={memberQuery}
+              onChange={(event) => setMemberQuery(event.target.value)}
+              autoFocus
+            />
+            {memberQuery && (
+              <IconButton
+                label="Kişi aramasını temizle"
+                onClick={() => setMemberQuery("")}
+              >
+                <X size={16} />
+              </IconButton>
+            )}
+          </div>
           <div className="members-modal-list">
-            {data.members
-              .filter((user) => !user.suspended)
-              .map((user) => (
-                <button
-                  key={user.id}
-                  disabled={
-                    user.id !== data.user.id &&
-                    (Boolean(user.isBot) ||
-                      ((user.role === "guest" || data.user.role === "guest") &&
-                        !data.channels.some(
-                          (c) =>
-                            c.kind === "dm" && c.memberIds?.includes(user.id),
-                        )))
-                  }
-                  onClick={() => void openDm(user)}
-                >
-                  <Avatar
-                    user={user}
-                    online={data.onlineIds.includes(user.id)}
-                  />
-                  <span>
-                    <strong>{user.name}</strong>
-                    <small>
-                      {user.status ||
-                        (data.onlineIds.includes(user.id)
-                          ? "Çevrimiçi"
-                          : "Çevrimdışı")}
-                    </small>
-                  </span>
-                  {user.id === data.user.id ? (
-                    <Settings2 size={17} />
-                  ) : (
-                    <MessageCircle size={18} />
-                  )}
-                </button>
-              ))}
+            {listedMembers.map((user) => (
+              <button
+                key={user.id}
+                disabled={
+                  user.id !== data.user.id &&
+                  (Boolean(user.isBot) ||
+                    ((user.role === "guest" || data.user.role === "guest") &&
+                      !data.channels.some(
+                        (c) =>
+                          c.kind === "dm" && c.memberIds?.includes(user.id),
+                      )))
+                }
+                onClick={() => void openDm(user)}
+              >
+                <Avatar user={user} online={data.onlineIds.includes(user.id)} />
+                <span>
+                  <strong>{user.name}</strong>
+                  <small>
+                    {user.status ||
+                      (data.onlineIds.includes(user.id)
+                        ? "Çevrimiçi"
+                        : "Çevrimdışı")}
+                  </small>
+                </span>
+                {user.id === data.user.id ? (
+                  <Settings2 size={17} />
+                ) : (
+                  <MessageCircle size={18} />
+                )}
+              </button>
+            ))}
+            {!listedMembers.length && (
+              <p className="member-search-empty" role="status">
+                Bu isimle bir kişi bulunamadı. Farklı bir isim deneyebilirsin.
+              </p>
+            )}
           </div>
           <button
             className="primary-button full-width"
@@ -2662,6 +2874,40 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+function NavigationSection({
+  title,
+  action,
+  children,
+  className = "",
+}: {
+  title: string;
+  action: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const id = useId();
+  return (
+    <section className={`nav-section ${className}`}>
+      <div className="nav-section-title">
+        <button
+          className="nav-section-toggle"
+          aria-expanded={expanded}
+          aria-controls={id}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}{" "}
+          {title}
+        </button>
+        {action}
+      </div>
+      <div id={id} hidden={!expanded}>
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -2840,6 +3086,8 @@ function SearchDialog({
     if (!canSearch) {
       setResults([]);
       setLoading(false);
+      setError("");
+      setHasMore(false);
       return;
     }
     let cancelled = false;
@@ -2877,6 +3125,7 @@ function SearchDialog({
         <Search size={21} />
         <input
           aria-label="Mesajlarda ara"
+          data-autofocus
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);

@@ -44,7 +44,9 @@ export function Avatar({
           .join("")
           .toLocaleUpperCase("tr")}
       </span>
-      {online && <i className="presence-dot" role="img" aria-label="Çevrimiçi" />}
+      {online && (
+        <i className="presence-dot" role="img" aria-label="Çevrimiçi" />
+      )}
     </span>
   );
 }
@@ -92,6 +94,8 @@ export function Modal({
   useEffect(() => {
     ref.current?.showModal();
     const dialog = ref.current;
+    // React's autoFocus runs before a closed native dialog can receive focus.
+    dialog?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
     return () => dialog?.close();
   }, []);
   return (
