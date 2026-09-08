@@ -1,0 +1,275 @@
+.modal:has(.call-preflight-polished) {
+  width: min(480px, calc(100vw - 32px));
+  color: #20292b;
+}
+
+.call-preflight-polished {
+  color: #20292b;
+  gap: 16px;
+  padding-top: 0;
+}
+
+.call-preflight-polished .call-preflight-room {
+  gap: 10px;
+  min-width: 0;
+}
+
+.call-preflight-polished .call-preflight-room > span {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: #eaf4ef;
+  color: #237459;
+}
+
+.call-preflight-polished .call-preflight-room > div {
+  min-width: 0;
+}
+
+.call-preflight-polished .call-preflight-room strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: -0.2px;
+}
+
+.call-preflight-polished .call-preflight-room p {
+  color: #687176;
+  font-size: 11px;
+  line-height: 1.6;
+  margin-top: 3px;
+}
+
+.call-join-mode {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #e2e6e8;
+  border-radius: 9px;
+  padding: 12px;
+  background: #f5f7f8;
+}
+
+.call-join-mode-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: #687176;
+}
+
+.call-join-mode > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.call-preflight-polished .call-muted-choice {
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  font-weight: 650;
+  cursor: pointer;
+  line-height: 1.6;
+}
+
+.call-preflight-polished .call-muted-choice input {
+  accent-color: #237459;
+  flex: 0 0 16px;
+  margin: 0;
+}
+
+.call-join-mode p {
+  margin: 3px 25px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #687176;
+}
+
+.call-preflight-polished .call-mic-test {
+  border: 0;
+  padding: 0;
+  gap: 10px;
+}
+
+.call-mic-test-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.call-mic-test-row > div {
+  min-width: 0;
+}
+
+.call-preflight-polished .call-mic-test small {
+  line-height: 1.6;
+  margin-top: 3px;
+  color: #687176;
+}
+
+.call-preflight-polished .call-mic-test button {
+  font-size: 11px;
+  padding: 8px 9px;
+  min-height: 34px;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.call-preflight-polished .call-level-meter {
+  height: 5px;
+  background: #e2e6e8;
+  border-radius: 3px;
+}
+
+.call-preflight-polished .call-level-meter span {
+  background: #237459;
+}
+
+.call-test-status {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #687176;
+}
+
+.call-test-status > svg {
+  flex-shrink: 0;
+}
+
+.call-test-status-detected {
+  color: #237459;
+}
+
+.call-setup-devices {
+  border-top: 1px solid #e2e6e8;
+  padding-top: 5px;
+}
+
+.call-setup-disclosure {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #20292b;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: left;
+}
+
+.call-setup-disclosure > svg:last-child {
+  margin-left: auto;
+  color: #687176;
+  transition: transform 120ms ease;
+}
+
+.call-setup-disclosure[aria-expanded="true"] > svg:last-child {
+  transform: rotate(180deg);
+}
+
+.call-setup-devices .call-device-settings-polished {
+  margin-top: 8px;
+}
+
+.call-device-settings-polished {
+  gap: 11px;
+  color: #20292b;
+}
+
+.call-device-settings-polished select {
+  min-height: 38px;
+  padding: 8px 9px;
+  border-color: #e2e6e8;
+  border-radius: 7px;
+  color: #20292b;
+}
+
+.call-device-settings-polished select:disabled {
+  color: #687176;
+  background: #f5f7f8;
+}
+
+.call-device-settings-polished .call-device-help {
+  color: #687176;
+}
+
+.call-preflight-polished .call-secondary,
+.call-device-settings-polished .call-secondary {
+  border: 1px solid #e2e6e8;
+  background: white;
+  color: #20292b;
+  border-radius: 7px;
+}
+
+.call-preflight-polished .call-secondary:hover,
+.call-device-settings-polished .call-secondary:hover {
+  background: #f5f7f8;
+}
+
+.call-preflight-polished .call-primary {
+  border-radius: 7px;
+  background: #153d36;
+}
+
+.call-preflight-polished button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.call-preflight-polished .call-preflight-actions {
+  border-top: 1px solid #e2e6e8;
+  padding-top: 15px;
+  margin-top: -4px;
+}
+
+.call-preflight-polished :is(button, input):focus-visible,
+.call-device-settings-polished :is(button, select):focus-visible {
+  outline: 2px solid #237459;
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .modal:has(.call-preflight-polished) {
+    width: calc(100vw - 24px);
+    padding: 18px 16px;
+  }
+
+  .call-preflight-polished {
+    gap: 14px;
+  }
+
+  .call-mic-test-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .call-preflight-polished .call-mic-test button {
+    align-self: flex-start;
+    min-height: 40px;
+  }
+
+  .call-preflight-polished .call-preflight-actions button {
+    min-height: 42px;
+    padding: 10px 12px;
+  }
+
+  .call-preflight-polished .call-muted-choice {
+    min-height: 30px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call-setup-disclosure > svg:last-child {
+    transition: none;
+  }
+}

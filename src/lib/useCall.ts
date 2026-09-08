@@ -61,6 +61,8 @@ function mediaError(
 }
 const stopStream = (stream: MediaStream | null) =>
   stream?.getTracks().forEach((track) => track.stop());
+const disconnectedMicrophone =
+  "Mikrofon bağlantısı kesildi. Ses ayarlarından başka bir mikrofon seçin.";
 
 export function useCall({
   socket,
@@ -148,6 +150,10 @@ export function useCall({
     joinTarget.current = null;
     joinedRef.current = false;
     joiningRef.current = false;
+    // A dismissed browser picker may settle long after leaving. The next call
+    // must be able to start its own media operation immediately.
+    mediaOperation.current = false;
+    setMediaBusy(false);
     for (const p of connections.current.values()) {
       p.pc.onconnectionstatechange = null;
       p.pc.onicecandidate = null;
@@ -545,9 +551,7 @@ export function useCall({
             if (version !== sessionVersion.current) return;
             setMic(false);
             publishState({ mic: false });
-            setError(
-              "Mikrofon bağlantısı kesildi. Cihazınızı bağlayıp görüşmeye yeniden katılın.",
-            );
+            setError(disconnectedMicrophone);
           };
         });
         currentChannel.current = channel.id;
@@ -602,9 +606,7 @@ export function useCall({
         ?.getAudioTracks()
         .some((track) => track.readyState === "live")
     ) {
-      setError(
-        "Mikrofon bağlantısı kesildi. Cihazınızı bağlayıp görüşmeye yeniden katılın.",
-      );
+      setError(disconnectedMicrophone);
       return;
     }
     const enabled = !stateRef.current.mic;
@@ -644,7 +646,10 @@ export function useCall({
         }
         const track = acquired.getAudioTracks()[0];
         if (!track) throw new Error("Mikrofon bulunamadı.");
-        track.enabled = stateRef.current.mic;
+        // Senders may switch at different times. Keep the candidate silent while
+        // the old local track still owns the microphone toggle, then apply the
+        // latest state once replacement succeeds for the whole call.
+        track.enabled = false;
         const results = await Promise.allSettled(
           [...connections.current.values()].map((p) =>
             p.audio?.sender.replaceTrack(track),
@@ -668,23 +673,27 @@ export function useCall({
           oldTrack.stop();
         }
         local.current?.addTrack(track);
+        track.enabled = stateRef.current.mic;
         track.onended = () => {
           if (version !== sessionVersion.current) return;
           setMic(false);
           publishState({ mic: false });
-          setError(
-            "Mikrofon bağlantısı kesildi. Ses ayarlarından başka bir mikrofon seçin.",
-          );
+          setError(disconnectedMicrophone);
         };
         setLocalStream(new MediaStream(local.current?.getTracks() ?? [track]));
         setPreferences({ inputDeviceId: deviceId });
+        setError((current) =>
+          current === disconnectedMicrophone ? null : current,
+        );
       } catch (err) {
         stopStream(acquired);
         if (version === sessionVersion.current)
           throw new Error(mediaError(err, "microphone"));
       } finally {
-        mediaOperation.current = false;
-        setMediaBusy(false);
+        if (version === sessionVersion.current) {
+          mediaOperation.current = false;
+          setMediaBusy(false);
+        }
       }
     },
     [setPreferences, publishState],
@@ -769,8 +778,10 @@ export function useCall({
         setError(mediaError(err, "camera"));
       }
     } finally {
-      mediaOperation.current = false;
-      setMediaBusy(false);
+      if (version === sessionVersion.current) {
+        mediaOperation.current = false;
+        setMediaBusy(false);
+      }
     }
   }, [publishState]);
 
@@ -849,8 +860,10 @@ export function useCall({
           setError(mediaError(err, "screen"));
       }
     } finally {
-      mediaOperation.current = false;
-      setMediaBusy(false);
+      if (version === sessionVersion.current) {
+        mediaOperation.current = false;
+        setMediaBusy(false);
+      }
     }
   }, [publishState]);
 

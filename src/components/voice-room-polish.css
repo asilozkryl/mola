@@ -1,0 +1,230 @@
+.voice-preview {
+  color: #20292b;
+}
+.voice-room-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.voice-room-symbol {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border: 1px solid #d9e7df;
+  border-radius: 9px;
+  color: #237459;
+  background: #eaf4ef;
+}
+.voice-room-summary > div {
+  min-width: 0;
+  flex: 1;
+}
+.voice-room-summary strong {
+  font-size: 14px;
+  font-weight: 750;
+}
+.voice-room-summary > div > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  color: #687176;
+  font-size: 11px;
+}
+.voice-room-capacity {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #153d36;
+}
+.voice-room-capacity > span {
+  font-size: 12px;
+  color: #687176;
+  font-weight: 500;
+}
+.voice-preview .voice-preview-description {
+  margin: 16px 0 20px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #687176;
+  overflow-wrap: anywhere;
+}
+.voice-preview .voice-room-list-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 750;
+  margin: 0 0 10px;
+  color: #48564f;
+}
+.voice-room-list-heading > span {
+  color: #687176;
+  font-weight: 500;
+}
+.voice-preview .voice-participants-detailed {
+  padding: 0;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  gap: 0;
+}
+.voice-participants-detailed .voice-participant {
+  min-height: 58px;
+  padding: 8px 0;
+  border-top: 1px solid #edf0ee;
+}
+.voice-participants-detailed .voice-participant-profile {
+  gap: 11px;
+}
+.voice-participants-detailed .voice-participant-name {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: flex-start;
+  white-space: normal;
+  font-size: 12px;
+  font-weight: 650;
+}
+.voice-participants-detailed .voice-participant-name > span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.voice-participants-detailed .voice-participant-name > small {
+  color: #687176;
+  font-size: 10px;
+  font-weight: 500;
+}
+.voice-preview .voice-preview-empty {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 13px;
+  padding: 18px 14px;
+  margin: 0;
+  border: 1px dashed #dce3df;
+  border-radius: 8px;
+  background: #f8faf9;
+}
+.voice-preview .voice-preview-empty > svg {
+  flex-shrink: 0;
+  margin: 0;
+  color: #687176;
+}
+.voice-preview .voice-preview-empty h3 {
+  margin: 0 0 5px;
+  font-size: 13px;
+}
+.voice-preview .voice-preview-empty p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: #687176;
+}
+.voice-room-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f5f7f8;
+  color: #58665d;
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.voice-room-footer {
+  border-top: 1px solid #e2e6e8;
+  margin-top: 20px;
+  padding-top: 16px;
+}
+.voice-room-footer > span {
+  display: block;
+  font-size: 11px;
+  line-height: 1.65;
+  color: #687176;
+  margin-bottom: 12px;
+}
+.voice-room-footer > button {
+  min-height: 40px;
+  font-size: 12px;
+}
+.voice-room-footer > button svg:last-child {
+  margin-left: auto;
+}
+.voice-channel-entry .voice-nav {
+  border-radius: 5px;
+}
+.voice-channel-entry .voice-nav.voice-active {
+  background: #e6f1ea;
+  color: #153d36;
+  box-shadow: inset 2px 0 #237459;
+}
+.voice-channel-entry .voice-peer-count {
+  font-size: 10px;
+  padding: 1px 5px;
+  background: #eaf4ef;
+  color: #237459;
+  border-radius: 4px;
+}
+.voice-room-idle {
+  color: #687176;
+  font-size: 10px;
+  font-weight: 400;
+}
+.voice-channel-entry .voice-participants {
+  border-left: 1px solid #dfe6e2;
+  margin: 3px 0 7px 19px;
+  padding: 0 0 0 9px;
+}
+.voice-switch-details {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-block: 1px solid #e2e6e8;
+  padding: 16px 0;
+  margin: 20px 0;
+}
+.voice-switch-details > div {
+  flex: 1;
+  min-width: 0;
+}
+.voice-switch-details small {
+  display: block;
+  color: #687176;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.voice-switch-details strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.voice-switch-details > svg {
+  flex-shrink: 0;
+  color: #687176;
+}
+.voice-switch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.voice-switch-actions > button {
+  min-height: 40px;
+  font-size: 12px;
+}
+@media (max-width: 400px) {
+  .voice-switch-actions > button {
+    flex: 1 0 100%;
+  }
+  .voice-channel-entry .voice-channel-row > .icon-button {
+    min-width: 30px;
+  }
+}

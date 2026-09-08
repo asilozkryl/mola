@@ -1,9 +1,18 @@
-import { useEffect, useRef, useState } from "react";
-import { Headphones, Mic, Square } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+  Check,
+  ChevronDown,
+  Headphones,
+  Mic,
+  MicOff,
+  SlidersHorizontal,
+  Square,
+} from "lucide-react";
 import type { CallController } from "../lib/useCall";
 import { monitorAudio } from "../lib/audioMeter";
 import { Modal } from "./ui";
 import "./call.css";
+import "./call-setup-polish.css";
 
 type OutputDevices = MediaDevices & {
   selectAudioOutput?: () => Promise<MediaDeviceInfo>;
@@ -24,16 +33,45 @@ export function MediaSettings({
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState("");
+  const mounted = useRef(false);
+  const operation = useRef(0);
+  const locked = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      operation.current++;
+      locked.current = false;
+    };
+  }, []);
   useEffect(() => {
     let active = true;
-    const refresh = () =>
-      void navigator.mediaDevices
-        ?.enumerateDevices()
-        .then((list) => {
-          if (active) setDevices(list);
-        })
-        .catch(() => {});
-    refresh();
+    let revision = 0;
+    const refresh = async () => {
+      const version = ++revision;
+      setLoading(true);
+      try {
+        const list = await navigator.mediaDevices?.enumerateDevices();
+        if (active && version === revision) {
+          setDevices(list ?? []);
+          setNotice(
+            list
+              ? ""
+              : "Cihaz listesi kullanılamıyor. Sistem varsayılanıyla devam edebilirsin.",
+          );
+        }
+      } catch {
+        if (active && version === revision)
+          setNotice(
+            "Cihaz listesi alınamadı. Cihaz bağlantısını kontrol edip ses ayarlarını yeniden aç.",
+          );
+      } finally {
+        if (active && version === revision) setLoading(false);
+      }
+    };
+    void refresh();
     navigator.mediaDevices?.addEventListener("devicechange", refresh);
     return () => {
       active = false;
@@ -46,43 +84,54 @@ export function MediaSettings({
   const outputs = devices.filter(
     (device) => device.kind === "audiooutput" && device.deviceId,
   );
-  const changeOutput = async (id: string) => {
+  const performChange = async (
+    action: (isCurrent: () => boolean) => Promise<void>,
+    message: string,
+  ) => {
+    if (locked.current || call.mediaBusy) return;
+    locked.current = true;
+    const version = ++operation.current;
+    const isCurrent = () => mounted.current && version === operation.current;
     setError("");
     setBusy(true);
     try {
-      const probe = document.createElement("audio");
-      await probe.setSinkId(id);
-      call.setPreferences({ outputDeviceId: id });
-    } catch {
-      setError(
-        "Bu hoparlör seçilemedi. Tarayıcının ses çıkışı iznini ve cihaz bağlantısını kontrol edin.",
-      );
+      await action(isCurrent);
+    } catch (err) {
+      if (isCurrent())
+        setError(
+          err instanceof Error && !(err instanceof DOMException)
+            ? err.message
+            : message,
+        );
     } finally {
-      setBusy(false);
+      if (isCurrent()) {
+        locked.current = false;
+        setBusy(false);
+      }
     }
   };
+  const changeOutput = (id: string) =>
+    performChange(async (isCurrent) => {
+      const probe = document.createElement("audio");
+      await probe.setSinkId(id);
+      if (isCurrent()) call.setPreferences({ outputDeviceId: id });
+    }, "Bu hoparlör seçilemedi. Tarayıcının ses çıkışı iznini ve cihaz bağlantısını kontrol et.");
   return (
-    <div className="call-device-settings">
+    <div
+      className="call-device-settings call-device-settings-polished"
+      aria-busy={busy}
+    >
       <label>
         Mikrofon
         <select
           value={call.preferences.inputDeviceId}
-          disabled={busy || call.mediaBusy}
+          disabled={busy || call.mediaBusy || loading}
           onChange={(event) => {
             const value = event.target.value;
-            beforeInputChange?.();
-            setError("");
-            setBusy(true);
-            void call
-              .selectInputDevice(value)
-              .catch((err: unknown) =>
-                setError(
-                  err instanceof Error
-                    ? err.message
-                    : "Mikrofon değiştirilemedi.",
-                ),
-              )
-              .finally(() => setBusy(false));
+            void performChange(async () => {
+              beforeInputChange?.();
+              await call.selectInputDevice(value);
+            }, "Mikrofon değiştirilemedi. Cihaz bağlantısını kontrol et.");
           }}
         >
           <option value="">Sistem varsayılanı</option>
@@ -105,7 +154,7 @@ export function MediaSettings({
         Hoparlör
         <select
           value={call.preferences.outputDeviceId}
-          disabled={busy || !canSelectOutput()}
+          disabled={busy || call.mediaBusy || loading || !canSelectOutput()}
           onChange={(event) => void changeOutput(event.target.value)}
         >
           <option value="">Sistem varsayılanı</option>
@@ -136,32 +185,39 @@ export function MediaSettings({
           <button
             type="button"
             className="call-secondary"
-            disabled={busy}
+            disabled={busy || call.mediaBusy}
             onClick={() => {
-              setError("");
-              void (navigator.mediaDevices as OutputDevices)
-                .selectAudioOutput!()
-                .then((device) => {
-                  setDevices((list) => [
-                    ...list.filter((item) => item.deviceId !== device.deviceId),
-                    device,
-                  ]);
-                  return changeOutput(device.deviceId);
-                })
-                .catch(() =>
-                  setError(
-                    "Hoparlör seçimi tamamlanmadı. Sistem varsayılanıyla devam edebilirsiniz.",
-                  ),
-                );
+              void performChange(async (isCurrent) => {
+                const device = await (navigator.mediaDevices as OutputDevices)
+                  .selectAudioOutput!();
+                if (!isCurrent()) return;
+                const probe = document.createElement("audio");
+                await probe.setSinkId(device.deviceId);
+                if (!isCurrent()) return;
+                setDevices((list) => [
+                  ...list.filter((item) => item.deviceId !== device.deviceId),
+                  device,
+                ]);
+                call.setPreferences({ outputDeviceId: device.deviceId });
+              }, "Hoparlör seçimi tamamlanmadı. Sistem varsayılanıyla devam edebilirsin.");
             }}
           >
             Başka bir hoparlör seç
           </button>
         )}
       <p className="call-device-help">
-        Cihaz adları mikrofon izninden sonra görünür. Değişiklikler bu
-        tarayıcıdaki görüşmeler için geçerlidir.
+        Cihaz adları mikrofon izninden sonra görünür. Seçimin bu tarayıcıdaki
+        sonraki görüşmelerde kullanılır.
       </p>
+      {(loading || busy || notice) && (
+        <p className="call-device-help" role="status">
+          {busy
+            ? "Cihaz değiştiriliyor…"
+            : loading
+              ? "Cihazlar yükleniyor…"
+              : notice}
+        </p>
+      )}
       {error && (
         <p className="call-device-error" role="alert">
           {error}
@@ -174,11 +230,17 @@ export function MediaSettings({
 export function CallSetup({
   call,
   channel,
+  participantCount,
+  capacity,
+  connected = true,
   onJoin,
   onClose,
 }: {
   call: CallController;
   channel: { id: string; name: string };
+  participantCount?: number;
+  capacity?: number;
+  connected?: boolean;
   onJoin: () => void;
   onClose: () => void;
 }) {
@@ -186,6 +248,15 @@ export function CallSetup({
   const [busy, setBusy] = useState(false);
   const [level, setLevel] = useState(0);
   const [error, setError] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [heardAudio, setHeardAudio] = useState(false);
+  const [tested, setTested] = useState(false);
+  const settingsId = useId();
+  const modeHelpId = useId();
+  const full =
+    participantCount !== undefined &&
+    capacity !== undefined &&
+    participantCount >= capacity;
   const cleanup = useRef<(() => void) | null>(null);
   const generation = useRef(0);
   const mounted = useRef(true);
@@ -212,6 +283,8 @@ export function CallSetup({
     stop();
     setBusy(true);
     setError("");
+    setHeardAudio(false);
+    setTested(false);
     const version = generation.current;
     let stream: MediaStream | null = null;
     try {
@@ -233,9 +306,14 @@ export function CallSetup({
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
-      const disposeMeter = monitorAudio([{ id: "test", stream }], (levels) =>
-        setLevel(Math.min(100, Math.round((levels.test ?? 0) * 500))),
-      );
+      if (!stream.getAudioTracks().some((track) => track.readyState === "live"))
+        throw new Error("Mikrofon bulunamadı. Cihazını bağlayıp tekrar dene.");
+      const disposeMeter = monitorAudio([{ id: "test", stream }], (levels) => {
+        if (!mounted.current || version !== generation.current) return;
+        const measured = Math.min(100, Math.round((levels.test ?? 0) * 500));
+        setLevel(measured);
+        if (measured > 3) setHeardAudio(true);
+      });
       const captured = stream;
       cleanup.current = () => {
         disposeMeter();
@@ -245,22 +323,32 @@ export function CallSetup({
         track.addEventListener(
           "ended",
           () => {
+            if (!mounted.current || version !== generation.current) return;
             stop();
+            setTested(false);
             setError("Mikrofon bağlantısı kesildi. Cihazınızı kontrol edin.");
           },
           { once: true },
         ),
       );
       setTesting(true);
+      setTested(true);
     } catch (err) {
       stream?.getTracks().forEach((track) => track.stop());
       if (mounted.current && version === generation.current)
         setError(
           err instanceof DOMException && err.name === "NotAllowedError"
             ? "Mikrofon izni verilmedi. Site izinlerinden mikrofonu açıp tekrar deneyin."
-            : err instanceof Error && !(err instanceof DOMException)
-              ? err.message
-              : "Mikrofon başlatılamadı. Cihaz bağlantısını ve site izinlerini kontrol edin.",
+            : err instanceof DOMException && err.name === "NotFoundError"
+              ? "Mikrofon bulunamadı. Cihazını bağlayıp tekrar dene."
+              : err instanceof DOMException &&
+                  err.name === "OverconstrainedError"
+                ? "Seçili mikrofon kullanılamıyor. Ses ayarlarından başka bir mikrofon seç."
+                : err instanceof DOMException && err.name === "NotReadableError"
+                  ? "Mikrofon başka bir uygulamada kullanılıyor olabilir. Cihazını kontrol edip tekrar dene."
+                  : err instanceof Error && !(err instanceof DOMException)
+                    ? err.message
+                    : "Mikrofon başlatılamadı. Cihaz bağlantısını ve site izinlerini kontrol edin.",
         );
     } finally {
       if (mounted.current && version === generation.current) setBusy(false);
@@ -274,29 +362,70 @@ export function CallSetup({
         onClose();
       }}
     >
-      <div className="call-preflight">
+      <div className="call-preflight call-preflight-polished">
         <div className="call-preflight-room">
           <span>
-            <Headphones size={22} />
+            <Headphones size={19} />
           </span>
           <div>
             <strong>{channel.name}</strong>
-            <p>Katılmadan önce sesini kontrol edebilirsin.</p>
+            <p>
+              {!connected
+                ? "Bağlantı bekleniyor. Katılımcılar güncellenemiyor."
+                : participantCount === undefined
+                  ? "Katılmadan önce sesini kontrol edebilirsin."
+                  : participantCount === 0
+                    ? "Henüz kimse yok. Görüşmeyi sen başlat."
+                    : `${participantCount} kişi görüşmede${capacity ? ` · En fazla ${capacity} kişi` : ""}`}
+            </p>
           </div>
         </div>
-        <MediaSettings
-          call={call}
-          beforeInputChange={stop}
-          refreshKey={Number(testing)}
-        />
-        <div className="call-mic-test">
+        <div className="call-join-mode">
+          <span className="call-join-mode-icon" aria-hidden="true">
+            {call.preferences.startMuted ? (
+              <MicOff size={19} />
+            ) : (
+              <Mic size={19} />
+            )}
+          </span>
           <div>
-            <strong>Mikrofon testi</strong>
-            <small>
+            <label className="call-muted-choice">
+              <input
+                type="checkbox"
+                checked={call.preferences.startMuted}
+                aria-describedby={modeHelpId}
+                onChange={(event) =>
+                  call.setPreferences({ startMuted: event.target.checked })
+                }
+              />
+              Mikrofonum kapalı katıl
+            </label>
+            <p id={modeHelpId}>
+              {call.preferences.startMuted
+                ? "Mikrofon izni gerekir; sesin kapalı başlar."
+                : "Katıldığında mikrofonun açık olacak."}{" "}
+              Kameran kapalı başlar.
+            </p>
+          </div>
+        </div>
+        <div className="call-mic-test">
+          <div className="call-mic-test-row">
+            <div>
+              <strong>Sesini kontrol et</strong>
+              <small>İsteğe bağlı; sesin kaydedilmez veya paylaşılmaz.</small>
+            </div>
+            <button
+              type="button"
+              className="call-secondary"
+              onClick={() => (testing || busy ? stop() : void testMicrophone())}
+            >
+              {testing || busy ? <Square size={14} /> : <Mic size={14} />}
               {testing
-                ? "Konuşurken ses seviyesi hareket eder."
-                : "Sesin kaydedilmez ve diğer üyelere gönderilmez."}
-            </small>
+                ? "Testi durdur"
+                : busy
+                  ? "Testi iptal et"
+                  : "Mikrofonu test et"}
+            </button>
           </div>
           <div
             className="call-level-meter"
@@ -305,36 +434,75 @@ export function CallSetup({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={level}
+            aria-valuetext={
+              testing
+                ? `${level} / 100`
+                : busy
+                  ? "Mikrofon izni bekleniyor"
+                  : "Test çalışmıyor"
+            }
           >
             <span style={{ width: `${level}%` }} />
           </div>
-          <button
-            type="button"
-            className="call-secondary"
-            disabled={busy}
-            onClick={() => (testing ? stop() : void testMicrophone())}
+          <p
+            className={`call-test-status${heardAudio && tested && !busy ? " call-test-status-detected" : ""}`}
+            role="status"
           >
-            {testing ? <Square size={15} /> : <Mic size={15} />}
-            {testing
-              ? "Testi durdur"
-              : busy
-                ? "Mikrofon bekleniyor…"
-                : "Mikrofonu test et"}
-          </button>
+            {heardAudio && tested && !busy && (
+              <Check size={13} aria-hidden="true" />
+            )}
+            {busy
+              ? "Mikrofon izni bekleniyor. Tarayıcıdaki izin isteğini kontrol et."
+              : testing
+                ? heardAudio
+                  ? "Ses algılandı. Konuşurken seviyeyi takip edebilirsin."
+                  : "Konuş ve mikrofon seviyesini kontrol et."
+                : tested
+                  ? heardAudio
+                    ? "Test tamamlandı, ses algılandı."
+                    : "Test tamamlandı. Ses algılanmadı; mikrofonunu kontrol et."
+                  : "Henüz test edilmedi."}
+          </p>
         </div>
-        <label className="call-muted-choice">
-          <input
-            type="checkbox"
-            checked={call.preferences.startMuted}
-            onChange={(event) =>
-              call.setPreferences({ startMuted: event.target.checked })
-            }
-          />
-          Mikrofonum kapalı katıl
-        </label>
         {error && (
           <p className="call-device-error" role="alert">
             {error}
+          </p>
+        )}
+        <div className="call-setup-devices">
+          <button
+            type="button"
+            className="call-setup-disclosure"
+            aria-expanded={settingsOpen}
+            aria-controls={settingsId}
+            onClick={() => setSettingsOpen((open) => !open)}
+          >
+            <SlidersHorizontal size={15} aria-hidden="true" />
+            Ses ayarları
+            <ChevronDown size={15} aria-hidden="true" />
+          </button>
+          <div id={settingsId} hidden={!settingsOpen}>
+            {settingsOpen && (
+              <MediaSettings
+                call={call}
+                beforeInputChange={() => {
+                  stop();
+                  setHeardAudio(false);
+                  setTested(false);
+                  setError("");
+                }}
+                refreshKey={Number(testing)}
+              />
+            )}
+          </div>
+        </div>
+        {(full || !call.canJoin) && (
+          <p className="call-device-error" role="status">
+            {!connected
+              ? "Görüşmeye katılmak için bağlantının yeniden kurulmasını bekle."
+              : full
+                ? "Bu görüşme şu an dolu. Bir kişi ayrıldığında katılabilirsin."
+                : "Şu an görüşmeye katılamıyorsun. Kanal erişimini kontrol et."}
           </p>
         )}
         <div className="call-preflight-actions">
@@ -349,7 +517,7 @@ export function CallSetup({
           </button>
           <button
             className="call-primary"
-            disabled={!call.canJoin}
+            disabled={!call.canJoin || full}
             onClick={() => {
               stop();
               onJoin();

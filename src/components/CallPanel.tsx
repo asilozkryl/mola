@@ -18,12 +18,16 @@ import {
   Settings2,
   PictureInPicture2,
   MessageSquare,
+  AlertCircle,
   X,
 } from "lucide-react";
 import type { CallController, CallParticipant } from "../lib/useCall";
 import type { ConnectionQuality } from "../../shared/call-types";
 import { MediaSettings } from "./CallSetup";
+import { Avatar } from "./ui";
+import { ProfileIdentity } from "./ProfileIdentity";
 import "./call.css";
+import "./call-panel-polish.css";
 
 function MediaVideo({
   stream,
@@ -255,13 +259,6 @@ function useShareWindow(stream: MediaStream | null, title: string) {
   return { open, error };
 }
 
-const initials = (name: string) =>
-  name
-    .split(" ")
-    .map((word) => word[0])
-    .join("")
-    .slice(0, 2)
-    .toLocaleUpperCase("tr");
 const connectionLabel = (state: RTCPeerConnectionState) =>
   ({
     new: "Bağlantı hazırlanıyor",
@@ -275,58 +272,75 @@ const connectionLabel = (state: RTCPeerConnectionState) =>
 function ParticipantTile({
   peer,
   local = false,
+  selfId,
+  onOpenProfile,
 }: {
   peer: CallParticipant;
   local?: boolean;
+  selfId: string;
+  onOpenProfile?: (id: string) => void;
 }) {
   const connected = local || peer.connectionState === "connected";
-  return (
-    <div
-      className={`call-person ${peer.camera && connected ? "call-person-camera" : ""} ${peer.speaking && peer.mic ? "call-person-speaking" : ""}`}
-      aria-label={`${peer.user.name}${peer.speaking && peer.mic ? ": konuşuyor" : ""}`}
-    >
-      {peer.camera && connected && peer.stream ? (
-        <MediaVideo stream={peer.stream} mirror={local} />
-      ) : (
-        <div
-          className="call-person-avatar"
-          style={{ background: peer.user.color || "#b8cabe" }}
-        >
-          {initials(peer.user.name)}
-        </div>
-      )}
-      {!connected && (
-        <span
-          className={`call-connection-badge ${peer.connectionState === "failed" ? "call-connection-failed" : ""}`}
-        >
-          <Signal size={12} />
-          {connectionLabel(peer.connectionState)}
+  const speaking = connected && peer.speaking && peer.mic;
+  const cameraVisible = peer.camera && connected && Boolean(peer.stream);
+  const identity = (
+    <>
+      {!cameraVisible && (
+        <span className="call-person-avatar">
+          <Avatar user={peer.user} />
         </span>
       )}
-      <div className="call-person-caption">
-        <span>
+      <span className="call-person-caption">
+        <span className="call-person-name">
           {peer.user.name}
           {local && <small> (siz)</small>}
         </span>
-        {peer.mic ? (
-          <Mic size={14} role="img" aria-label="Mikrofon açık" />
-        ) : (
-          <span className="call-muted-mark" title="Mikrofon kapalı">
-            <MicOff size={14} role="img" aria-label="Mikrofon kapalı" />
+        <span className="call-person-status">
+          {peer.mic ? <Mic size={13} /> : <MicOff size={13} />}
+          {!connected
+            ? connectionLabel(peer.connectionState)
+            : speaking
+              ? "Konuşuyor"
+              : peer.mic
+                ? "Mikrofon açık"
+                : "Mikrofon kapalı"}
+        </span>
+      </span>
+    </>
+  );
+  return (
+    <div
+      className={`call-person ${cameraVisible ? "call-person-camera" : "call-person-audio"} ${speaking ? "call-person-speaking" : ""}`}
+      aria-label={`${peer.user.name}${speaking ? ": konuşuyor" : ""}`}
+    >
+      {cameraVisible && <MediaVideo stream={peer.stream} mirror={local} />}
+      {onOpenProfile && !peer.user.suspended ? (
+        <ProfileIdentity
+          user={peer.user}
+          online={connected}
+          connected={connected}
+          selfId={selfId}
+          onOpen={onOpenProfile}
+          className="call-person-identity"
+        >
+          {identity}
+        </ProfileIdentity>
+      ) : (
+        <div className="call-person-identity">{identity}</div>
+      )}
+      <div className="call-person-meta">
+        {peer.sharing && (
+          <span className="call-person-sharing">
+            <MonitorUp size={13} />
+            <span>Ekran paylaşıyor</span>
           </span>
         )}
+        {!local && connected && (
+          <div className="call-person-quality">
+            <QualityBadge quality={peer.quality} />
+          </div>
+        )}
       </div>
-      {peer.sharing && (
-        <span className="call-person-sharing">
-          <MonitorUp size={13} />
-          <span>Ekran paylaşıyor</span>
-        </span>
-      )}
-      {!local && connected && (
-        <div className="call-person-quality">
-          <QualityBadge quality={peer.quality} />
-        </div>
-      )}
     </div>
   );
 }
@@ -336,11 +350,13 @@ export function CallPanel({
   onClose,
   minimized = false,
   onExpand,
+  onOpenProfile,
 }: {
   call: CallController;
   onClose: () => void;
   minimized?: boolean;
   onExpand?: () => void;
+  onOpenProfile?: (id: string) => void;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
   const screenStage = useRef<HTMLDivElement>(null);
@@ -351,8 +367,12 @@ export function CallPanel({
   const [selectedSharing, setSelectedSharing] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [expandedScreen, setExpandedScreen] = useState(false);
+  const [fullscreenScreen, setFullscreenScreen] = useState(false);
   const [screenError, setScreenError] = useState("");
   const [outputError, setOutputError] = useState(false);
+  const settingsButton = useRef<HTMLButtonElement>(null);
+  const expandButton = useRef<HTMLButtonElement>(null);
+  const escapeCallback = useRef<() => void>(() => {});
   const outputErrorCallback = useRef(() => setOutputError(true));
   const blockedCallback = useRef(() => setAudioBlocked(true));
   const closeCallback = useRef(onClose);
@@ -360,7 +380,33 @@ export function CallPanel({
     if (!call.joined) call.leave();
     onClose();
   };
+  escapeCallback.current = () => {
+    if (document.fullscreenElement) {
+      void document
+        .exitFullscreen()
+        .catch(() =>
+          setScreenError("Tam ekrandan çıkılamadı. Escape tuşunu kullanın."),
+        );
+    } else if (expandedScreen) {
+      setExpandedScreen(false);
+      expandButton.current?.focus();
+    } else if (settingsOpen) {
+      setSettingsOpen(false);
+      settingsButton.current?.focus();
+    } else closeCallback.current();
+  };
   const visible = !minimized && Boolean(call.channelId || call.error);
+  useEffect(() => {
+    const update = () =>
+      setFullscreenScreen(
+        Boolean(
+          screenStage.current &&
+          document.fullscreenElement === screenStage.current,
+        ),
+      );
+    document.addEventListener("fullscreenchange", update);
+    return () => document.removeEventListener("fullscreenchange", update);
+  }, []);
   useEffect(() => {
     if (!call.joined) {
       setElapsed(0);
@@ -379,25 +425,40 @@ export function CallPanel({
     const element = dialog.current;
     element?.focus();
     const keydown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || document.querySelector("dialog[open]"))
+        return;
       if (event.key === "Escape") {
         event.preventDefault();
-        closeCallback.current();
+        escapeCallback.current();
       }
       if (event.key !== "Tab" || !element) return;
+      const stage = screenStage.current;
+      const focusRoot =
+        stage &&
+        (document.fullscreenElement === stage ||
+          stage.classList.contains("call-share-expanded"))
+          ? stage
+          : element;
       const focusable = [
-        ...element.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input, select, [tabindex="0"]',
+        ...focusRoot.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex="0"]',
         ),
       ].filter((node) => node.offsetParent !== null);
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       if (
         event.shiftKey &&
-        (document.activeElement === first || document.activeElement === element)
+        (document.activeElement === first ||
+          document.activeElement === focusRoot ||
+          !focusRoot.contains(document.activeElement))
       ) {
         event.preventDefault();
         last?.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (
+        !event.shiftKey &&
+        (document.activeElement === last ||
+          !focusRoot.contains(document.activeElement))
+      ) {
         event.preventDefault();
         first?.focus();
       }
@@ -405,9 +466,33 @@ export function CallPanel({
     document.addEventListener("keydown", keydown);
     return () => {
       document.removeEventListener("keydown", keydown);
-      previous?.focus();
+      window.requestAnimationFrame(() => {
+        if (
+          document.activeElement !== document.body &&
+          !element?.contains(document.activeElement)
+        )
+          return;
+        const target = previous?.isConnected
+          ? previous
+          : document.querySelector<HTMLButtonElement>(".call-dock-main");
+        target?.focus({ preventScroll: true });
+      });
     };
   }, [visible]);
+  useEffect(() => {
+    if (!visible || !settingsOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      const section = dialog.current?.querySelector<HTMLElement>(
+        ".call-settings-section",
+      );
+      const target =
+        section?.querySelector<HTMLElement>(
+          "select:not([disabled]), button:not([disabled]), input:not([disabled])",
+        ) || section;
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [visible, settingsOpen]);
 
   const localPeer: CallParticipant | null =
     call.user && call.joined
@@ -450,6 +535,25 @@ export function CallPanel({
     call.leave();
     onClose();
   };
+  const openProfile = onOpenProfile
+    ? (id: string) => {
+        onClose();
+        onOpenProfile(id);
+      }
+    : undefined;
+  const audioOnly = !participants.some(
+    (peer) =>
+      peer.camera &&
+      peer.stream &&
+      (peer.socketId === "local" || peer.connectionState === "connected"),
+  );
+  const dockNotice =
+    call.error ||
+    (outputError
+      ? "Hoparlör bağlantısını kontrol edin"
+      : audioBlocked
+        ? "Sesi etkinleştirin"
+        : screenError || shareWindow.error);
 
   return (
     <>
@@ -466,11 +570,15 @@ export function CallPanel({
       ))}
       {minimized ? (
         <div
-          className="call-dock"
+          className="call-dock call-dock-polished"
           role="region"
           aria-label="Devam eden görüşme"
         >
-          <button className="call-dock-main" onClick={onExpand}>
+          <button
+            className="call-dock-main"
+            onClick={onExpand}
+            title="Görüşmeyi aç"
+          >
             <span className="call-dock-icon">
               {call.sharing ? (
                 <MonitorUp size={19} />
@@ -489,6 +597,11 @@ export function CallPanel({
                       ? `${participants.length} kişi · ${time}`
                       : "Görüşme bildirimi"}
               </small>
+              {deafened && (
+                <small className="call-dock-listening-off">
+                  Hoparlör kapalı
+                </small>
+              )}
             </span>
             <ArrowUpRight size={18} />
           </button>
@@ -496,23 +609,67 @@ export function CallPanel({
             <button
               className={`call-dock-button ${!call.mic ? "call-dock-muted" : ""}`}
               aria-label={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
+              title={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
+              aria-pressed={call.mic}
               onClick={call.toggleMic}
             >
               {call.mic ? <Mic size={18} /> : <MicOff size={18} />}
             </button>
           )}
+          {call.joined && (
+            <button
+              className={`call-dock-button ${deafened ? "call-dock-muted" : ""}`}
+              aria-label={
+                deafened
+                  ? "Katılımcıların sesini aç"
+                  : "Katılımcıların sesini kapat"
+              }
+              title={
+                deafened
+                  ? "Katılımcıların sesini aç"
+                  : "Katılımcıların sesini kapat"
+              }
+              aria-pressed={!deafened}
+              onClick={() => setDeafened((value) => !value)}
+            >
+              {deafened ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </button>
+          )}
           <button
             className="call-dock-button call-dock-leave"
             aria-label="Görüşmeden ayrıl"
+            title="Görüşmeden ayrıl"
             onClick={leaveCall}
           >
             <PhoneOff size={18} />
           </button>
+          {call.sharing && (
+            <button
+              className="call-dock-sharing"
+              onClick={() => void call.toggleScreen()}
+              disabled={call.mediaBusy}
+              aria-label="Ekran paylaşımını durdur"
+            >
+              <MonitorUp size={14} /> Paylaşımı bitir
+            </button>
+          )}
+          {call.camera && (
+            <span className="call-dock-camera">
+              <Video size={13} /> Kamera açık
+            </span>
+          )}
+          {dockNotice && (
+            <button className="call-dock-notice" onClick={onExpand}>
+              <AlertCircle size={14} />
+              <span>{dockNotice}</span>
+              <ArrowUpRight size={14} />
+            </button>
+          )}
         </div>
       ) : (
         <div className="call-backdrop">
           <div
-            className="call-dialog"
+            className={`call-dialog call-panel ${audioOnly && !activeShare ? "call-panel-audio" : "call-panel-media"}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="call-heading"
@@ -577,6 +734,8 @@ export function CallPanel({
               <section
                 className="call-settings-section"
                 aria-label="Görüşme ses ayarları"
+                id="call-media-settings"
+                tabIndex={-1}
               >
                 <MediaSettings call={call} />
               </section>
@@ -594,14 +753,13 @@ export function CallPanel({
               <div className="call-audio-prompt" role="status">
                 <Signal size={17} />
                 <span>
-                  Görüşmeler doğrudan bağlantıyla çalışıyor. Bağlantı hizmeti
-                  henüz kurulmadığı için bazı mobil ve kurumsal ağlarda ses,
-                  kamera veya ekran paylaşımı bağlanamayabilir.
+                  Bazı mobil ve kurumsal ağlarda görüşme bağlanamayabilir. Ses
+                  gelmiyorsa başka bir ağ deneyin veya yöneticinize bildirin.
                 </span>
               </div>
             )}
             {audioBlocked && call.joined && (
-              <div className="call-audio-prompt">
+              <div className="call-audio-prompt" role="status">
                 <Volume2 size={17} />
                 <span>Tarayıcınız sesi başlatmak için onay bekliyor.</span>
                 <button
@@ -662,6 +820,7 @@ export function CallPanel({
                     <div
                       className={`call-share-stage ${expandedScreen ? "call-share-expanded" : ""}`}
                       ref={screenStage}
+                      tabIndex={-1}
                     >
                       <div className="call-share-heading">
                         <span>
@@ -674,6 +833,7 @@ export function CallPanel({
                           <button
                             className="call-icon-button"
                             aria-label="Paylaşılan ekranı ayrı pencerede aç"
+                            title="Ayrı pencerede aç"
                             onClick={() => void shareWindow.open()}
                           >
                             <PictureInPicture2 size={17} />
@@ -681,6 +841,13 @@ export function CallPanel({
                           <button
                             className="call-icon-button"
                             aria-label="Paylaşılan ekranı büyüt"
+                            title={
+                              expandedScreen || fullscreenScreen
+                                ? "Paylaşımı küçült"
+                                : "Paylaşımı büyüt"
+                            }
+                            aria-pressed={expandedScreen || fullscreenScreen}
+                            ref={expandButton}
                             onClick={() => {
                               setScreenError("");
                               if (document.fullscreenElement)
@@ -730,29 +897,36 @@ export function CallPanel({
                     </div>
                   )}
                   <div
-                    className={`call-people call-people-${Math.min(participants.length, 4)}`}
+                    className={`call-people call-people-${Math.min(participants.length, 4)} ${audioOnly ? "call-people-audio" : "call-people-video"}`}
+                    aria-label="Görüşmedeki katılımcılar"
                   >
                     {participants.map((peer) => (
                       <ParticipantTile
                         key={peer.socketId}
                         peer={peer}
                         local={peer.socketId === "local"}
+                        selfId={call.user?.id || ""}
+                        onOpenProfile={openProfile}
                       />
                     ))}
                     {participants.length === 1 && !activeShare && (
                       <div className="call-invite-space">
                         <span>
-                          <Headphones size={26} />
+                          <Headphones size={20} />
                         </span>
-                        <h3>Diğerleri de birazdan burada.</h3>
+                        <h3>Görüşmedeki ilk kişisiniz</h3>
                         <p>
-                          Ekip arkadaşlarınız aynı kanaldan
-                          <br />
-                          görüşmeye katılabilir.
+                          Ekip arkadaşlarınız bu kanaldan katılabilir. Beklerken
+                          sohbete dönebilirsiniz.
                         </p>
                         <div className="call-invite-detail">
-                          <span className="call-live-dot" />
-                          Mikrofonunuz {call.mic ? "açık" : "kapalı"}
+                          <button
+                            className="call-chat-return"
+                            onClick={() => closeCallback.current()}
+                          >
+                            <MessageSquare size={14} />
+                            Sohbette bekle
+                          </button>
                         </div>
                       </div>
                     )}
@@ -782,7 +956,9 @@ export function CallPanel({
                     >
                       {call.mic ? <Mic size={21} /> : <MicOff size={21} />}
                     </button>
-                    <span>Mikrofon</span>
+                    <span>
+                      Mikrofon <small>{call.mic ? "Açık" : "Kapalı"}</small>
+                    </span>
                   </div>
                   <div className="call-control-wrap">
                     <button
@@ -800,7 +976,9 @@ export function CallPanel({
                         <VideoOff size={21} />
                       )}
                     </button>
-                    <span>Kamera</span>
+                    <span>
+                      Kamera <small>{call.camera ? "Açık" : "Kapalı"}</small>
+                    </span>
                   </div>
                   <div className="call-control-wrap">
                     <button
@@ -833,7 +1011,9 @@ export function CallPanel({
                     >
                       {deafened ? <VolumeX size={21} /> : <Volume2 size={21} />}
                     </button>
-                    <span>Hoparlör</span>
+                    <span>
+                      Hoparlör <small>{deafened ? "Kapalı" : "Açık"}</small>
+                    </span>
                   </div>
                   <span className="call-controls-divider" />
                   <div className="call-control-wrap">
@@ -841,6 +1021,8 @@ export function CallPanel({
                       className={`call-control ${settingsOpen ? "call-control-active" : ""}`}
                       aria-label="Ses ayarları"
                       aria-expanded={settingsOpen}
+                      aria-controls="call-media-settings"
+                      ref={settingsButton}
                       onClick={() => setSettingsOpen((value) => !value)}
                     >
                       <Settings2 size={21} />
@@ -858,8 +1040,10 @@ export function CallPanel({
                     <span>Ayrıl</span>
                   </div>
                 </div>
-                <span className="call-footer-size">
-                  {participants.length}/6
+                <span className="call-footer-size" role="status">
+                  {call.mediaBusy
+                    ? "Cihaz yanıtı bekleniyor…"
+                    : `${participants.length}/6 kişi`}
                 </span>
               </footer>
             )}

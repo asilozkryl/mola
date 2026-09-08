@@ -221,6 +221,12 @@ export default function App() {
   const [callSetupChannel, setCallSetupChannel] = useState<Channel | null>(
     null,
   );
+  const [callSwitchTarget, setCallSwitchTarget] = useState<Channel | null>(
+    null,
+  );
+  const [createChannelKind, setCreateChannelKind] = useState<"text" | "voice">(
+    "text",
+  );
   const [channelAccess, setChannelAccess] = useState<Channel | null>(null);
   const [channelMenu, setChannelMenu] = useState<{
     channelId: string;
@@ -314,6 +320,7 @@ export default function App() {
         setRepliesHasMore(false);
         setShowCall(false);
         setCallSetupChannel(null);
+        setCallSwitchTarget(null);
         setChannelAccess(null);
         setChannelMenu(null);
         setChannelAction(null);
@@ -352,6 +359,11 @@ export default function App() {
         );
         setSaved((old) => old.filter((m) => accessible.has(m.channelId)));
         setCallSetupChannel((old) => (old && allowed.has(old.id) ? old : null));
+        setCallSwitchTarget((old) =>
+          old && allowed.has(old.id)
+            ? next.channels.find((candidate) => candidate.id === old.id) || null
+            : null,
+        );
         setChannelAccess((old) => (old && accessible.has(old.id) ? old : null));
         if (threadRef.current && !accessible.has(threadRef.current.channelId)) {
           threadRef.current = null;
@@ -477,6 +489,7 @@ export default function App() {
       adminOpen ||
       voicePreviewId ||
       callSetupChannel ||
+      callSwitchTarget ||
       channelAction ||
       channelAccess
     )
@@ -486,6 +499,7 @@ export default function App() {
     adminOpen,
     voicePreviewId,
     callSetupChannel,
+    callSwitchTarget,
     channelAction,
     channelAccess,
   ]);
@@ -497,6 +511,7 @@ export default function App() {
         channelAccess ||
         voicePreviewId ||
         callSetupChannel ||
+        callSwitchTarget ||
         adminOpen
       ) ||
       !isMobile
@@ -525,6 +540,7 @@ export default function App() {
     channelAccess,
     voicePreviewId,
     callSetupChannel,
+    callSwitchTarget,
     adminOpen,
     isMobile,
     sidebarRef,
@@ -1787,7 +1803,7 @@ export default function App() {
       call.channelId &&
       call.channelId !== target.id
     ) {
-      fail("Başka bir odaya geçmeden önce mevcut aramadan ayrıl.");
+      setCallSwitchTarget(target);
       return;
     }
     if (!call.joined && !call.joining) setCallSetupChannel(target);
@@ -2055,7 +2071,10 @@ export default function App() {
               <IconButton
                 label="Kanal oluştur"
                 disabled={!canCreate}
-                onClick={() => setDialog("channel")}
+                onClick={() => {
+                  setCreateChannelKind("text");
+                  setDialog("channel");
+                }}
               >
                 <Plus size={16} />
               </IconButton>
@@ -2112,7 +2131,10 @@ export default function App() {
             <button
               className="add-channel"
               disabled={!canCreate}
-              onClick={() => setDialog("channel")}
+              onClick={() => {
+                setCreateChannelKind("text");
+                setDialog("channel");
+              }}
             >
               <Plus size={16} />
               Kanal ekle
@@ -2130,12 +2152,25 @@ export default function App() {
           <NavigationSection
             title="Sesli odalar"
             className="voice-section"
-            action={<AudioLines size={15} />}
+            action={
+              <IconButton
+                label="Sesli oda oluştur"
+                disabled={!canCreate}
+                onClick={() => {
+                  setCreateChannelKind("voice");
+                  setDialog("channel");
+                }}
+              >
+                <Plus size={16} />
+              </IconButton>
+            }
           >
             {data.channels
               .filter((c) => c.kind === "voice" && !c.archived)
               .map((c) => {
                 const peers = connected ? voiceChannels.get(c.id) || [] : [];
+                const inThisRoom =
+                  (call.joined || call.joining) && call.channelId === c.id;
                 return (
                   <div key={c.id} className="voice-channel-entry">
                     <div
@@ -2144,7 +2179,10 @@ export default function App() {
                     >
                       <button
                         aria-label={c.name}
-                        className={`channel-nav voice-nav ${call.channelId === c.id ? "voice-active" : ""}`}
+                        title={
+                          inThisRoom ? "Görüşmeyi göster" : "Sesli odaya katıl"
+                        }
+                        className={`channel-nav voice-nav ${inThisRoom ? "voice-active" : ""}`}
                         onClick={() => startCall(c)}
                         onKeyDown={(event) => channelMenuKey(event, c)}
                       >
@@ -2158,9 +2196,10 @@ export default function App() {
                             {peers.length}
                           </span>
                         )}
-                        {call.channelId === c.id && (
-                          <span className="small-status-dot" />
+                        {connected && peers.length === 0 && (
+                          <small className="voice-room-idle">Boş</small>
                         )}
+                        {inThisRoom && <span className="small-status-dot" />}
                       </button>
                       <IconButton
                         label={`${c.name} katılımcılarını gör`}
@@ -3161,7 +3200,12 @@ export default function App() {
             setVoicePreviewId(null);
             openProfile(id);
           }}
-          isCurrentCall={call.channelId === voicePreview.id}
+          isCurrentCall={
+            (call.joined || call.joining) && call.channelId === voicePreview.id
+          }
+          activeChannelName={
+            call.joined || call.joining ? call.channelName : undefined
+          }
           busy={call.joining}
           connected={connected}
           onClose={() => setVoicePreviewId(null)}
@@ -3195,6 +3239,7 @@ export default function App() {
       )}
       {dialog === "channel" && (
         <CreateChannel
+          initialKind={createChannelKind}
           onClose={() => setDialog(null)}
           onCreate={(created) => {
             if (
@@ -3216,7 +3261,11 @@ export default function App() {
             if (created.kind === "text") selectChannel(created.id);
             if (created.visibility === "private") setChannelAccess(created);
             setDialog(null);
-            notify(`#${created.name} kanalı oluşturuldu.`);
+            notify(
+              created.kind === "voice"
+                ? `${created.name} sesli odası oluşturuldu.`
+                : `#${created.name} kanalı oluşturuldu.`,
+            );
           }}
         />
       )}
@@ -3513,12 +3562,23 @@ export default function App() {
           minimized={!showCall && call.joined}
           onExpand={() => setShowCall(true)}
           onClose={() => setShowCall(false)}
+          onOpenProfile={(id) => {
+            setShowCall(false);
+            openProfile(id);
+          }}
         />
       )}
       {callSetupChannel && (
         <CallSetup
           call={call}
           channel={callSetupChannel}
+          connected={connected}
+          participantCount={
+            connected && callSetupChannel.kind === "voice"
+              ? (voiceChannels.get(callSetupChannel.id) || []).length
+              : undefined
+          }
+          capacity={6}
           onClose={() => setCallSetupChannel(null)}
           onJoin={() => {
             const target = callSetupChannel;
@@ -3527,6 +3587,56 @@ export default function App() {
             void call.join({ id: target.id, name: target.name });
           }}
         />
+      )}
+      {callSwitchTarget && (
+        <Modal
+          title="Başka bir görüşmeye geç"
+          onClose={() => setCallSwitchTarget(null)}
+        >
+          <p className="modal-description">
+            {call.joined || call.joining
+              ? "Mevcut görüşmeden ayrılıp yeni odanın hazırlık ekranını açacaksın. Mikrofon, kamera ve ekran paylaşımın duracak."
+              : "Seçtiğin odanın hazırlık ekranını açabilirsin."}
+          </p>
+          <div className="voice-switch-details">
+            <div>
+              <small>Mevcut görüşme</small>
+              <strong>{call.channelName || "Görüşme sona erdi"}</strong>
+            </div>
+            <ArrowRight size={18} aria-hidden="true" />
+            <div>
+              <small>Geçeceğin oda</small>
+              <strong>{callSwitchTarget.name}</strong>
+            </div>
+          </div>
+          <div className="voice-switch-actions">
+            <button
+              className="secondary-button"
+              onClick={() => setCallSwitchTarget(null)}
+            >
+              Burada kal
+            </button>
+            <button
+              className="primary-button"
+              disabled={!connected}
+              onClick={() => {
+                const target = dataRef.current?.channels.find(
+                  (item) => item.id === callSwitchTarget.id && !item.archived,
+                );
+                if (!target) {
+                  setCallSwitchTarget(null);
+                  return;
+                }
+                call.leave();
+                setShowCall(false);
+                setCallSwitchTarget(null);
+                setCallSetupChannel(target);
+              }}
+            >
+              Ayrıl ve devam et <ArrowRight size={16} aria-hidden="true" />
+            </button>
+          </div>
+        </Modal>
       )}
       {channelAccess && (
         <ChannelAccessDialog
@@ -3688,13 +3798,15 @@ function EmptyState({
 function CreateChannel({
   onClose,
   onCreate,
+  initialKind = "text",
 }: {
   onClose: () => void;
   onCreate: (channel: Channel) => void;
+  initialKind?: "text" | "voice";
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [kind, setKind] = useState<"text" | "voice">("text");
+  const [kind, setKind] = useState<"text" | "voice">(initialKind);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -3722,6 +3834,7 @@ function CreateChannel({
           <button
             type="button"
             className={kind === "text" ? "active" : ""}
+            aria-pressed={kind === "text"}
             onClick={() => setKind("text")}
           >
             <Hash size={22} />
@@ -3731,6 +3844,7 @@ function CreateChannel({
           <button
             type="button"
             className={kind === "voice" ? "active" : ""}
+            aria-pressed={kind === "voice"}
             onClick={() => setKind("voice")}
           >
             <Volume2 size={22} />

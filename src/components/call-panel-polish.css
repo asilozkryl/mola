@@ -1,0 +1,717 @@
+/* The voice room stays compact until someone brings video or a shared screen. */
+.call-panel {
+  width: min(1020px, 100%);
+  border: 1px solid #e2e6e8;
+  border-radius: 14px;
+  background: #fff;
+  color: #20292b;
+  box-shadow: 0 24px 80px #102b2533;
+}
+.call-panel-audio {
+  width: min(780px, 100%);
+}
+.call-panel .call-header {
+  padding: 17px 20px;
+  border-color: #e2e6e8;
+}
+.call-panel .call-header-title {
+  gap: 11px;
+}
+.call-panel .call-header-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #eaf4ef;
+}
+.call-panel .call-header h2 {
+  font-size: 15px;
+  margin-bottom: 4px;
+  letter-spacing: -0.25px;
+}
+.call-panel .call-header p {
+  color: #687176;
+  flex-wrap: wrap;
+  line-height: 1.5;
+}
+.call-panel .call-live-dot {
+  background: #237459;
+}
+.call-panel .call-body {
+  min-height: 0;
+  padding: 16px;
+  background: #f5f7f8;
+}
+.call-panel .call-people {
+  min-height: 0;
+  grid-template-rows: none;
+  gap: 10px;
+  align-content: start;
+}
+.call-panel .call-people-audio {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.call-panel .call-person {
+  min-width: 0;
+  min-height: 104px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: stretch;
+  gap: 9px;
+  padding: 15px;
+  border: 1px solid #e2e6e8;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: none;
+}
+.call-panel .call-person.call-person-speaking {
+  border-color: #237459;
+  box-shadow: inset 3px 0 #237459;
+}
+.call-panel .call-person-speaking::after {
+  content: none;
+}
+.call-panel .call-person-identity {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+.call-panel button.call-person-identity:hover .call-person-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.call-panel .call-person-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  box-shadow: none;
+  background: transparent;
+  flex-shrink: 0;
+}
+.call-panel .call-person-avatar .avatar {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+}
+.call-panel .call-person-caption {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
+}
+.call-panel .call-person-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  font-size: 12px;
+  font-weight: 700;
+}
+.call-panel .call-person-caption small {
+  color: #687176;
+  font-size: 10px;
+}
+.call-panel .call-person-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #687176;
+  font-size: 10px;
+  line-height: 1.4;
+  font-weight: 500;
+}
+.call-panel .call-person-status svg {
+  flex-shrink: 0;
+}
+.call-panel .call-person-speaking .call-person-status {
+  color: #237459;
+}
+.call-panel .call-person-meta {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: 60px;
+  z-index: 2;
+}
+.call-panel .call-person-meta:empty {
+  display: none;
+}
+.call-panel .call-person-quality,
+.call-panel .call-person-sharing {
+  position: static;
+}
+.call-panel .call-person-sharing {
+  font-size: 9px;
+  padding: 3px 5px;
+  background: #eaf4ef;
+  color: #1c6049;
+  border-radius: 4px;
+}
+.call-panel .call-quality {
+  background: #f5f7f8;
+  font-size: 9px;
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+.call-panel .call-quality-good {
+  color: #1c6049;
+}
+.call-panel .call-people-video .call-person {
+  min-height: 190px;
+}
+.call-panel .call-person-camera {
+  background: #20292b;
+  justify-content: flex-end;
+}
+.call-panel .call-person-camera .call-person-caption {
+  color: white;
+  text-shadow: 0 1px 4px #0008;
+}
+.call-panel .call-person-camera .call-person-caption small,
+.call-panel .call-person-camera .call-person-status {
+  color: white;
+}
+.call-panel .call-person-camera .call-person-meta {
+  position: absolute;
+  top: 11px;
+  left: 11px;
+  right: 11px;
+  margin: 0;
+}
+.call-panel .call-person-camera .call-quality {
+  background: #ffffffed;
+}
+.call-panel .call-person-camera::after {
+  content: "";
+  top: auto;
+  border: 0;
+  height: 85px;
+}
+.call-panel .call-person-camera.call-person-speaking::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid #237459;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 3;
+}
+.call-panel .call-invite-space {
+  padding: 17px;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  text-align: left;
+  align-items: flex-start;
+}
+.call-panel .call-invite-space > span {
+  display: none;
+}
+.call-panel .call-invite-space h3 {
+  margin: 0 0 7px;
+  font-size: 12px;
+  color: #20292b;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.call-panel .call-invite-space p {
+  color: #687176;
+  font-size: 11px;
+  line-height: 1.7;
+  max-width: 36ch;
+}
+.call-panel .call-invite-detail {
+  margin-top: 11px;
+}
+.call-panel .call-chat-return {
+  padding: 8px 9px;
+  border: 1px solid #e2e6e8;
+  border-radius: 6px;
+  color: #344248;
+  background: white;
+  font-size: 10px;
+}
+.call-panel .call-chat-return:hover {
+  background: #f5f7f8;
+}
+.call-panel .call-waiting {
+  min-height: 220px;
+  padding: 24px 14px;
+}
+.call-panel .call-waiting-symbol,
+.call-panel .call-joining-symbol {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #eaf4ef;
+  color: #237459;
+}
+.call-panel .call-waiting-symbol svg,
+.call-panel .call-joining-symbol svg {
+  width: 23px;
+  height: 23px;
+}
+.call-panel .call-waiting h3 {
+  font-size: 17px;
+  letter-spacing: -0.3px;
+  margin: 16px 0 8px;
+}
+.call-panel .call-waiting p {
+  color: #687176;
+  font-size: 12px;
+  margin-bottom: 18px;
+}
+.call-panel .call-footer {
+  padding: 13px 18px;
+  gap: 12px;
+  border-color: #e2e6e8;
+  flex-wrap: wrap;
+}
+.call-panel .call-footer-note {
+  display: flex;
+  width: auto;
+}
+.call-panel .call-footer-size {
+  display: block;
+  width: auto;
+  font-size: 10px;
+  color: #687176;
+}
+.call-panel .call-controls {
+  gap: 9px;
+  flex: 1;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+}
+.call-panel .call-control-wrap {
+  min-width: 48px;
+  gap: 6px;
+}
+.call-panel .call-control {
+  width: 42px;
+  height: 38px;
+  border-radius: 7px !important;
+  background: #f5f7f8;
+  border-color: #e2e6e8;
+  color: #48575c;
+}
+.call-panel .call-control svg {
+  width: 18px;
+  height: 18px;
+}
+.call-panel .call-control:hover {
+  background: #eaf0ed;
+}
+.call-panel .call-control-active {
+  color: #1c6049;
+  background: #eaf4ef;
+  border-color: #a1c8b7;
+}
+.call-panel .call-control-off {
+  color: #9a3c33;
+  background: #fff0ed;
+  border-color: #edcfc8;
+}
+.call-panel .call-control-leave {
+  min-width: 42px;
+  background: #b84438;
+  border-color: #b84438;
+  color: white;
+}
+.call-panel .call-control-leave:hover {
+  background: #a6382d;
+}
+.call-panel .call-control-wrap > span {
+  color: #566367;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: center;
+}
+.call-panel .call-control-wrap > span small {
+  display: block;
+  color: #687176;
+  font-size: 9px;
+  margin-top: 2px;
+}
+.call-panel .call-controls-divider {
+  height: 26px;
+  background: #e2e6e8;
+  margin-top: 6px;
+}
+.call-panel .call-settings-section {
+  padding: 16px 20px;
+  background: #fff;
+  border-color: #e2e6e8;
+  flex-shrink: 1;
+}
+.call-panel .call-error {
+  padding: 10px 18px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.call-panel .call-audio-prompt {
+  padding: 9px 18px;
+  background: #edf2f3;
+  color: #526167;
+  font-size: 10px;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+.call-panel .call-audio-prompt > svg {
+  flex-shrink: 0;
+}
+.call-panel .call-audio-prompt button {
+  background: #e0e9e5;
+  color: #153d36;
+}
+.call-panel .call-body-sharing {
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 12px;
+}
+.call-panel .call-body-sharing .call-people {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.call-panel .call-body-sharing .call-person {
+  min-height: 84px;
+  max-height: none;
+  flex: none;
+  padding: 11px;
+}
+.call-panel .call-body-sharing .call-person-camera {
+  min-height: 140px;
+}
+.call-panel .call-body-sharing .call-person-avatar,
+.call-panel .call-body-sharing .call-person-avatar .avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 12px;
+}
+.call-panel .call-body-sharing .call-person-identity {
+  gap: 8px;
+}
+.call-panel .call-body-sharing .call-person-meta {
+  margin-left: 44px;
+}
+.call-panel .call-body-sharing .call-person-camera .call-person-meta {
+  margin-left: 0;
+}
+.call-panel .call-share-stage {
+  border-radius: 9px;
+  min-height: 290px;
+}
+.call-panel .call-share-heading {
+  gap: 8px;
+  padding: 8px 11px;
+  color: #e5eeeb;
+}
+.call-panel .call-share-heading > span {
+  min-width: 0;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.call-panel .call-share-heading > span > svg {
+  flex-shrink: 0;
+}
+.call-panel .call-share-actions {
+  flex-shrink: 0;
+}
+.call-panel .call-share-heading .call-icon-button:hover {
+  background: #ffffff1c !important;
+  color: #fff;
+}
+.call-panel .call-share-tabs {
+  flex-wrap: wrap;
+}
+.call-panel .call-share-tabs button {
+  color: #e5eeeb;
+}
+.call-panel .call-share-tabs button[aria-pressed="true"] {
+  color: #153d36;
+  background: #d6ede2;
+}
+.call-panel button:focus-visible {
+  outline: 2px solid #237459;
+  outline-offset: 3px;
+}
+.call-panel .call-share-stage button:focus-visible {
+  outline-color: #a1d6bd;
+}
+
+.call-dock-polished {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 34px);
+  gap: 6px;
+  padding: 8px;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px #17382c24;
+}
+.call-dock-polished .call-dock-main {
+  gap: 8px;
+  padding: 2px 6px 2px 0;
+  grid-column: 1;
+}
+.call-dock-polished .call-dock-main strong {
+  max-width: 190px;
+  font-size: 11px;
+}
+.call-dock-polished .call-dock-main small {
+  font-size: 9px;
+  color: #c3d5cd;
+  margin-top: 3px;
+}
+.call-dock-polished .call-dock-main > svg {
+  flex-shrink: 0;
+  width: 15px;
+}
+.call-dock-polished .call-dock-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  color: #d6ede2;
+}
+.call-dock-polished .call-dock-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  color: #e5eeeb;
+}
+.call-dock-polished .call-dock-leave {
+  background: #b84438;
+  color: #fff;
+}
+.call-dock-polished .call-dock-muted {
+  background: #9c493c;
+  color: #fff;
+}
+.call-dock-polished .call-dock-listening-off {
+  color: #ffddd5;
+}
+.call-dock-sharing,
+.call-dock-camera,
+.call-dock-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.call-dock-sharing {
+  grid-column: 1 / -1;
+  justify-content: center;
+  border: 1px solid #7cae99;
+  border-radius: 5px;
+  background: #ffffff0a;
+  color: #e5eeeb;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+.call-dock-sharing:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.call-dock-camera {
+  grid-column: 1 / -1;
+  color: #c3d5cd;
+  justify-content: center;
+}
+.call-dock-notice {
+  grid-column: 1 / -1;
+  color: #ffe4db;
+  background: #ffffff0c;
+  border: 0;
+  border-radius: 5px;
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.call-dock-notice > svg {
+  flex-shrink: 0;
+}
+.call-dock-notice > span {
+  max-width: 290px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.call-dock-polished button:focus-visible {
+  outline: 2px solid #b1dac7;
+  outline-offset: 2px;
+}
+@media (max-width: 850px) {
+  .call-panel .call-footer-note {
+    display: none !important;
+  }
+  .call-panel .call-footer-size {
+    width: 100%;
+    text-align: center;
+  }
+  .call-panel .call-body-sharing {
+    display: flex;
+    flex-direction: column;
+  }
+  .call-panel .call-body-sharing .call-people {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .call-panel .call-share-stage {
+    min-height: 250px;
+    flex: none;
+  }
+}
+@media (max-width: 560px) {
+  .call-panel {
+    border-radius: 0;
+    border: 0;
+    height: 100dvh;
+    width: 100%;
+  }
+  .call-panel .call-header {
+    padding: 14px;
+  }
+  .call-panel .call-header-title {
+    gap: 9px;
+  }
+  .call-panel .call-header h2 {
+    max-width: 200px;
+  }
+  .call-panel .call-header-icon {
+    width: 32px;
+    height: 32px;
+  }
+  .call-panel .call-body {
+    padding: 12px;
+    display: block;
+  }
+  .call-panel .call-people {
+    flex: none;
+    min-height: 0;
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    gap: 9px;
+  }
+  .call-panel .call-person {
+    min-height: 84px;
+    padding: 12px;
+  }
+  .call-panel .call-person-avatar,
+  .call-panel .call-person-avatar .avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 14px;
+  }
+  .call-panel .call-person-meta {
+    margin-left: 52px;
+  }
+  .call-panel .call-person-camera .call-person-meta {
+    margin-left: 0;
+  }
+  .call-panel .call-people-video .call-person {
+    min-height: 155px;
+  }
+  .call-panel .call-invite-space {
+    padding: 16px 8px;
+  }
+  .call-panel .call-footer {
+    padding: 11px 9px calc(10px + env(safe-area-inset-bottom));
+    gap: 10px;
+  }
+  .call-panel .call-controls {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    width: 100%;
+    gap: 4px;
+  }
+  .call-panel .call-control-wrap {
+    min-width: 0;
+  }
+  .call-panel .call-control {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+  .call-panel .call-control-wrap > span {
+    font-size: 10px;
+    max-width: 100%;
+  }
+  .call-panel .call-control-wrap > span small {
+    font-size: 9px;
+  }
+  .call-panel .call-controls-divider {
+    display: none;
+  }
+  .call-panel .call-footer-size {
+    font-size: 9px;
+  }
+  .call-panel .call-settings-section {
+    padding: 12px 14px;
+    max-height: 42dvh;
+    flex-shrink: 0;
+  }
+  .call-panel .call-body-sharing {
+    display: flex;
+  }
+  .call-panel .call-body-sharing .call-people {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .call-panel .call-body-sharing .call-person-camera {
+    min-height: 155px;
+  }
+  .call-panel .call-share-stage {
+    min-height: 215px;
+  }
+  .call-panel .call-screen-video {
+    min-height: 160px;
+  }
+  .call-panel .call-share-heading {
+    align-items: flex-start;
+  }
+  .call-panel .call-share-heading > span {
+    padding-top: 7px;
+  }
+  .call-panel .call-share-actions {
+    gap: 0;
+  }
+  .call-panel .call-error,
+  .call-panel .call-audio-prompt {
+    padding: 9px 13px;
+  }
+  .call-dock-polished {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    width: min(390px, calc(100vw - 24px));
+  }
+  .call-dock-polished .call-dock-main strong {
+    max-width: 130px;
+  }
+  .call-dock-polished .call-dock-icon {
+    display: none;
+  }
+  .call-dock-polished .call-dock-main > svg {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-panel .call-control {
+    transition: none;
+  }
+}
