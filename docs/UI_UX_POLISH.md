@@ -2,6 +2,8 @@
 
 8 Eylül 2026
 
+Devam eden görsel yön ve canlı etkileşim çalışması: [Dinamik çalışma alanı](DYNAMIC_UI.md).
+
 ## Tasarım yönü
 
 Mola, ekibin gün boyunca açık tuttuğu bir sohbet alanı. Tasarımın önceliği mesajı okumak, doğru kişiye ulaşmak ve paylaşım yapmak. Var olan orman yeşili kimliği ve yerel Manrope yazı tipi korundu; büyük süslemelerin kapladığı alan azaltıldı. Metinler sola hizalı; mesajların satır uzunluğu 78 karakter birimiyle sınırlı.

@@ -39,6 +39,7 @@ npm run test:load
 - **Hesap güvenliği:** e-posta doğrulama, tek kullanımlık parola kurtarma bağlantıları, süreli ve şifreli e-posta kuyruğu. Parola kurtarma tüm açık oturumları kapatır.
 - **Klavye:** `Ctrl/⌘ K` arama; `Enter` gönder; `Shift Enter` yeni satır; `Ctrl/⌘ B` kalın yazı; kanal veya mesaj odaktayken `Shift F10` işlem menüsü; menü içinde yön tuşları ve `Home/End`; `Esc` menü/pencereyi kapat.
 - **Yerel tercihler:** taslaklar oturum depolamasında; kaydedilen mesajlar ve odak modu bu tarayıcıda tutulur. Kaydedilenler cihazlar arası eşitlenmez.
+- **Canlı geri bildirim:** gönderim onayı, yeni mesaj sayacı, çevrimiçi üyeler ve yazıyor bilgisi gerçek olaylardan güncellenir. Geçmişi okurken yeni mesajlar konumunuzu değiştirmez. Sisteminizin hareket azaltma tercihi desteklenir. [Arayüz kararları ve doğrulama](docs/DYNAMIC_UI.md).
 
 ## Docker ile dağıtım
 

@@ -1,3 +1,149 @@
+.message {
+  --message-surface: transparent;
+}
+
+.message[data-message-id]:hover,
+.message[data-message-id]:focus-within {
+  --message-surface: #f5f7f8;
+  background: var(--message-surface);
+}
+
+.message[data-message-id]:focus-visible {
+  box-shadow: inset 2px 0 #237459;
+}
+
+.message .message-meta > strong {
+  color: var(--ink, #20292b);
+}
+
+.message .message-meta > time,
+.message .message-meta > small {
+  color: var(--muted, #687176);
+  font-variant-numeric: tabular-nums;
+}
+
+.message .self-label {
+  color: #46645c;
+  background: #edf3f0;
+}
+
+.message .message-text {
+  color: #424e52;
+  line-height: 1.7;
+}
+
+.message .message-text strong {
+  color: var(--ink, #20292b);
+}
+
+.message .message-text code {
+  color: #40554e;
+  background: #f1f4f3;
+  border-color: #e2e8e5;
+}
+
+.message .mention {
+  color: #237459;
+  background: #eaf4ef;
+}
+
+.message.message-pinned {
+  --message-surface: #f3f8f5;
+  background: var(--message-surface);
+  box-shadow: inset 2px 0 #a9c8b9;
+}
+
+.message.message-pinned[data-message-id]:hover,
+.message.message-pinned[data-message-id]:focus-within {
+  --message-surface: #edf4f0;
+}
+
+.message.message-pinned:focus-visible {
+  box-shadow: inset 2px 0 #237459;
+}
+
+.message .message-pin-label {
+  color: #527064;
+  font-weight: 600;
+}
+
+.message .message-reactions > button {
+  border-color: #e2e6e8;
+  background: #f7f9f8;
+  border-radius: 5px;
+  transition:
+    background-color 120ms ease-out,
+    border-color 120ms ease-out;
+}
+
+.message .message-reactions > button > span {
+  color: #687176;
+  font-variant-numeric: tabular-nums;
+}
+
+.message .message-reactions > button:hover:not(:disabled) {
+  background: #edf3f0;
+  border-color: #b9cfc3;
+}
+
+.message .message-reactions > button.reacted {
+  background: #eaf4ef;
+  border-color: #7fae98;
+}
+
+.message .message-reactions > button.reacted > span {
+  color: #1c624a;
+  font-weight: 800;
+}
+
+.message .message-reactions > button.add-reaction {
+  color: #687176;
+  background: transparent;
+  border-color: transparent;
+}
+
+.message .thread-preview {
+  color: #237459;
+}
+
+.message .thread-preview > span {
+  color: #687176;
+}
+
+.message .thread-preview:hover > span {
+  color: #237459;
+}
+
+.message > .message-actions {
+  border-color: #dce3e0;
+  border-radius: 6px;
+  box-shadow:
+    0 2px 4px #20292b08,
+    0 6px 18px #20292b0a;
+  transition: opacity 120ms ease-out;
+}
+
+.message .message-actions .icon-button {
+  color: #687176;
+  border-radius: 4px;
+}
+
+.message .message-actions .icon-button:hover,
+.message .message-actions .icon-button[aria-expanded="true"],
+.message .message-actions .icon-button[aria-pressed="true"] {
+  color: #237459;
+  background: #eaf4ef;
+}
+
+.message .message-menu,
+.message .reaction-popover {
+  border-color: #dce3e0;
+  border-radius: 7px;
+  box-shadow:
+    0 2px 5px #20292b08,
+    0 8px 24px #20292b12;
+}
+
 .message .file-attachment {
   min-width: min(220px, 100%);
   max-width: min(320px, 100%);
@@ -20,7 +166,7 @@
   height: 40px;
   max-width: 40px;
   object-fit: cover;
-  background: #f1f4ed;
+  background: #f1f4f3;
 }
 
 .message .file-attachment strong {
@@ -33,7 +179,7 @@
 
 .message .message-edit-hint {
   margin: 5px 0 0;
-  color: var(--muted, #66735f);
+  color: var(--muted, #687176);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -79,7 +225,34 @@
   min-height: 30px;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .message[data-fresh="true"] {
+    animation: message-arrival 900ms ease-out;
+  }
+}
+
+@keyframes message-arrival {
+  from {
+    background-color: #e4f2ea;
+  }
+  to {
+    background-color: var(--message-surface);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message .message-reactions > button,
+  .message > .message-actions {
+    transition: none;
+  }
+}
+
 @media (pointer: coarse) {
+  .message > .message-actions {
+    box-shadow: none;
+    border: 0;
+  }
+
   .message .message-menu > .message-touch-action {
     display: flex;
   }

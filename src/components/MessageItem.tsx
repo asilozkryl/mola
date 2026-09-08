@@ -43,6 +43,7 @@ export function MessageItem({
   compact = false,
   readOnly = false,
   canModerate = false,
+  fresh = false,
   onCopyLink,
 }: {
   message: Message;
@@ -58,6 +59,7 @@ export function MessageItem({
   compact?: boolean;
   readOnly?: boolean;
   canModerate?: boolean;
+  fresh?: boolean;
   onCopyLink: () => void;
 }) {
   const [menu, setMenu] = useState(false);
@@ -76,6 +78,59 @@ export function MessageItem({
   const popupId = useId();
   const editHintId = useId();
   const authorIsSelf = message.userId === selfId;
+  const reactionSnapshot = (message.reactions || []).map((reaction) => ({
+    emoji: reaction.emoji,
+    count: reaction.userIds.length,
+    pressed: reaction.userIds.includes(selfId),
+  }));
+  const reactionVersion = JSON.stringify(reactionSnapshot);
+  const previousReactions = useRef({
+    messageId: message.id,
+    reactions: reactionSnapshot,
+  });
+
+  useEffect(() => {
+    const previous = previousReactions.current;
+    previousReactions.current = {
+      messageId: message.id,
+      reactions: reactionSnapshot,
+    };
+    if (
+      previous.messageId !== message.id ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    )
+      return;
+    const changed = new Set(
+      reactionSnapshot
+        .filter((reaction) => {
+          const before = previous.reactions.find(
+            (item) => item.emoji === reaction.emoji,
+          );
+          return (
+            !before ||
+            before.count !== reaction.count ||
+            before.pressed !== reaction.pressed
+          );
+        })
+        .map((reaction) => reaction.emoji),
+    );
+    const animations = Array.from(
+      articleRef.current?.querySelectorAll<HTMLButtonElement>(
+        "[data-reaction-emoji]",
+      ) || [],
+    )
+      .filter((button) => changed.has(button.dataset.reactionEmoji || ""))
+      .map((button) =>
+        button.animate(
+          [
+            { backgroundColor: "#d7efe3" },
+            { backgroundColor: getComputedStyle(button).backgroundColor },
+          ],
+          { duration: 260, easing: "ease-out" },
+        ),
+      );
+    return () => animations.forEach((animation) => animation.cancel());
+  }, [message.id, reactionVersion]);
 
   function closePopovers(restoreFocus = false) {
     setMenu(false);
@@ -299,6 +354,7 @@ export function MessageItem({
       ref={articleRef}
       className={`message ${compact ? "message-compact" : ""} ${message.pinned ? "message-pinned" : ""}`}
       data-message-id={message.id}
+      data-fresh={fresh || undefined}
       tabIndex={0}
       aria-label={`${author?.name || "Üye"}: ${message.content.slice(0, 80)}`}
       aria-haspopup="menu"
@@ -471,6 +527,7 @@ export function MessageItem({
               .map((r) => (
                 <button
                   key={r.emoji}
+                  data-reaction-emoji={r.emoji}
                   disabled={readOnly}
                   className={r.userIds.includes(selfId) ? "reacted" : ""}
                   onClick={() => onReact(r.emoji)}

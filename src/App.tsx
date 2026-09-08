@@ -90,6 +90,10 @@ import ChannelActionsDialog, {
 import "./components/channel-navigation.css";
 import { useCall } from "./lib/useCall";
 import { useMobileNavigation } from "./lib/useMobileNavigation";
+import {
+  useMessageActivity,
+  messageScrollBehavior,
+} from "./lib/useMessageActivity";
 import { usePushSubscription } from "./lib/usePushSubscription";
 import { CallPanel } from "./components/CallPanel";
 import { CallSetup } from "./components/CallSetup";
@@ -190,6 +194,8 @@ export default function App() {
   );
   const [memberQuery, setMemberQuery] = useState("");
   const [awayFromLatest, setAwayFromLatest] = useState(false);
+  const { freshIds, pendingCount, received, clearPending, forget } =
+    useMessageActivity(`${data?.user.id}:${data?.workspace.id}:${channelId}`);
   const [thread, setThread] = useState<Message | null>(null);
   const [linkedReply, setLinkedReply] = useState<Message | null>(null);
   const [replies, setReplies] = useState<Message[]>([]);
@@ -231,8 +237,10 @@ export default function App() {
   const highlightRef = useRef<string | null>(null);
   const quietRef = useRef(quiet);
   const viewRef = useRef(view);
+  const tabRef = useRef(tab);
   quietRef.current = quiet;
   viewRef.current = view;
+  tabRef.current = tab;
   channelRef.current = channelId;
   threadRef.current = thread;
   const dataRef = useRef(data);
@@ -506,11 +514,13 @@ export default function App() {
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
-    const update = () =>
-      setAwayFromLatest(
+    const update = () => {
+      const away =
         scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight >
-          180,
-      );
+        180;
+      setAwayFromLatest(away);
+      if (!away && view === "channel" && tab === "chat") clearPending();
+    };
     update();
     scroller.addEventListener("scroll", update, { passive: true });
     const observer = new ResizeObserver(update);
@@ -519,7 +529,7 @@ export default function App() {
       scroller.removeEventListener("scroll", update);
       observer.disconnect();
     };
-  }, [loading, channelId, view, tab, messages, messagesLoading]);
+  }, [loading, channelId, view, tab, messages, messagesLoading, clearPending]);
   useEffect(() => {
     function key(e: KeyboardEvent) {
       if (adminOpen) return;
@@ -602,6 +612,7 @@ export default function App() {
     client.on("disconnect", (reason) => {
       if (disposed) return;
       setConnected(false);
+      setTyping({});
       if (reason === "io server disconnect") {
         void refreshAccess().then(() => {
           if (
@@ -641,23 +652,30 @@ export default function App() {
                 : m,
             ),
           );
-          if (threadRef.current?.id === message.parentId)
+          if (threadRef.current?.id === message.parentId) {
+            received(message.id);
             setReplies((old) => uniqueMessages([...old, message]));
+          }
         } else {
+          const conversationVisible =
+            viewRef.current === "channel" && tabRef.current === "chat";
           const nearBottom = scrollRef.current
             ? scrollRef.current.scrollHeight -
                 scrollRef.current.scrollTop -
                 scrollRef.current.clientHeight <
               160
             : true;
+          received(
+            message.id,
+            message.userId !== data.user.id &&
+              (!nearBottom || !conversationVisible),
+          );
           setMessages((old) => uniqueMessages([...old, message]));
-          if (nearBottom)
-            setTimeout(
-              () =>
-                scrollRef.current?.scrollTo({
-                  top: scrollRef.current.scrollHeight,
-                  behavior: "smooth",
-                }),
+          if (nearBottom && conversationVisible)
+            scrollToLatestSoon(
+              message.channelId,
+              data.user.id,
+              workspaceId,
               60,
             );
         }
@@ -674,6 +692,7 @@ export default function App() {
       setCollectionVersion((v) => v + 1);
     });
     client.on("message:deleted", ({ id }: { id: string }) => {
+      forget(id);
       setMessages((old) => old.filter((m) => m.id !== id));
       setReplies((old) => old.filter((m) => m.id !== id));
       setSaved((old) => old.filter((m) => m.id !== id));
@@ -747,6 +766,8 @@ export default function App() {
     verificationPending,
     authLink,
     refreshAccess,
+    received,
+    forget,
   ]);
   useEffect(() => {
     if (!channelId || !data) return;
@@ -1082,6 +1103,11 @@ export default function App() {
             !m.suspended &&
             (m.role !== "guest" || channel?.memberIds?.includes(m.id)),
         ) || [];
+  const onlineMembers = connected
+    ? conversationMembers.filter(
+        (member) => !member.suspended && data?.onlineIds.includes(member.id),
+      )
+    : [];
   const directMessageMembers =
     data?.members.filter(
       (user) =>
@@ -1345,21 +1371,47 @@ export default function App() {
     setUnread((old) => ({ ...old, [id]: 0 }));
   }
   function onSent(message: Message) {
-    if (message.channelId !== channelRef.current) return;
+    if (
+      !data ||
+      dataRef.current?.user.id !== data.user.id ||
+      dataRef.current?.workspace.id !== data.workspace.id ||
+      message.channelId !== channelRef.current
+    )
+      return;
+    received(message.id);
     if (message.parentId) {
       if (threadRef.current?.id === message.parentId)
         setReplies((old) => uniqueMessages([...old, message]));
     } else {
       setMessages((old) => uniqueMessages([...old, message]));
-      setTimeout(
-        () =>
-          scrollRef.current?.scrollTo({
-            top: scrollRef.current.scrollHeight,
-            behavior: "smooth",
-          }),
+      scrollToLatestSoon(
+        message.channelId,
+        data.user.id,
+        data.workspace.id,
         50,
       );
     }
+  }
+  function scrollToLatestSoon(
+    targetId: string,
+    userId: string,
+    workspaceId: string,
+    delay: number,
+  ) {
+    setTimeout(() => {
+      if (
+        dataRef.current?.user.id !== userId ||
+        dataRef.current?.workspace.id !== workspaceId ||
+        channelRef.current !== targetId ||
+        viewRef.current !== "channel" ||
+        tabRef.current !== "chat"
+      )
+        return;
+      scrollRef.current?.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: messageScrollBehavior(),
+      });
+    }, delay);
   }
   async function mutate(path: string, options: RequestInit) {
     try {
@@ -1382,6 +1434,7 @@ export default function App() {
   async function deleteMessage(message: Message) {
     try {
       await api(`/messages/${message.id}`, { method: "DELETE" });
+      forget(message.id);
       setMessages((old) => old.filter((m) => m.id !== message.id));
       setReplies((old) => old.filter((m) => m.id !== message.id));
       notify("Mesaj silindi.");
@@ -1394,6 +1447,7 @@ export default function App() {
       <MessageItem
         key={message.id}
         message={message}
+        fresh={freshIds.has(message.id)}
         author={userMap.get(message.userId)}
         selfId={data!.user.id}
         canModerate={Boolean(
@@ -1538,7 +1592,10 @@ export default function App() {
           const element = document.querySelector(
             `[data-message-id="${CSS.escape(message.id)}"]`,
           );
-          element?.scrollIntoView({ block: "center", behavior: "smooth" });
+          element?.scrollIntoView({
+            block: "center",
+            behavior: messageScrollBehavior(),
+          });
           if (element) highlightRef.current = null;
         });
       }
@@ -1748,7 +1805,7 @@ export default function App() {
             title="Profil ve ayarlar"
             onClick={() => setDialog("settings")}
           >
-            <Avatar user={data.user} size="small" online />
+            <Avatar user={data.user} size="small" online={connected} />
           </button>
         </div>
       </aside>
@@ -1857,6 +1914,7 @@ export default function App() {
                 >
                   <button
                     className={`channel-nav ${channelId === c.id && view === "channel" ? "selected" : ""}`}
+                    data-unread={(unread[c.id] || 0) > 0}
                     aria-current={
                       channelId === c.id && view === "channel"
                         ? "page"
@@ -2011,7 +2069,7 @@ export default function App() {
                 <Avatar
                   user={user}
                   size="tiny"
-                  online={data.onlineIds.includes(user.id)}
+                  online={connected && data.onlineIds.includes(user.id)}
                 />
                 <span>{user.name}</span>
                 {data.channels
@@ -2176,7 +2234,7 @@ export default function App() {
               aria-label="Profil ayarları"
               onClick={() => setDialog("settings")}
             >
-              <Avatar user={data.user} size="small" online />
+              <Avatar user={data.user} size="small" online={connected} />
             </button>
           </div>
         </header>
@@ -2249,10 +2307,22 @@ export default function App() {
                         aria-label="Kanal üyelerini gör"
                         onClick={() => openMembers("channel")}
                       >
-                        {conversationMembers.slice(0, 3).map((u) => (
-                          <Avatar key={u.id} user={u} size="tiny" />
-                        ))}
-                        <span>{conversationMembers.length}</span>
+                        {(onlineMembers.length
+                          ? onlineMembers
+                          : conversationMembers
+                        )
+                          .slice(0, 3)
+                          .map((u) => (
+                            <Avatar
+                              key={u.id}
+                              user={u}
+                              size="tiny"
+                              online={
+                                connected && data.onlineIds.includes(u.id)
+                              }
+                            />
+                          ))}
+                        <span>{conversationMembers.length} üye</span>
                       </button>
                       <button
                         className="huddle-button"
@@ -2300,75 +2370,82 @@ export default function App() {
                   )}
                 </div>
                 {view === "channel" && (
-                  <div
-                    className="channel-tabs"
-                    role="tablist"
-                    aria-label="Kanal içeriği"
-                    onKeyDown={(event) => {
-                      const tabs = ["chat", "files", "pins"] as const;
-                      const index = tabs.indexOf(tab);
-                      const next =
-                        event.key === "ArrowRight"
-                          ? (index + 1) % tabs.length
-                          : event.key === "ArrowLeft"
-                            ? (index + tabs.length - 1) % tabs.length
-                            : event.key === "Home"
-                              ? 0
-                              : event.key === "End"
-                                ? tabs.length - 1
-                                : -1;
-                      if (next < 0) return;
-                      event.preventDefault();
-                      setTab(tabs[next]);
-                      event.currentTarget
-                        .querySelectorAll<HTMLButtonElement>('[role="tab"]')
-                        [next]?.focus();
-                    }}
-                  >
-                    <button
-                      role="tab"
-                      id="channel-tab-chat"
-                      aria-controls="channel-content"
-                      tabIndex={tab === "chat" ? 0 : -1}
-                      aria-selected={tab === "chat"}
-                      className={tab === "chat" ? "active" : ""}
-                      onClick={() => setTab("chat")}
+                  <div className="channel-tabs-row">
+                    <div
+                      className="channel-tabs"
+                      role="tablist"
+                      aria-label="Kanal içeriği"
+                      onKeyDown={(event) => {
+                        const tabs = ["chat", "files", "pins"] as const;
+                        const index = tabs.indexOf(tab);
+                        const next =
+                          event.key === "ArrowRight"
+                            ? (index + 1) % tabs.length
+                            : event.key === "ArrowLeft"
+                              ? (index + tabs.length - 1) % tabs.length
+                              : event.key === "Home"
+                                ? 0
+                                : event.key === "End"
+                                  ? tabs.length - 1
+                                  : -1;
+                        if (next < 0) return;
+                        event.preventDefault();
+                        setTab(tabs[next]);
+                        event.currentTarget
+                          .querySelectorAll<HTMLButtonElement>('[role="tab"]')
+                          [next]?.focus();
+                      }}
                     >
-                      <MessageSquare size={16} />
-                      Sohbet
-                    </button>
-                    <button
-                      role="tab"
-                      id="channel-tab-files"
-                      aria-controls="channel-content"
-                      tabIndex={tab === "files" ? 0 : -1}
-                      aria-selected={tab === "files"}
-                      className={tab === "files" ? "active" : ""}
-                      onClick={() => setTab("files")}
+                      <button
+                        role="tab"
+                        id="channel-tab-chat"
+                        aria-controls="channel-content"
+                        tabIndex={tab === "chat" ? 0 : -1}
+                        aria-selected={tab === "chat"}
+                        className={tab === "chat" ? "active" : ""}
+                        onClick={() => setTab("chat")}
+                      >
+                        <MessageSquare size={16} />
+                        Sohbet
+                      </button>
+                      <button
+                        role="tab"
+                        id="channel-tab-files"
+                        aria-controls="channel-content"
+                        tabIndex={tab === "files" ? 0 : -1}
+                        aria-selected={tab === "files"}
+                        className={tab === "files" ? "active" : ""}
+                        onClick={() => setTab("files")}
+                      >
+                        <FileText size={16} />
+                        Dosyalar
+                      </button>
+                      <button
+                        role="tab"
+                        id="channel-tab-pins"
+                        aria-controls="channel-content"
+                        tabIndex={tab === "pins" ? 0 : -1}
+                        aria-selected={tab === "pins"}
+                        className={tab === "pins" ? "active" : ""}
+                        onClick={() => setTab("pins")}
+                      >
+                        <Pin size={15} />
+                        Sabitlenenler
+                      </button>
+                    </div>
+                    <div
+                      className="channel-tab-end"
+                      data-connected={connected}
+                      role="status"
+                      aria-atomic="true"
                     >
-                      <FileText size={16} />
-                      Dosyalar
-                    </button>
-                    <button
-                      role="tab"
-                      id="channel-tab-pins"
-                      aria-controls="channel-content"
-                      tabIndex={tab === "pins" ? 0 : -1}
-                      aria-selected={tab === "pins"}
-                      className={tab === "pins" ? "active" : ""}
-                      onClick={() => setTab("pins")}
-                    >
-                      <Pin size={15} />
-                      Sabitlenenler
-                    </button>
-                    <div className="channel-tab-end">
-                      <span className="small-status-dot" />
-                      {
-                        conversationMembers.filter((user) =>
-                          data.onlineIds.includes(user.id),
-                        ).length
-                      }{" "}
-                      çevrimiçi
+                      <span
+                        className={`small-status-dot${connected ? "" : " disconnected"}`}
+                        aria-hidden="true"
+                      />
+                      {connected
+                        ? `${onlineMembers.length} çevrimiçi`
+                        : "Bağlantı bekleniyor"}
                     </div>
                   </div>
                 )}
@@ -2545,7 +2622,9 @@ export default function App() {
                           Önceki mesajları yükle
                         </button>
                       ) : (
-                        <div className="channel-welcome">
+                        <div
+                          className={`channel-welcome${messages.length ? " channel-welcome-history" : ""}`}
+                        >
                           <span className="welcome-hash" aria-hidden="true">
                             {channel?.kind === "dm" ? (
                               <MessageCircle size={22} />
@@ -2589,27 +2668,37 @@ export default function App() {
                 </div>
                 {view === "channel" &&
                   tab === "chat" &&
-                  awayFromLatest &&
+                  (awayFromLatest || pendingCount > 0) &&
                   !messagesLoading && (
                     <div className="latest-message-bar">
                       <button
                         onClick={() =>
                           scrollRef.current?.scrollTo({
                             top: scrollRef.current.scrollHeight,
-                            behavior: "smooth",
+                            behavior: messageScrollBehavior(),
                           })
                         }
                       >
-                        <ArrowDown size={15} /> Son mesajlara git
+                        <ArrowDown size={15} />
+                        {pendingCount > 0 && (
+                          <span className="new-message-count">
+                            {pendingCount} yeni mesaj
+                          </span>
+                        )}
+                        Son mesajlara git
                       </button>
                     </div>
                   )}
                 {view === "channel" && (
                   <>
                     <div className="typing-indicator" aria-live="polite">
-                      {typingNames.length > 0 && (
+                      {connected && typingNames.length > 0 && (
                         <>
-                          <span className="typing-dots">•••</span>
+                          <span className="typing-dots" aria-hidden="true">
+                            <i />
+                            <i />
+                            <i />
+                          </span>
                           {typingNames.join(", ")} yazıyor...
                         </>
                       )}
@@ -2780,7 +2869,9 @@ export default function App() {
                             <Avatar
                               user={user}
                               size="small"
-                              online={data.onlineIds.includes(user.id)}
+                              online={
+                                connected && data.onlineIds.includes(user.id)
+                              }
                             />
                             <span>
                               <strong>
@@ -2791,9 +2882,11 @@ export default function App() {
                               </strong>
                               <small>
                                 {user.status ||
-                                  (data.onlineIds.includes(user.id)
-                                    ? "Çevrimiçi"
-                                    : "Çevrimdışı")}
+                                  (!connected
+                                    ? "Durum güncellenemiyor"
+                                    : data.onlineIds.includes(user.id)
+                                      ? "Çevrimiçi"
+                                      : "Çevrimdışı")}
                               </small>
                             </span>
                             {user.role === "owner" && (
@@ -3107,14 +3200,19 @@ export default function App() {
                 }
                 onClick={() => void openDm(user)}
               >
-                <Avatar user={user} online={data.onlineIds.includes(user.id)} />
+                <Avatar
+                  user={user}
+                  online={connected && data.onlineIds.includes(user.id)}
+                />
                 <span>
                   <strong>{user.name}</strong>
                   <small>
                     {user.status ||
-                      (data.onlineIds.includes(user.id)
-                        ? "Çevrimiçi"
-                        : "Çevrimdışı")}
+                      (!connected
+                        ? "Durum güncellenemiyor"
+                        : data.onlineIds.includes(user.id)
+                          ? "Çevrimiçi"
+                          : "Çevrimdışı")}
                   </small>
                 </span>
                 {user.id === data.user.id ? (

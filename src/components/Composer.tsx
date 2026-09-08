@@ -10,6 +10,7 @@ import {
   AlertCircle,
   AtSign,
   Bold,
+  Check,
   Code2,
   LoaderCircle,
   Paperclip,
@@ -52,6 +53,7 @@ export function Composer({
   const draft = useSyncedDraft(userId, workspaceId, channelId, parentId);
   const content = draft.content;
   const [busy, setBusy] = useState(false);
+  const [sendAcknowledged, setSendAcknowledged] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [files, setFiles] = useState<Attachment[]>([]);
   const [picker, setPicker] = useState<"emoji" | "mention" | null>(null);
@@ -74,6 +76,12 @@ export function Composer({
       alive.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!sendAcknowledged) return;
+    const timeout = window.setTimeout(() => setSendAcknowledged(false), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [sendAcknowledged]);
 
   useLayoutEffect(() => {
     const el = input.current;
@@ -117,6 +125,7 @@ export function Composer({
 
   function update(value: string) {
     if (busy) return;
+    setSendAcknowledged(false);
     if (value.length > MAX_MESSAGE_LENGTH) {
       reportError(
         "Mesaj en fazla 10.000 karakter olabilir. Göndermeden önce biraz kısalt.",
@@ -154,6 +163,7 @@ export function Composer({
     )
       return;
     operation.current = "send";
+    setSendAcknowledged(false);
     setBusy(true);
     setFeedback("");
     setPicker(null);
@@ -172,6 +182,7 @@ export function Composer({
       setFiles([]);
       onTyping?.(false);
       onSent(message);
+      if (alive.current) setSendAcknowledged(true);
       input.current?.focus();
     } catch (e) {
       draft.failed();
@@ -204,6 +215,7 @@ export function Composer({
       return;
     }
     operation.current = "upload";
+    setSendAcknowledged(false);
     setUploading(true);
     setFeedback("");
     setPicker(null);
@@ -281,7 +293,9 @@ export function Composer({
         void upload(Array.from(event.dataTransfer.files));
       }}
     >
-      <div className={`composer ${dragging ? "is-dragging" : ""}`}>
+      <div
+        className={`composer ${dragging ? "is-dragging" : ""} ${busy ? "is-sending" : ""}`}
+      >
         {dragging && (
           <div className="composer-drop-zone" role="status">
             <Paperclip size={20} aria-hidden="true" />
@@ -423,7 +437,7 @@ export function Composer({
           </div>
           <button
             type="button"
-            className="send-button"
+            className={`send-button ${sendAcknowledged ? "is-sent" : ""}`}
             title="Mesaj gönder"
             aria-label={parentId ? "Yanıt gönder" : "Mesaj gönder"}
             aria-busy={busy}
@@ -436,11 +450,20 @@ export function Composer({
             }
           >
             {busy ? (
-              <LoaderCircle size={17} className="spin" />
+              <LoaderCircle size={17} className="spin" aria-hidden="true" />
+            ) : sendAcknowledged ? (
+              <Check size={17} aria-hidden="true" />
             ) : (
-              <Send size={17} />
+              <Send size={17} aria-hidden="true" />
             )}
-            <span>Gönder</span>
+            <span className="send-button-label" aria-hidden="true">
+              <span className={sendAcknowledged ? "is-hidden" : ""}>
+                Gönder
+              </span>
+              <span className={sendAcknowledged ? "" : "is-hidden"}>
+                Gönderildi
+              </span>
+            </span>
           </button>
         </div>
         {picker && (
@@ -525,6 +548,9 @@ export function Composer({
           onChange={(e) => void upload(Array.from(e.target.files || []))}
         />
       </div>
+      <span className="visually-hidden" role="status" aria-atomic="true">
+        {sendAcknowledged ? "Mesaj gönderildi." : ""}
+      </span>
       <div className="composer-hint" id={hintId}>
         <span>
           <kbd>Enter</kbd> ile gönder · <kbd>Shift + Enter</kbd> ile yeni satır
