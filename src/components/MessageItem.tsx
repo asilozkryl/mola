@@ -21,6 +21,11 @@ import {
   X,
 } from "lucide-react";
 import type { Message, User } from "../../shared/types";
+import {
+  ContextMenu,
+  type ContextMenuItem,
+  type ContextMenuPosition,
+} from "./ContextMenu";
 import { Avatar, fileSize, IconButton, Modal, RichText, timeLabel } from "./ui";
 import "./message-ux.css";
 
@@ -56,6 +61,8 @@ export function MessageItem({
   onCopyLink: () => void;
 }) {
   const [menu, setMenu] = useState(false);
+  const [contextPosition, setContextPosition] =
+    useState<ContextMenuPosition | null>(null);
   const [reacting, setReacting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -64,7 +71,7 @@ export function MessageItem({
   const [editError, setEditError] = useState("");
   const articleRef = useRef<HTMLElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const savingRef = useRef(false);
   const popupId = useId();
   const editHintId = useId();
@@ -218,6 +225,75 @@ export function MessageItem({
     articleRef.current?.focus();
   }
 
+  function startEdit() {
+    setEditing(true);
+    setDraft(message.content);
+    setEditError("");
+    closePopovers();
+  }
+
+  function openContextMenu(position: ContextMenuPosition) {
+    closePopovers();
+    triggerRef.current = articleRef.current;
+    setContextPosition(position);
+  }
+
+  const contextItems: ContextMenuItem[] = [
+    {
+      label: "Mesaj bağlantısını kopyala",
+      icon: <Link size={15} />,
+      onSelect: onCopyLink,
+    },
+    ...(!compact
+      ? [
+          {
+            label: "Mesajı yanıtla",
+            icon: <MessageSquare size={15} />,
+            onSelect: onReply,
+          },
+        ]
+      : []),
+    {
+      label: "Tepki ekle",
+      icon: <SmilePlus size={15} />,
+      disabled: readOnly,
+      onSelect: () => setReacting(true),
+    },
+    {
+      label: saved ? "Kaydedilenlerden kaldır" : "Mesajı kaydet",
+      icon: <Bookmark size={15} fill={saved ? "currentColor" : "none"} />,
+      onSelect: onSave,
+    },
+    {
+      label: message.pinned ? "Sabitlemeyi kaldır" : "Kanala sabitle",
+      icon: <Pin size={15} />,
+      disabled: readOnly,
+      onSelect: onPin,
+    },
+    ...(authorIsSelf
+      ? [
+          {
+            label: "Mesajı düzenle",
+            icon: <Pencil size={15} />,
+            disabled: readOnly,
+            onSelect: startEdit,
+          },
+        ]
+      : []),
+    ...(authorIsSelf || canModerate
+      ? [
+          {
+            label: "Mesajı sil",
+            icon: <Trash2 size={15} />,
+            disabled: readOnly,
+            danger: true,
+            separatorBefore: true,
+            onSelect: () => setDeleting(true),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <article
       ref={articleRef}
@@ -225,7 +301,48 @@ export function MessageItem({
       data-message-id={message.id}
       tabIndex={0}
       aria-label={`${author?.name || "Üye"}: ${message.content.slice(0, 80)}`}
+      aria-haspopup="menu"
+      onContextMenu={(event) => {
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest(
+            "a, input, textarea, select, [contenteditable], dialog",
+          )
+        )
+          return;
+        const selection = window.getSelection();
+        if (
+          selection &&
+          !selection.isCollapsed &&
+          (event.currentTarget.contains(selection.anchorNode) ||
+            event.currentTarget.contains(selection.focusNode))
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        openContextMenu({ x: event.clientX, y: event.clientY });
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (
+          event.key !== "ContextMenu" &&
+          !(event.shiftKey && event.key === "F10")
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        const bounds = event.currentTarget.getBoundingClientRect();
+        openContextMenu({ x: bounds.left + 48, y: bounds.top + 32 });
+      }}
     >
+      <ContextMenu
+        position={contextPosition}
+        items={contextItems}
+        label="Mesaj işlemleri"
+        returnFocus={articleRef.current}
+        onClose={() => setContextPosition(null)}
+      />
       {message.pinned && (
         <div className="message-pin-label">
           <Pin size={11} /> Bu kanala sabitlendi
@@ -534,15 +651,7 @@ export function MessageItem({
             </button>
             {authorIsSelf && (
               <>
-                <button
-                  disabled={readOnly}
-                  onClick={() => {
-                    setEditing(true);
-                    setDraft(message.content);
-                    setEditError("");
-                    setMenu(false);
-                  }}
-                >
+                <button disabled={readOnly} onClick={startEdit}>
                   <Pencil size={15} />
                   Mesajı düzenle
                 </button>

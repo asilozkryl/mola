@@ -1,0 +1,129 @@
+.channel-nav-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 6px;
+}
+.channel-nav-row > .channel-nav {
+  flex: 1;
+  min-width: 0;
+}
+.channel-nav-row .channel-nav {
+  padding-right: 36px;
+}
+.channel-nav-row .channel-row-menu {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+}
+.channel-nav-row:hover {
+  background: #e8eddf;
+}
+.sidebar .channel-row-menu {
+  opacity: 0;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 5px;
+  color: #566d58;
+}
+.sidebar .channel-nav-row:hover .channel-row-menu,
+.sidebar .voice-channel-row:hover .channel-row-menu,
+.sidebar .channel-row-menu[aria-expanded="true"],
+.sidebar .channel-nav-row:focus-within .channel-row-menu,
+.sidebar .voice-channel-row:focus-within .channel-row-menu {
+  opacity: 1;
+}
+.sidebar .channel-row-menu:hover {
+  background: #d8e4d1;
+}
+.voice-channel-row > .channel-nav {
+  min-width: 0;
+}
+.voice-channel-row > .channel-row-menu {
+  flex-shrink: 0;
+}
+.channel-actions-trigger {
+  display: inline-flex;
+}
+.channel-archived-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #687052;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 9px;
+  vertical-align: middle;
+}
+.archive-channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(460px, 55dvh);
+  overflow: auto;
+}
+.archive-channel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e3e9df;
+  border-radius: 8px;
+  padding: 10px;
+}
+.archive-channel-row > button:first-child {
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.archive-channel-row strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.archive-channel-row small {
+  color: #66716b;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.archive-channel-row .icon-button {
+  flex-shrink: 0;
+}
+.archive-empty {
+  padding: 20px 0;
+  color: #66716b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+@media (max-width: 800px), (pointer: coarse) {
+  .sidebar .channel-row-menu {
+    opacity: 1;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .channel-nav-row .channel-nav {
+    padding-right: 40px;
+  }
+  .channel-heading .channel-actions-trigger {
+    width: 36px;
+    min-width: 36px;
+  }
+  .channel-heading .channel-heading-actions > .icon-button {
+    width: 36px;
+    min-width: 36px;
+  }
+  .channel-heading .channel-title-icon {
+    display: none;
+  }
+  .channel-archived-label {
+    display: block;
+    margin: 2px 0 0;
+  }
+}

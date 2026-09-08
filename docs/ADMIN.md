@@ -51,7 +51,11 @@ Son aktif uygulama yöneticisinin yetkisi doğrudan kaldırılamaz. Önce başka
 
 **Üyeler:** İsim veya e-posta ile bulun, **Askıya al** seçeneğini onaylayın. Kullanıcının oturumları/görüşmeleri kapanır; mesajlar ve dosyalar silinmez. **Etkinleştir** sonrası kullanıcı yeniden giriş yapar; eski oturum canlanmaz. Sahip ve kendi hesabınız için askıya alma düğmesi sunulmaz.
 
-**Kanallar:** Kanal oluşturun veya **Düzenle** ile isim/açıklamayı değiştirin. **Arşivle**, kanalı aktif listeden çıkarır ve yazma/görüşme erişimini kapatır; geçmiş korunur. **Arşiv → Arşivden çıkar** ile geri açılır. Arşivleme kalıcı veri silme değildir.
+**Kanallar:** Kanal oluşturun veya **Düzenle** ile isim/açıklamayı değiştirin. Bu işlemler sohbet ekranında kanala sağ tıklayarak ya da kanal satırındaki/başlığındaki **⋯** düğmesinden de açılır. Sahipler, yöneticiler ve uygulama yöneticileri kanalları yönetir; moderatörler erişebildikleri herkese açık kanalları düzenleyebilir, arşivleyebilir ve silebilir. Normal üyeler ve misafirler bu yönetim seçeneklerini görmez.
+
+**Arşivle**, kanalı aktif listeden çıkarır ve yazma/görüşme erişimini kapatır; geçmiş korunur. Sol menüdeki **Arşivlenmiş kanallar** bölümünden geçmişi okuyabilir veya yetkiniz varsa **Arşivden çıkar** ile geri açabilirsiniz. Kaydedilen mesajlar ve bu mesajların geçmiş bağlantıları arşivleme sonrasında kullanılabilir. Kanalın gizlilik ve üyelik sınırları devam eder.
+
+**Kanalı sil**, güncel kanal adının aynen yazılmasıyla onaylanır. Mesajlar, yanıtlar, ekler, sunucudaki taslaklar, ilişkili bildirimler ve kanal entegrasyonları kalıcı olarak kaldırılır; devam eden görüşme kapanır. Entegrasyon botunun ilgili ekip üyeliği kapatılır, diğer alanlardaki tarihsel kayıtları korunur. Silme işlemi yönetim geçmişine kaydedilir. Geçmişi saklamak için arşivlemeyi kullanın. Özel mesaj sohbetleri bu kanal silme işleminin kapsamına girmez.
 
 **Davetler:** Bağlantılar üç gün, en fazla 20 yeni katılım için geçerlidir. Oluşturulan bağlantı o anda kopyalanabilir; sonradan eski bağlantının açık metni gösterilmez. Listede kullanım, süre ve durum görünür. **İptal et** gelecekteki katılımları engeller; daha önce katılan kullanıcıları çıkarmaz. Sızan bir bağlantıyı iptal edip yeni bağlantı oluşturun.
 

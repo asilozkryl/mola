@@ -29,6 +29,7 @@ import { api, post, ApiError } from "../lib/api";
 import { Avatar, Logo, Modal, Spinner, fileSize } from "./ui";
 import SystemAdmin from "./SystemAdmin";
 import ChannelAccessDialog, { roleNames } from "./ChannelAccessDialog";
+import ChannelActionsDialog from "./ChannelActionsDialog";
 import "./admin.css";
 
 type Section =
@@ -70,6 +71,7 @@ const auditNames: Record<string, string> = {
   "ownership.transferred": "Sahiplik devredildi",
   "channel.updated": "Kanal güncellendi",
   "channel.archived": "Kanal arşivlendi",
+  "channel.deleted": "Kanal kalıcı olarak silindi",
   "channel.restored": "Kanal arşivden çıkarıldı",
   "invite.revoked": "Davet iptal edildi",
   "invite.created": "Davet oluşturuldu",
@@ -100,6 +102,8 @@ export default function AdminPanel({
   const [actionError, setActionError] = useState("");
   const [editing, setEditing] = useState<Channel | "new">();
   const [accessChannel, setAccessChannel] = useState<Channel>();
+  const [deletingChannelId, setDeletingChannelId] = useState<string>();
+  const deletingChannel = snapshot?.channels.find((channel) => channel.id === deletingChannelId);
   const [inviteUrl, setInviteUrl] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const canManage = data.user.role === "owner" || data.user.role === "admin" || data.user.siteAdmin;
@@ -583,6 +587,7 @@ export default function AdminPanel({
                                     {channel.name}
                                   </span>
                                 </button>
+                                <button className="adm-text-button danger-text" aria-label={`${channel.name} kanalını sil`} onClick={() => setDeletingChannelId(channel.id)}>Sil</button>
                               </div>
                             </div>
                           ))}
@@ -994,6 +999,7 @@ export default function AdminPanel({
         </Modal>
       )}
       {accessChannel && <ChannelAccessDialog channel={accessChannel} currentUserId={data.user.id} onClose={() => setAccessChannel(undefined)} onChanged={() => { setAccessChannel(undefined); void changed("Kanal erişimi güncellendi."); }} />}
+      {deletingChannel && <ChannelActionsDialog channel={deletingChannel} mode="delete" workspaceId={data.workspace.id} userId={data.user.id} onClose={() => setDeletingChannelId(undefined)} onChanged={() => {}} onDeleted={() => { setDeletingChannelId(undefined); void changed("Kanal ve içeriği kalıcı olarak silindi."); }} />}
     </dialog>
   );
 }

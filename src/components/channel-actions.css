@@ -1,0 +1,135 @@
+.channel-action-form {
+  color: var(--forest, #153d36);
+}
+
+.modal .channel-action-form > label {
+  margin: 16px 0 6px;
+  font-size: 12px;
+}
+
+.modal .channel-action-form > input,
+.modal .channel-action-form > textarea {
+  margin-top: 0;
+}
+
+.channel-action-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #e0e7df;
+  border-radius: 9px;
+  background: #f6f8f3;
+}
+
+.channel-action-summary > svg {
+  flex: 0 0 auto;
+  color: #587061;
+}
+
+.channel-action-summary > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.channel-action-summary > span {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: #526458;
+  font-size: 11px;
+}
+
+.channel-action-note,
+.channel-action-explanation p,
+.channel-action-warning p {
+  margin: 12px 0;
+  color: #526458;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.channel-action-optional,
+.channel-action-hint,
+.channel-action-count {
+  color: #526458;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.channel-action-hint {
+  margin: 6px 0 16px;
+}
+
+.channel-action-count {
+  margin: 4px 0 0;
+  text-align: right;
+}
+
+.modal .channel-action-form textarea {
+  min-height: 86px;
+  resize: vertical;
+}
+
+.channel-action-explanation {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.channel-action-explanation > svg {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: #587061;
+}
+
+.channel-action-explanation p:first-child {
+  margin-top: 0;
+  color: #153d36;
+}
+
+.channel-action-warning {
+  margin-top: 16px;
+  padding: 13px 14px;
+  border: 1px solid #efd9d2;
+  border-radius: 9px;
+  background: #fff7f3;
+}
+
+.channel-action-warning > strong {
+  color: #a63725;
+  font-size: 13px;
+}
+
+.channel-action-warning p {
+  margin: 7px 0 0;
+  color: #70493d;
+}
+
+.channel-action-confirm-name {
+  color: #153d36;
+  overflow-wrap: anywhere;
+}
+
+.channel-action-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 20px;
+}
+
+.channel-action-footer button {
+  min-height: 40px;
+}
+
+@media (max-width: 480px) {
+  .channel-action-footer {
+    flex-wrap: wrap;
+  }
+
+  .channel-action-footer button {
+    flex: 1 1 auto;
+  }
+}

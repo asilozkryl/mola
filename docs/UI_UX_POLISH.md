@@ -37,6 +37,11 @@ Masaüstünde sol alanlar sabit, sohbet esnek; kanal bilgisi kullanıcı açtı�
 | Görsel ekler ayırt edilemiyordu. | İndirilebilir dosya satırında 40×40 px önizleme; mesajı kaplayan büyük görseller yok. |
 | Düzenleme hatası ve açılır menü kullanımı yeterince açıklayıcı değildi. | Hata sırasında düzenleme taslağı korunuyor; Ctrl/⌘+Enter ile kaydetme, Escape, dışarı tıklama ve yön tuşları destekleniyor. |
 | Dosya ve sabitlenen mesaj boş ekranlarında sonraki adım dolaylıydı. | “Dosya paylaş” ve “Sohbete dön” düğmeleri eklendi. Arama sıfırlanınca eski hata temizleniyor. |
+| Kanal ve mesajlarda sağ tık işlemleri eksikti. | Ekrana sığan sağ tık menüleri; klavye için Shift+F10, yön tuşları, Home/End ve Escape. Bağlantı, metin seçimi ve yazı alanlarında tarayıcının yerel menüsü korunuyor. |
+| Kanal adını değiştirmek yönetim panelinde saklıydı. | Kanal satırında, sesli odalarda ve sohbet başlığında ⋯; ad/açıklama düzenleme, erişim/üyeler, okundu işaretleme ve ad kopyalama. Sağ tık başka kanala geçirmiyor veya sesli odaya katılmıyor. |
+| Kalıcı kanal silme yoktu. | Rol kontrolü ve güncel kanal adını aynen yazma onayıyla silme; yanlışlıkla kaybı önlemek için arşivleme açıklaması. Mesajlar, ekler, taslaklar, bildirimler ve entegrasyonlar temizleniyor; diğer sohbetler korunuyor. |
+| Arşivlenmiş geçmiş ve kaydedilen mesajlar erişim yenilemesinde kaybolabiliyordu. | Arşivlenmiş kanallar dizini, geçmişi açma ve geri yükleme. Seçili arşivli sohbet ve kaydedilen mesajlar erişim sürdükçe korunuyor. |
+| Başka kanala ait kayıtlı mesajdan açılan dizi, kanal silinince ekranda kalabiliyordu. | Açık dizinin kendi kanalı ayrıca kontrol ediliyor; kanal silinir veya erişim kalkarsa önizleme, yanıtlar ve yazma alanı kapanıyor. |
 
 ## Doğrulama
 
@@ -48,8 +53,14 @@ Masaüstünde sol alanlar sabit, sohbet esnek; kanal bilgisi kullanıcı açtı�
 - Masaüstü, mobil, giriş, kanal oluşturma ve görüşme ekranları için mevcut axe denetimleri; dokunmatik mobil gezinme menüsü için ayrıca axe denetimi uygulandı.
 - Ekran görüntüleri yerel `artifacts/ui-before-*.png` ve `artifacts/ui-after-*.png` dosyalarında. Örnek veriler ayrı geçici yerel veri dizininde çalıştırıldı.
 
+### Sağ tık ve kanal yönetimi ek kontrolü
+
+- 45 farklı tarayıcı senaryosu başarılı: 43 senaryolu toplu çalışma ve inceleme sırasında bulunan iki sorun için ek regresyon testi. İsim/açıklama değişimi, hata sonrası tekrar deneme, tam adla silme onayı, iptal, diğer sekmeye yansıma, arşiv geçmişi/kaydedilenler, rol sınırları, sesli odaya yanlışlıkla katılmama, dokunmatik menü ve klavye odağı doğrulandı.
+- Kanal silme, yönetim yarışları, izinler ve entegrasyonlar için 26 sunucu testi başarılı. Gerçek dosya temizliği, veritabanı ilişkileri, aktif görüşmenin kapanması ve botun ilgili ekip üyeliğinin sonlandırılması kontrol edildi.
+- Yeni kalıcı testler: `tests/channel-actions.e2e.spec.ts` (8), `tests/context-menu.e2e.spec.ts` (4), `tests/channel-deletion.test.ts` (5).
+- 320, 390, 768, 1024 ve 1440 px ekranlarda kanal menüsü, düzenleme ve silme pencereleri axe WCAG A/AA denetiminden hatasız geçti; yatay taşma yok. Masaüstü ve mobil görüntüler ayrıca görsel olarak incelendi.
+- Ekran görüntüleri yerel `artifacts/channel-actions-desktop.png`, `artifacts/channel-edit-desktop.png`, `artifacts/channel-delete-mobile.png` ve `artifacts/channel-edit-320.png` dosyalarında.
+
 ## Açık kalan bulgular
 
 Üretim derlemesinin ana JavaScript dosyası Vite'ın 500 kB uyarı eşiğinin biraz üzerinde. Yönetim ve seyrek kullanılan ayar ekranlarını ihtiyaç anında yüklemek, ilk açılış yükünü azaltmak için somut bir sonraki iş. Bu düzenlemede ağ hızı ölçümü veya gerçek cihazda performans iddiası yapılmadı.
-
-Arşivlenmiş sohbet geçmişine erişim ayrıca ele alınmalı: mevcut erişim yenileme akışı, seçili arşiv kanalını aktif bir kanalla değiştiriyor ve kaydedilen mesaj listesinden arşiv kanallarını çıkarabiliyor (`App.tsx`, `acceptData`). Bu nedenle arşiv mesajına ait bağlantının ve kaydedilmiş geçmişin açılması tutarlı değil. Mesaj menüsündeki salt okunur işlemler korunuyor; geçmişe yönlendirme ve arşiv yaşam döngüsü bu düzenlemede değiştirilmedi.

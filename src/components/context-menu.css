@@ -1,0 +1,72 @@
+.context-menu {
+  position: fixed;
+  z-index: 150;
+  width: 244px;
+  padding: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--ink, #26342d);
+  background: #fff;
+  border: 1px solid var(--line, #e3e7e0);
+  border-radius: 10px;
+  box-shadow:
+    0 10px 32px #24342824,
+    0 2px 6px #2434280d;
+}
+
+.context-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.context-menu > button > span {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.context-menu > button:hover:not(:disabled),
+.context-menu > button:focus-visible {
+  background: #eef3e9;
+}
+
+.context-menu > button:focus-visible {
+  outline: 2px solid #70885d;
+  outline-offset: -2px;
+}
+
+.context-menu > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.context-menu > .context-menu-danger {
+  color: #a03a36;
+}
+
+.context-menu > .context-menu-danger:hover:not(:disabled),
+.context-menu > .context-menu-danger:focus-visible {
+  background: #fbefed;
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 5px 6px;
+  background: var(--line, #e3e7e0);
+}
+
+@media (pointer: coarse) {
+  .context-menu > button {
+    min-height: 42px;
+  }
+}

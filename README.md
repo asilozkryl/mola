@@ -30,13 +30,14 @@ npm run test:load
 ## Kullanım
 
 - **Kanallar ve özel mesajlar:** kalıcı mesajlar, yanıt dizileri, düzenleme/silme, emoji tepkileri, kanala sabitleme, tüm geçmişte arama.
+- **Hızlı işlemler:** kanala veya mesaja sağ tıklayın; telefonda **⋯** düğmesini kullanın. Kanal menüsünden ad/açıklama düzenleme, erişim yönetimi, arşivleme ve kalıcı silme açılır. Kalıcı silme için kanalın güncel adını aynen yazmak gerekir. **Arşivlenmiş kanallar** bölümünden geçmişi okuyabilir veya yetkiniz varsa kanalı geri açabilirsiniz.
 - **Dosyalar:** PNG, JPEG, GIF, WebP, PDF, TXT ve CSV; dosya başına 10 MB, mesaj başına 4 dosya. İndirme erişimi ait olduğu sohbetle sınırlıdır.
 - **Görüşmeler:** sesli oda veya kanal başlığından başlatın. Sesli odaların altında katılımcılar ve mikrofon/kamera/ekran paylaşımı durumları anlık görünür; kişi simgesi odaya girmeden katılımcıları gösterir. Mikrofon, kamera, ayrı ekran paylaşımı ve görüşmeyi küçültme desteklenir. Odalar en fazla **6 katılımcı** alır. Ekran paylaşımı görüntüyü taşır; sistem sesi dahil değildir.
 - **Birden fazla çalışma alanı:** sol üstteki alan adına veya soldaki **+** düğmesine tıklayın. Aynı hesapla alan oluşturabilir, davet bağlantısıyla başka ekibe katılabilir ve soldaki simgelerden geçiş yapabilirsiniz. Sahip/üye rolü her alanda ayrıdır. Görüşme sırasında alan değiştirirken ayrılmanız onaylanır; taslaklar korunur. Aynı tarayıcı oturumunun sekmeleri birlikte geçiş yapar; ayrı giriş yapılan cihazların aktif alanları bağımsızdır. [Üyelik ve geçiş ayrıntıları](docs/WORKSPACES.md).
 - **Ekip:** sahip/üye rolleri, süreli davet, profil ve durum düzenleme, parola değiştirme ve diğer oturumları kapatma.
-- **Yönetim paneli:** üye erişimi, kanal düzenleme/arşivleme, davet iptali, ekip adı, parolayla sahiplik devri ve işlem geçmişi. Ayrı yetkilendirilen uygulama yöneticileri tüm çalışma alanlarının ve hesapların erişimini yönetir. [İlk yönetici ataması ve kullanım](docs/ADMIN.md).
+- **Yönetim paneli:** üye erişimi, kanal düzenleme/arşivleme/silme, davet iptali, ekip adı, parolayla sahiplik devri ve işlem geçmişi. Ayrı yetkilendirilen uygulama yöneticileri tüm çalışma alanlarının ve hesapların erişimini yönetir. [İlk yönetici ataması ve kullanım](docs/ADMIN.md).
 - **Hesap güvenliği:** e-posta doğrulama, tek kullanımlık parola kurtarma bağlantıları, süreli ve şifreli e-posta kuyruğu. Parola kurtarma tüm açık oturumları kapatır.
-- **Klavye:** `Ctrl/⌘ K` arama; `Enter` gönder; `Shift Enter` yeni satır; `Ctrl/⌘ B` kalın yazı; `Esc` pencereyi kapat.
+- **Klavye:** `Ctrl/⌘ K` arama; `Enter` gönder; `Shift Enter` yeni satır; `Ctrl/⌘ B` kalın yazı; kanal veya mesaj odaktayken `Shift F10` işlem menüsü; menü içinde yön tuşları ve `Home/End`; `Esc` menü/pencereyi kapat.
 - **Yerel tercihler:** taslaklar oturum depolamasında; kaydedilen mesajlar ve odak modu bu tarayıcıda tutulur. Kaydedilenler cihazlar arası eşitlenmez.
 
 ## Docker ile dağıtım

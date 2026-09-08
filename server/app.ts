@@ -359,7 +359,7 @@ export function createApp(options: AppOptions = {}) {
     const user = repo.transaction(() => switchWorkspace(req, workspaceId));
     respondWorkspace(req, res, user);
   });
-  installAdminRoutes(app, { repo, io, verifyPassword });
+  installAdminRoutes(app, { repo, io, verifyPassword, uploadDir });
   app.use('/api', (req, _res, next) => { try { requireActiveWorkspace(req); next(); } catch (error) { next(error); } });
   installChannelPermissionRoutes(app,{repo,io});
   collaborationData = installCollaborationData(app,{repo,io,key:featureKey,origin,requiresVerification});

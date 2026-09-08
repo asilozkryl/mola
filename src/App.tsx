@@ -6,6 +6,8 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
 import { io, type Socket } from "socket.io-client";
@@ -13,6 +15,8 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
+  Archive,
+  ArchiveRestore,
   AudioLines,
   Bell,
   BellOff,
@@ -35,10 +39,12 @@ import {
   MonitorUp,
   MoreHorizontal,
   Plus,
+  Pencil,
   Search,
   Settings2,
   ShieldCheck,
   Users,
+  Trash2,
   Video,
   Volume2,
   X,
@@ -74,6 +80,14 @@ import {
 } from "./components/ui";
 import { Composer } from "./components/Composer";
 import { MessageItem } from "./components/MessageItem";
+import {
+  ContextMenu,
+  type ContextMenuPosition,
+} from "./components/ContextMenu";
+import ChannelActionsDialog, {
+  type ChannelActionMode,
+} from "./components/ChannelActionsDialog";
+import "./components/channel-navigation.css";
 import { useCall } from "./lib/useCall";
 import { useMobileNavigation } from "./lib/useMobileNavigation";
 import { usePushSubscription } from "./lib/usePushSubscription";
@@ -108,6 +122,7 @@ type Dialog =
   | "info"
   | "notifications"
   | "integrations"
+  | "archives"
   | null;
 type View = "channel" | "saved" | "inbox";
 let initialBootstrap: Promise<Bootstrap | null> | undefined;
@@ -193,6 +208,19 @@ export default function App() {
     null,
   );
   const [channelAccess, setChannelAccess] = useState<Channel | null>(null);
+  const [channelMenu, setChannelMenu] = useState<{
+    channelId: string;
+    position: ContextMenuPosition;
+    anchor: HTMLElement;
+    workspaceId: string;
+    userId: string;
+  } | null>(null);
+  const [channelAction, setChannelAction] = useState<{
+    channel: Channel;
+    mode: ChannelActionMode;
+    workspaceId: string;
+    userId: string;
+  } | null>(null);
   const [quiet, setQuiet] = useState(
     localStorage.getItem("mola:quiet") === "true",
   );
@@ -268,6 +296,8 @@ export default function App() {
       setShowCall(false);
       setCallSetupChannel(null);
       setChannelAccess(null);
+      setChannelMenu(null);
+      setChannelAction(null);
       setVoicePreviewId(null);
       setView("channel");
       setTab("chat");
@@ -285,23 +315,32 @@ export default function App() {
     )
       setAdminOpen(false);
     const selected =
-      !changed &&
-      next.channels.some((c) => c.id === channelRef.current && !c.archived)
+      !changed && next.channels.some((c) => c.id === channelRef.current)
         ? channelRef.current
         : next.channels.find((c) => c.name === "tasarım" && !c.archived)?.id ||
           next.channels.find((c) => c.kind === "text" && !c.archived)?.id ||
           "";
     if (!changed) {
+      const accessible = new Set(next.channels.map((c) => c.id));
       const allowed = new Set(
         next.channels.filter((c) => !c.archived).map((c) => c.id),
       );
-      setSaved((old) => old.filter((m) => allowed.has(m.channelId)));
+      setSaved((old) => old.filter((m) => accessible.has(m.channelId)));
       setCallSetupChannel((old) => (old && allowed.has(old.id) ? old : null));
-      setChannelAccess((old) => (old && allowed.has(old.id) ? old : null));
+      setChannelAccess((old) => (old && accessible.has(old.id) ? old : null));
+      if (threadRef.current && !accessible.has(threadRef.current.channelId)) {
+        threadRef.current = null;
+        setThread(null);
+        setReplies([]);
+        setLinkedReply(null);
+        setRepliesHasMore(false);
+        setThreadLoading(false);
+      }
       if (channelRef.current !== selected) {
         setMessages([]);
         setReplies([]);
         setThread(null);
+        setLinkedReply(null);
         setPins([]);
         setChannelFiles([]);
         setHasMore(false);
@@ -406,11 +445,36 @@ export default function App() {
     localStorage.setItem("mola:details", String(details));
   }, [details]);
   useEffect(() => {
-    if (dialog || adminOpen || voicePreviewId || callSetupChannel)
+    if (
+      dialog ||
+      adminOpen ||
+      voicePreviewId ||
+      callSetupChannel ||
+      channelAction ||
+      channelAccess
+    )
       setMobileNav(false);
-  }, [dialog, adminOpen, voicePreviewId, callSetupChannel]);
+  }, [
+    dialog,
+    adminOpen,
+    voicePreviewId,
+    callSetupChannel,
+    channelAction,
+    channelAccess,
+  ]);
   useEffect(() => {
-    if (!dialog || !isMobile) return;
+    if (
+      !(
+        dialog ||
+        channelAction ||
+        channelAccess ||
+        voicePreviewId ||
+        callSetupChannel ||
+        adminOpen
+      ) ||
+      !isMobile
+    )
+      return;
     return () => {
       requestAnimationFrame(() => {
         if (
@@ -428,7 +492,17 @@ export default function App() {
         }
       });
     };
-  }, [dialog, isMobile, sidebarRef, triggerRef]);
+  }, [
+    dialog,
+    channelAction,
+    channelAccess,
+    voicePreviewId,
+    callSetupChannel,
+    adminOpen,
+    isMobile,
+    sidebarRef,
+    triggerRef,
+  ]);
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
@@ -989,6 +1063,7 @@ export default function App() {
   }, [data?.workspace.id, data?.user.id, verificationPending]);
 
   const channel = data?.channels.find((c) => c.id === channelId);
+  const threadChannel = data?.channels.find((c) => c.id === thread?.channelId);
   const userMap = useMemo(
     () => new Map(data?.members.map((u) => [u.id, u]) || []),
     [data?.members],
@@ -1038,6 +1113,174 @@ export default function App() {
     (["owner", "admin"].includes(data.user.role) || data.user.siteAdmin),
   );
   const canCreate = Boolean(data && data.user.role !== "guest");
+  const canEditChannel = (target: Channel) =>
+    Boolean(
+      data &&
+      target.kind !== "dm" &&
+      !data.user.suspended &&
+      !data.workspace.suspended &&
+      (canManage ||
+        (data.user.role === "moderator" && target.visibility !== "private")),
+    );
+  const menuChannel =
+    channelMenu?.workspaceId === data?.workspace.id &&
+    channelMenu?.userId === data?.user.id
+      ? data?.channels.find(
+          (candidate) => candidate.id === channelMenu?.channelId,
+        )
+      : undefined;
+  const actionChannel =
+    channelAction?.workspaceId === data?.workspace.id &&
+    channelAction?.userId === data?.user.id
+      ? data?.channels.find(
+          (candidate) => candidate.id === channelAction?.channel.id,
+        )
+      : undefined;
+  function openChannelMenu(
+    target: Channel,
+    anchor: HTMLElement,
+    position?: ContextMenuPosition,
+  ) {
+    if (!data) return;
+    const bounds = anchor.getBoundingClientRect();
+    setChannelMenu({
+      channelId: target.id,
+      workspaceId: data.workspace.id,
+      userId: data.user.id,
+      anchor,
+      position: position || { x: bounds.left, y: bounds.bottom + 4 },
+    });
+  }
+  function channelContext(
+    event: ReactMouseEvent<HTMLElement>,
+    target: Channel,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    openChannelMenu(
+      target,
+      event.currentTarget.querySelector<HTMLElement>(".channel-nav, button") ||
+        event.currentTarget,
+      { x: event.clientX, y: event.clientY },
+    );
+  }
+  function channelMenuKey(
+    event: ReactKeyboardEvent<HTMLElement>,
+    target: Channel,
+  ) {
+    if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10"))
+      return;
+    event.preventDefault();
+    event.stopPropagation();
+    openChannelMenu(target, event.currentTarget);
+  }
+  function editChannel(target: Channel, mode: ChannelActionMode) {
+    if (!data || !canEditChannel(target)) return;
+    setChannelMenu(null);
+    setDialog(null);
+    setChannelAction({
+      channel: target,
+      mode,
+      workspaceId: data.workspace.id,
+      userId: data.user.id,
+    });
+  }
+  async function markChannelRead(target: Channel) {
+    if (!data) return;
+    const workspaceId = data.workspace.id,
+      userId = data.user.id;
+    try {
+      await api(`/channels/${target.id}/read`, {
+        method: "POST",
+        body: "{}",
+        headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
+      });
+      if (
+        dataRef.current?.workspace.id !== workspaceId ||
+        dataRef.current?.user.id !== userId
+      )
+        return;
+      setUnread((old) => ({ ...old, [target.id]: 0 }));
+      notify("Kanal okundu olarak işaretlendi.");
+    } catch (error) {
+      fail((error as Error).message);
+    }
+  }
+  const channelMenuItems = menuChannel
+    ? [
+        {
+          label:
+            menuChannel.kind === "voice" && !menuChannel.archived
+              ? "Sesli odaya katıl"
+              : "Sohbeti aç",
+          icon: <MessageSquare size={16} />,
+          onSelect: () => {
+            setDialog(null);
+            if (menuChannel.kind === "voice" && !menuChannel.archived)
+              startCall(menuChannel);
+            else selectChannel(menuChannel.id);
+          },
+        },
+        {
+          label: "Okundu olarak işaretle",
+          icon: <Check size={16} />,
+          disabled: menuChannel.archived,
+          onSelect: () => void markChannelRead(menuChannel),
+        },
+        {
+          label: "Kanal adını kopyala",
+          icon: <Copy size={16} />,
+          onSelect: () => {
+            void navigator.clipboard
+              .writeText(menuChannel.name)
+              .then(() => notify("Kanal adı kopyalandı."))
+              .catch(() =>
+                fail("Kanal adı kopyalanamadı. Yeniden deneyebilirsin."),
+              );
+          },
+        },
+        ...(menuChannel.kind !== "dm"
+          ? [
+              {
+                label: "Kanal erişimi ve üyeler",
+                icon: <ShieldCheck size={16} />,
+                onSelect: () => {
+                  setDialog(null);
+                  setChannelAccess(menuChannel);
+                },
+              },
+            ]
+          : []),
+        ...(canEditChannel(menuChannel)
+          ? [
+              {
+                label: "Kanalı düzenle",
+                icon: <Pencil size={16} />,
+                separatorBefore: true,
+                onSelect: () => editChannel(menuChannel, "edit"),
+              },
+              {
+                label: menuChannel.archived
+                  ? "Arşivden çıkar"
+                  : "Kanalı arşivle",
+                icon: menuChannel.archived ? (
+                  <ArchiveRestore size={16} />
+                ) : (
+                  <Archive size={16} />
+                ),
+                onSelect: () => editChannel(menuChannel, "archive"),
+              },
+              {
+                label: "Kanalı sil",
+                icon: <Trash2 size={16} />,
+                danger: true,
+                separatorBefore: true,
+                onSelect: () => editChannel(menuChannel, "delete"),
+              },
+            ]
+          : []),
+      ]
+    : [];
   const voiceChannels = new Map(
     call.voiceChannels.map((roster) => [roster.channelId, roster.peers]),
   );
@@ -1607,32 +1850,49 @@ export default function App() {
             {data.channels
               .filter((c) => c.kind === "text" && !c.archived)
               .map((c) => (
-                <button
+                <div
                   key={c.id}
-                  className={`channel-nav ${channelId === c.id && view === "channel" ? "selected" : ""}`}
-                  aria-current={
-                    channelId === c.id && view === "channel"
-                      ? "page"
-                      : undefined
-                  }
-                  title={c.description || c.name}
-                  onClick={() => selectChannel(c.id)}
+                  className="channel-nav-row"
+                  onContextMenu={(event) => channelContext(event, c)}
                 >
-                  <>
-                    {c.visibility === "private" ? (
-                      <Lock size={16} />
-                    ) : (
-                      <Hash size={18} />
+                  <button
+                    className={`channel-nav ${channelId === c.id && view === "channel" ? "selected" : ""}`}
+                    aria-current={
+                      channelId === c.id && view === "channel"
+                        ? "page"
+                        : undefined
+                    }
+                    title={c.description || c.name}
+                    onClick={() => selectChannel(c.id)}
+                    onKeyDown={(event) => channelMenuKey(event, c)}
+                  >
+                    <>
+                      {c.visibility === "private" ? (
+                        <Lock size={16} />
+                      ) : (
+                        <Hash size={18} />
+                      )}
+                    </>
+                    <span>{c.name}</span>
+                    {(unread[c.id] || 0) > 0 && (
+                      <span className="count-badge">{unread[c.id]}</span>
                     )}
-                  </>
-                  <span>{c.name}</span>
-                  {(unread[c.id] || 0) > 0 && (
-                    <span className="count-badge">{unread[c.id]}</span>
-                  )}
-                  {channelId === c.id && view === "channel" && (
-                    <span className="selected-dot" />
-                  )}
-                </button>
+                    {channelId === c.id && view === "channel" && (
+                      <span className="selected-dot" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button channel-row-menu"
+                    aria-label={`${c.name} kanal işlemleri`}
+                    title="Kanal işlemleri"
+                    aria-haspopup="menu"
+                    aria-expanded={menuChannel?.id === c.id}
+                    onClick={(event) => openChannelMenu(c, event.currentTarget)}
+                  >
+                    <MoreHorizontal size={17} />
+                  </button>
+                </div>
               ))}
             <button
               className="add-channel"
@@ -1641,6 +1901,15 @@ export default function App() {
             >
               <Plus size={16} />
               Kanal ekle
+            </button>
+            <button
+              className="add-channel"
+              onClick={() => setDialog("archives")}
+            >
+              <Archive size={16} /> Arşivlenmiş kanallar
+              {data.channels.some((c) => c.archived) && (
+                <span>({data.channels.filter((c) => c.archived).length})</span>
+              )}
             </button>
           </NavigationSection>
           <NavigationSection
@@ -1654,11 +1923,15 @@ export default function App() {
                 const peers = connected ? voiceChannels.get(c.id) || [] : [];
                 return (
                   <div key={c.id} className="voice-channel-entry">
-                    <div className="voice-channel-row">
+                    <div
+                      className="voice-channel-row"
+                      onContextMenu={(event) => channelContext(event, c)}
+                    >
                       <button
                         aria-label={c.name}
                         className={`channel-nav voice-nav ${call.channelId === c.id ? "voice-active" : ""}`}
                         onClick={() => startCall(c)}
+                        onKeyDown={(event) => channelMenuKey(event, c)}
                       >
                         <Volume2 size={18} />
                         <span>{c.name}</span>
@@ -1680,6 +1953,19 @@ export default function App() {
                       >
                         <Users size={15} />
                       </IconButton>
+                      <button
+                        type="button"
+                        className="icon-button channel-row-menu"
+                        aria-label={`${c.name} kanal işlemleri`}
+                        title="Kanal işlemleri"
+                        aria-haspopup="menu"
+                        aria-expanded={menuChannel?.id === c.id}
+                        onClick={(event) =>
+                          openChannelMenu(c, event.currentTarget)
+                        }
+                      >
+                        <MoreHorizontal size={17} />
+                      </button>
                     </div>
                     {peers.length > 0 && (
                       <VoiceParticipants
@@ -1941,6 +2227,11 @@ export default function App() {
                         : view === "inbox"
                           ? "Gelen kutusu"
                           : channelName}
+                      {view === "channel" && channel?.archived && (
+                        <span className="channel-archived-label">
+                          <Archive size={12} /> Arşivde
+                        </span>
+                      )}
                     </h1>
                     <p>
                       {view === "saved"
@@ -1967,6 +2258,7 @@ export default function App() {
                         className="huddle-button"
                         aria-label="Bir araya gel"
                         onClick={() => startCall()}
+                        disabled={channel?.archived || !channel}
                       >
                         <Headphones size={17} />
                         <span>Bir araya gel</span>
@@ -1985,6 +2277,25 @@ export default function App() {
                       >
                         <Info size={20} />
                       </IconButton>
+                      {channel && channel.kind !== "dm" && (
+                        <button
+                          type="button"
+                          className="icon-button channel-actions-trigger"
+                          aria-label="Kanal işlemleri"
+                          title="Kanal işlemleri"
+                          aria-haspopup="menu"
+                          aria-expanded={menuChannel?.id === channel.id}
+                          onClick={(event) =>
+                            openChannelMenu(channel, event.currentTarget)
+                          }
+                          onContextMenu={(event) =>
+                            channelContext(event, channel)
+                          }
+                          onKeyDown={(event) => channelMenuKey(event, channel)}
+                        >
+                          <MoreHorizontal size={19} />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2336,7 +2647,7 @@ export default function App() {
                   </>
                 )}
               </section>
-              {thread ? (
+              {thread && threadChannel ? (
                 <aside className="thread-panel">
                   <div className="details-heading">
                     <h2>Mesaj dizisi</h2>
@@ -2378,8 +2689,7 @@ export default function App() {
                       replies.map((m) => renderMessage(m, true))
                     )}
                   </div>
-                  {data.channels.find((c) => c.id === thread.channelId)
-                    ?.archived ? (
+                  {threadChannel.archived ? (
                     <p className="archived-channel-note">
                       Bu kanal arşivde. Yeni yanıt eklenemez.
                     </p>
@@ -2443,7 +2753,10 @@ export default function App() {
                       <div className="huddle-card">
                         <h4>Birlikte üzerinden geçin</h4>
                         <p>Sesli konuş, gerekirse ekranını paylaş.</p>
-                        <button onClick={() => startCall()}>
+                        <button
+                          disabled={!channel || channel.archived}
+                          onClick={() => startCall()}
+                        >
                           <Headphones size={16} />
                           Sesli sohbet başlat
                         </button>
@@ -2675,6 +2988,7 @@ export default function App() {
           </button>
           <button
             className="primary-button full-width"
+            disabled={channel?.archived || !channel}
             onClick={() => {
               setDialog(null);
               startCall();
@@ -2683,6 +2997,68 @@ export default function App() {
             <Headphones size={18} />
             Bir araya gel
           </button>
+        </Modal>
+      )}
+      {dialog === "archives" && (
+        <Modal title="Arşivlenmiş kanallar" onClose={() => setDialog(null)}>
+          <p className="modal-description">
+            Arşivlenen kanalların geçmişini okuyabilir, yetkin varsa yeniden
+            kullanıma açabilirsin.
+          </p>
+          <div className="archive-channel-list">
+            {data.channels
+              .filter((c) => c.kind !== "dm" && c.archived)
+              .map((c) => (
+                <div
+                  className="archive-channel-row"
+                  key={c.id}
+                  onContextMenu={(event) => channelContext(event, c)}
+                >
+                  <button
+                    onClick={() => {
+                      selectChannel(c.id);
+                      setDialog(null);
+                    }}
+                    onKeyDown={(event) => channelMenuKey(event, c)}
+                  >
+                    <strong>{c.name}</strong>
+                    <small>
+                      {c.description ||
+                        (c.kind === "voice"
+                          ? "Sesli oda"
+                          : "Yazılı kanal")}{" "}
+                      · Geçmişi aç
+                    </small>
+                  </button>
+                  {canEditChannel(c) && (
+                    <IconButton
+                      label={`${c.name} arşivden çıkar`}
+                      onClick={() => editChannel(c, "archive")}
+                    >
+                      <ArchiveRestore size={18} />
+                    </IconButton>
+                  )}
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label={`${c.name} kanal işlemleri`}
+                    title="Kanal işlemleri"
+                    aria-haspopup="menu"
+                    aria-expanded={menuChannel?.id === c.id}
+                    onClick={(event) => openChannelMenu(c, event.currentTarget)}
+                  >
+                    <MoreHorizontal size={18} />
+                  </button>
+                </div>
+              ))}
+            {!data.channels.some((c) => c.kind !== "dm" && c.archived) && (
+              <p className="archive-empty">
+                Henüz arşivlenmiş kanal yok. Bir kanalı silmeden listeden
+                kaldırmak için kanal menüsündeki “Kanalı arşivle” seçeneğini
+                kullanabilirsin.
+              </p>
+            )}
+          </div>
         </Modal>
       )}
       {dialog === "members" && (
@@ -2852,6 +3228,73 @@ export default function App() {
           }}
         />
       )}
+      {channelAction && actionChannel && canEditChannel(actionChannel) && (
+        <ChannelActionsDialog
+          channel={actionChannel}
+          mode={channelAction.mode}
+          workspaceId={channelAction.workspaceId}
+          userId={channelAction.userId}
+          onClose={() => setChannelAction(null)}
+          onChanged={(updated) => {
+            if (
+              dataRef.current?.workspace.id !== channelAction.workspaceId ||
+              dataRef.current?.user.id !== channelAction.userId
+            )
+              return;
+            setData((old) =>
+              old
+                ? {
+                    ...old,
+                    channels: old.channels.map((c) =>
+                      c.id === updated.id ? updated : c,
+                    ),
+                  }
+                : old,
+            );
+            setChannelAction(null);
+            notify(
+              channelAction.mode === "archive"
+                ? updated.archived
+                  ? "Kanal arşivlendi. Geçmişi Arşivlenmiş kanallar bölümünden açabilirsin."
+                  : "Kanal arşivden çıkarıldı."
+                : "Kanal adı ve açıklaması güncellendi.",
+            );
+            void refreshAccess();
+          }}
+          onDeleted={(id) => {
+            if (
+              dataRef.current?.workspace.id !== channelAction.workspaceId ||
+              dataRef.current?.user.id !== channelAction.userId
+            )
+              return;
+            setChannelAction(null);
+            setChannelMenu(null);
+            setUnread((old) => {
+              const next = { ...old };
+              delete next[id];
+              return next;
+            });
+            const current = dataRef.current;
+            acceptData({
+              ...current,
+              channels: current.channels.filter((c) => c.id !== id),
+            });
+            notify("Kanal ve içeriği kalıcı olarak silindi.");
+            void refreshAccess();
+          }}
+        />
+      )}
+      <ContextMenu
+        position={menuChannel && channelMenu ? channelMenu.position : null}
+        items={channelMenuItems}
+        label={
+          menuChannel
+            ? `${menuChannel.name} kanal işlemleri`
+            : "Kanal işlemleri"
+        }
+        onClose={() => setChannelMenu(null)}
+        returnFocus={channelMenu?.anchor}
+      />
       {adminOpen &&
         (["owner", "admin"].includes(data.user.role) ||
           data.user.siteAdmin) && (

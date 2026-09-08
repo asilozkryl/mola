@@ -1,6 +1,8 @@
 import type { Express, Request } from 'express';
 import type { Server } from 'socket.io';
 import { randomUUID } from 'node:crypto';
+import { unlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { Repository, type Row } from './db.js';
@@ -24,7 +26,7 @@ export function recordAudit(repo: Repository, actor: Row | null, workspaceId: st
 }
 const event = (row: Row): AuditEvent => ({ id: row.id, actorName: row.actor_name, action: row.action, targetType: row.target_type, targetId: row.target_id, details: row.details, createdAt: row.created_at });
 
-export function installAdminRoutes(app: Express, options: { repo: Repository; io: Server; verifyPassword: (password: string, stored: string | null) => Promise<boolean> }) {
+export function installAdminRoutes(app: Express, options: { repo: Repository; io: Server; uploadDir: string; verifyPassword: (password: string, stored: string | null) => Promise<boolean> }) {
   const { repo, io } = options;
   const refresh = (workspaceId: string) => {
     io.to(`workspace:${workspaceId}`).emit('admin:refresh');
@@ -153,6 +155,41 @@ export function installAdminRoutes(app: Express, options: { repo: Repository; io
     });
     if (input.archived) closeCallRoom(io, channel.id, 'Bu kanal arşivlendi. Görüşme kapatıldı.');
     refresh(actor.workspace_id); res.json({ ok: true });
+  });
+  app.delete('/api/admin/workspace/channels/:id', (req, res) => {
+    const input = parse(z.object({ confirmName: z.string().min(1).max(40) }).strict(), req.body);
+    const deleted = repo.transaction(() => {
+      // Check session, role, workspace access and confirmation under the write lock.
+      // A concurrent rename or permission change must invalidate an old dialog.
+      const actor = currentActor(req);
+      const channel = uuid.safeParse(req.params.id).success ? repo.get("SELECT * FROM channels WHERE id=? AND workspace_id=? AND kind!='dm'", String(req.params.id), actor.workspace_id) : undefined;
+      if (!channel) throw new HttpError(404, 'Kanal bulunamadı.');
+      if (actor.membership_suspended_at || actor.membership_removed_at || repo.workspace(actor.workspace_id).suspended || !canManageChannel(repo, actor, channel)) throw new HttpError(403, 'Bu kanalı yönetme yetkiniz yok.');
+      if (input.confirmName !== channel.name) throw new HttpError(400, 'Onaylamak için kanalın güncel adını eksiksiz yazın.');
+      const attachments = repo.all('SELECT a.storage_name FROM attachments a JOIN messages m ON m.id=a.message_id WHERE m.channel_id=?', channel.id);
+      const botIds = repo.all('SELECT b.user_id FROM bot_accounts b JOIN integrations i ON i.id=b.integration_id AND i.bot_user_id=b.user_id WHERE i.channel_id=? AND i.workspace_id=?', channel.id, actor.workspace_id).map(row => row.user_id as string);
+      // Retire the integration identities in this workspace before their bot marker
+      // cascades away. Keep accounts and history in other channels/workspaces intact.
+      for (const botId of botIds) {
+        repo.run('UPDATE workspace_members SET removed_at=coalesce(removed_at,?) WHERE user_id=? AND workspace_id=?', new Date().toISOString(), botId, actor.workspace_id);
+        repo.run('DELETE FROM sessions WHERE user_id=? AND workspace_id=?', botId, actor.workspace_id);
+      }
+      // Foreign keys remove messages/replies, reactions, files, drafts, reads,
+      // notifications/push jobs and channel integrations with their deliveries.
+      repo.run('DELETE FROM channels WHERE id=?', channel.id);
+      recordAudit(repo, actor, actor.workspace_id, 'channel.deleted', 'channel', channel.id);
+      return { id: channel.id as string, workspaceId: actor.workspace_id as string, attachments, botIds };
+    });
+    closeCallRoom(io, deleted.id, 'Bu kanal silindi. Görüşme kapatıldı.');
+    io.in(`channel:${deleted.id}`).socketsLeave(`channel:${deleted.id}`);
+    for (const botId of deleted.botIds) io.in(`workspace-user:${deleted.workspaceId}:${botId}`).disconnectSockets(true);
+    // Unlink only committed deletions and generated upload names. Hourly maintenance
+    // retries orphan cleanup if the process crashes or a file is temporarily locked.
+    for (const file of deleted.attachments) {
+      if (!/^[a-f0-9-]{36}\.bin$/.test(file.storage_name) || repo.get('SELECT id FROM attachments WHERE storage_name=?', file.storage_name)) continue;
+      try { unlinkSync(join(options.uploadDir, file.storage_name)); } catch { /* Reclaimed by maintenance. */ }
+    }
+    refresh(deleted.workspaceId); res.status(204).end();
   });
   app.delete('/api/admin/workspace/invites/:id', (req, res) => {
     const actor = teamAdmin(req);
