@@ -589,6 +589,18 @@
   padding: 14px 0;
   border-block: 1px solid var(--line);
 }
+.channel-membership-scope,
+.workspace-invite-scope {
+  margin: 0 0 16px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--active-surface);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
 .channel-info-content .detail-members {
   gap: 4px;
 }

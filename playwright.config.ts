@@ -28,7 +28,9 @@ export default defineConfig({
       url: 'http://127.0.0.1:3101/api/health',
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { NODE_ENV: 'test', PORT: '3101', HOST: '127.0.0.1', DATA_DIR: dataDir, APP_ORIGIN: 'http://127.0.0.1:5174', ENABLE_DEMO: 'true', TRUST_PROXY: '0', MOLA_TEST_AUTH_LIMIT: '100', MOLA_TEST_API_LIMIT: '2000' },
+      // The full suite shares one localhost IP for demo, login and registration.
+      // This override is accepted only in NODE_ENV=test; production limits stay intact.
+      env: { NODE_ENV: 'test', PORT: '3101', HOST: '127.0.0.1', DATA_DIR: dataDir, APP_ORIGIN: 'http://127.0.0.1:5174', ENABLE_DEMO: 'true', TRUST_PROXY: '0', MOLA_TEST_AUTH_LIMIT: '500', MOLA_TEST_API_LIMIT: '2000' },
     },
     {
       command: 'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5174 --strictPort',

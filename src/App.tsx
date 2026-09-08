@@ -2358,7 +2358,7 @@ export default function App() {
                 className="sidebar-invite"
                 onClick={() => setDialog("invite")}
               >
-                <Plus size={17} /> Arkadaşlarını davet et
+                <Plus size={17} /> Çalışma alanına davet et
               </button>
             )
           )}
@@ -3222,6 +3222,13 @@ export default function App() {
             <p className="channel-about">
               {channel.description || "Ekibinle aynı yerde, aynı sohbette."}
             </p>
+            {channel.kind !== "dm" && (
+              <p className="channel-membership-scope">
+                {channel.visibility === "private"
+                  ? "Yalnızca bu kanala eklenen kişiler erişebilir. Çalışma alanına davet etmek bu kanala erişim vermez."
+                  : "Bu kanal çalışma alanı üyelerine açık. Yalnızca seçtiğin kişiler erişsin istiyorsan kanal erişiminden özel kanal yap."}
+              </p>
+            )}
             <div className="channel-info-members">
               <div className="detail-section-title">
                 <h4>
@@ -3288,13 +3295,16 @@ export default function App() {
                   Kanal erişimi ve üyeler
                 </button>
               )}
-              {canManage && (
+              {canManage && channel.kind !== "dm" && (
                 <button
                   className="secondary-button full-width"
-                  onClick={() => setDialog("invite")}
+                  onClick={() => {
+                    setDialog(null);
+                    setChannelAccess(channel);
+                  }}
                 >
                   <Plus size={16} />
-                  Ekibe birini davet et
+                  Kanala üye ekle
                 </button>
               )}
               <button
@@ -3442,10 +3452,21 @@ export default function App() {
           <button
             className="primary-button full-width"
             disabled={!canManage}
-            onClick={() => setDialog("invite")}
+            onClick={() => {
+              if (
+                memberScope === "channel" &&
+                channel?.kind !== "dm" &&
+                channel
+              ) {
+                setDialog(null);
+                setChannelAccess(channel);
+              } else setDialog("invite");
+            }}
           >
             <Plus size={17} />
-            Ekibe birini davet et
+            {memberScope === "channel" && channel?.kind !== "dm" && channel
+              ? "Kanala üye ekle"
+              : "Çalışma alanına davet et"}
           </button>
         </Modal>
       )}
@@ -4133,7 +4154,7 @@ function InviteDialog({
     }
   }
   return (
-    <Modal title="Ekibine bir yer daha aç." onClose={onClose}>
+    <Modal title="Çalışma alanına davet et" onClose={onClose}>
       <div className="invite-modal-art">
         <Users size={37} />
         <span>✦</span>
@@ -4141,6 +4162,11 @@ function InviteDialog({
       <p className="modal-description">
         Davet bağlantısını paylaş, ekip arkadaşların{" "}
         <strong>{data.workspace.name}</strong> çalışma alanına katılsın.
+      </p>
+      <p className="workspace-invite-scope">
+        Bu bağlantı yalnızca çalışma alanına üyelik verir. Yeni üyeler açık
+        kanalları görebilir; özel kanallara her kanalın{" "}
+        <strong>Kanala üye ekle</strong> alanından ayrıca eklenir.
       </p>
       {data.workspace.isDemo ? (
         <p className="demo-notice">

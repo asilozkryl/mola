@@ -138,7 +138,7 @@ test('mobile messaging stays within the viewport, including long unbroken text',
 test('an owner can invite a second real user and exchange private messages in two browsers', async ({ page, browser }) => {
   await registeredAccount(page, 'Ekip Sahibi');
   await page.getByRole('button', { name: 'Ekip arkadaşlarını davet et', exact: true }).click();
-  const invitation = page.getByRole('dialog', { name: 'Ekibine bir yer daha aç.' });
+  const invitation = page.getByRole('dialog', { name: 'Çalışma alanına davet et' });
   await invitation.getByRole('button', { name: 'Davet bağlantısı oluştur', exact: true }).click();
   const inviteLink = invitation.getByRole('textbox', { name: 'Davet bağlantısı', exact: true });
   await expect(inviteLink).toHaveValue(/\?invite=/);
