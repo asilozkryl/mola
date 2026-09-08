@@ -163,7 +163,7 @@ test("private messages have a real empty state, create conversations and expose 
       .click();
     await expect(picker).toHaveCount(0);
     const composer = page.getByRole("textbox", {
-      name: `#${peer.data.user.name} kanalına mesaj yaz`,
+      name: `${peer.data.user.name} kişisine mesaj yaz`,
       exact: true,
     });
     await expect(composer).toBeVisible();

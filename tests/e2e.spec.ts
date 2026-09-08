@@ -158,11 +158,11 @@ test('an owner can invite a second real user and exchange private messages in tw
     await page.getByRole('button', { name: 'Yeni direkt mesaj', exact: true }).click();
     await page.getByRole('dialog', { name: 'Yeni direkt mesaj', exact: true }).getByLabel('Ekip arkadaşını ara', { exact: true }).fill('Davetli');
     await page.getByRole('button', { name: 'Davetli Arkadaş ile mesajlaş', exact: true }).click();
-    await page.getByRole('textbox', { name: '#Davetli Arkadaş kanalına mesaj yaz', exact: true }).fill('Bu konuşma yalnızca ikimizin arasında.');
+    await page.getByRole('textbox', { name: 'Davetli Arkadaş kişisine mesaj yaz', exact: true }).fill('Bu konuşma yalnızca ikimizin arasında.');
     await page.getByRole('button', { name: 'Mesaj gönder', exact: true }).click();
     await invited.locator('.dm-nav').filter({ hasText: 'Ekip Sahibi' }).click();
     await expect(invited.getByText('Bu konuşma yalnızca ikimizin arasında.', { exact: true })).toBeVisible();
-    await invited.getByRole('textbox', { name: '#Ekip Sahibi kanalına mesaj yaz', exact: true }).fill('Davet ve özel mesaj birlikte çalışıyor.');
+    await invited.getByRole('textbox', { name: 'Ekip Sahibi kişisine mesaj yaz', exact: true }).fill('Davet ve özel mesaj birlikte çalışıyor.');
     await invited.getByRole('button', { name: 'Mesaj gönder', exact: true }).click();
     await expect(page.getByText('Davet ve özel mesaj birlikte çalışıyor.', { exact: true })).toBeVisible();
   } finally { await secondContext.close(); }

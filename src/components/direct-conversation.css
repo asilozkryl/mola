@@ -1,0 +1,255 @@
+.dm-conversation {
+  --dm-width: 960px;
+  --dm-gutter: 24px;
+}
+
+.dm-conversation > .channel-heading {
+  width: 100%;
+  max-width: var(--dm-width);
+  margin-inline: auto;
+  min-height: 76px;
+  height: 76px;
+  padding-inline: var(--dm-gutter);
+  gap: 12px;
+}
+
+.direct-conversation-heading .direct-person-avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 11px;
+}
+.direct-person-avatar .avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  font-size: 12px;
+}
+.direct-person-title .direct-person-name {
+  max-width: 100%;
+  border-radius: 3px;
+  text-align: left;
+  color: #153d36;
+}
+.direct-person-title .direct-person-name > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 17px;
+  letter-spacing: -0.4px;
+  font-weight: 700;
+}
+.direct-person-detail {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+  margin-top: 4px;
+  color: #586568;
+  font-size: 11px;
+}
+.direct-person-detail > [role="status"] {
+  flex-shrink: 0;
+}
+.direct-person-detail .profile-presence {
+  font-size: 11px;
+}
+.direct-person-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-left: 1px solid #dce5e0;
+  padding-left: 10px;
+}
+.dm-conversation .channel-heading-actions {
+  gap: 8px;
+}
+.dm-conversation .huddle-button {
+  color: #153d36;
+  border-color: #dce5e0;
+  background: #f4f7f6;
+}
+.dm-conversation > .channel-tabs-row {
+  width: 100%;
+  max-width: var(--dm-width);
+  margin-inline: auto;
+  padding-inline: var(--dm-gutter);
+  gap: 12px;
+}
+.dm-conversation .channel-tabs {
+  padding-left: 0;
+  gap: 24px;
+}
+.direct-conversation-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-bottom: 8px;
+  color: #586568;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.dm-conversation > .message-scroll {
+  padding: 0;
+}
+.dm-timeline {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 100%;
+  width: 100%;
+  max-width: var(--dm-width);
+  margin-inline: auto;
+  padding: 22px var(--dm-gutter) 6px;
+}
+.dm-timeline > * {
+  flex-shrink: 0;
+}
+.dm-timeline .date-divider {
+  margin: 12px 0 14px;
+  height: 22px;
+}
+.dm-timeline .date-divider::before {
+  background: #e5ece8;
+}
+.dm-timeline .date-divider > span {
+  border: 1px solid #e5ece8;
+  border-radius: 5px;
+  padding: 3px 9px;
+  color: #586568;
+  background: #fff;
+  font-weight: 500;
+}
+.direct-history-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding-block: 10px 6px;
+  color: #586568;
+  font-size: 11px;
+}
+.direct-history-start > svg {
+  flex-shrink: 0;
+}
+.direct-history-start > span {
+  overflow-wrap: anywhere;
+}
+.direct-conversation-intro {
+  align-self: center;
+  max-width: 420px;
+  padding: 26px 0 32px;
+  text-align: center;
+}
+.direct-conversation-intro > .avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 13px;
+  font-size: 14px;
+  margin: 0 auto 14px;
+}
+.direct-conversation-intro > h2 {
+  font-size: 18px;
+  letter-spacing: -0.4px;
+  color: #153d36;
+  overflow-wrap: anywhere;
+}
+.direct-conversation-intro > p {
+  margin: 8px 0 18px;
+  color: #586568;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.direct-intro-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.direct-intro-actions .secondary-button {
+  min-height: 36px;
+  font-size: 12px;
+}
+.direct-intro-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #237459;
+  font-size: 12px;
+}
+.dm-conversation > .typing-indicator,
+.dm-conversation > .composer-wrap {
+  width: 100%;
+  max-width: var(--dm-width);
+  margin-inline: auto;
+  padding-inline: var(--dm-gutter);
+}
+.dm-conversation > .typing-indicator {
+  min-height: 26px;
+  height: 26px;
+  gap: 6px;
+}
+.dm-conversation > .typing-indicator > .avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  font-size: 7px;
+}
+.dm-conversation > .composer-wrap {
+  padding-bottom: 16px;
+}
+
+@media (max-width: 1100px) {
+  .dm-conversation {
+    --dm-gutter: 18px;
+  }
+  .direct-person-note {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .dm-conversation {
+    --dm-gutter: 14px;
+  }
+  .dm-conversation > .channel-heading {
+    height: 70px;
+    min-height: 70px;
+    gap: 10px;
+  }
+  .direct-person-title .direct-person-name > strong {
+    font-size: 15px;
+  }
+  .direct-person-avatar .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    font-size: 11px;
+  }
+  .dm-conversation .channel-heading-actions {
+    gap: 4px;
+  }
+  .dm-conversation .huddle-button {
+    min-width: 36px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+  .dm-conversation .huddle-button > span {
+    display: none;
+  }
+  .direct-conversation-kind {
+    display: none;
+  }
+  .dm-conversation .channel-tabs {
+    gap: 22px;
+  }
+  .dm-conversation > .composer-wrap {
+    padding-bottom: 10px;
+  }
+  .direct-conversation-intro > h2 {
+    font-size: 17px;
+  }
+  .direct-conversation-intro {
+    padding-block: 20px;
+  }
+}

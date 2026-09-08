@@ -34,6 +34,7 @@ export function Composer({
   workspaceId,
   channelId,
   channelName,
+  isDirectMessage = false,
   parentId,
   onSent,
   onTyping,
@@ -44,6 +45,7 @@ export function Composer({
   workspaceId: string;
   channelId: string;
   channelName: string;
+  isDirectMessage?: boolean;
   parentId?: string;
   onSent: (message: Message) => void;
   onTyping?: (typing: boolean) => void;
@@ -52,6 +54,7 @@ export function Composer({
 }) {
   const draft = useSyncedDraft(userId, workspaceId, channelId, parentId);
   const content = draft.content;
+  const direct = isDirectMessage && !parentId;
   const [busy, setBusy] = useState(false);
   const [sendAcknowledged, setSendAcknowledged] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -260,7 +263,7 @@ export function Composer({
   return (
     <div
       ref={root}
-      className={`composer-wrap composer-ux ${parentId ? "thread-composer" : ""}`}
+      className={`composer-wrap composer-ux ${direct ? "composer-direct" : ""} ${parentId ? "thread-composer" : ""}`}
       onKeyDown={(event) => {
         if (event.key === "Escape" && picker) {
           event.preventDefault();
@@ -294,7 +297,7 @@ export function Composer({
       }}
     >
       <div
-        className={`composer ${dragging ? "is-dragging" : ""} ${busy ? "is-sending" : ""}`}
+        className={`composer ${content.trim() || files.length ? "has-content" : ""} ${dragging ? "is-dragging" : ""} ${busy ? "is-sending" : ""}`}
       >
         {dragging && (
           <div className="composer-drop-zone" role="status">
@@ -368,13 +371,19 @@ export function Composer({
         <textarea
           ref={input}
           aria-label={
-            parentId ? "Yanıtını yaz" : `#${channelName} kanalına mesaj yaz`
+            parentId
+              ? "Yanıtını yaz"
+              : direct
+                ? `${channelName} kişisine mesaj yaz`
+                : `#${channelName} kanalına mesaj yaz`
           }
           aria-describedby={`${hintId}${uploading || feedback ? ` ${feedbackId}` : ""}`}
           placeholder={
             parentId
               ? "Sohbete bir yanıt ekle..."
-              : `#${channelName} kanalına bir şeyler yaz...`
+              : direct
+                ? `${channelName} kişisine mesaj yaz…`
+                : `#${channelName} kanalına bir şeyler yaz...`
           }
           value={content}
           maxLength={MAX_MESSAGE_LENGTH}

@@ -113,6 +113,10 @@ import { CallSetup } from "./components/CallSetup";
 import ChannelAccessDialog from "./components/ChannelAccessDialog";
 import { ActivityCenter } from "./components/ActivityCenter";
 import { DirectMessagesCenter } from "./components/DirectMessagesCenter";
+import {
+  DirectConversationIdentity,
+  DirectConversationIntro,
+} from "./components/DirectConversation";
 import IntegrationsDialog from "./components/IntegrationsDialog";
 import { NotificationSettings } from "./components/NotificationSettings";
 import type { NotificationState } from "../shared/collaboration-types";
@@ -1335,11 +1339,17 @@ export default function App() {
     () => new Map(data?.members.map((u) => [u.id, u]) || []),
     [data?.members],
   );
-  const channelName =
+  const directPeer =
     channel?.kind === "dm"
       ? data?.members.find(
-          (u) => channel.memberIds?.includes(u.id) && u.id !== data.user.id,
-        )?.name || channel.name
+          (user) =>
+            channel.memberIds?.includes(user.id) && user.id !== data.user.id,
+        )
+      : undefined;
+  const isDirectConversation = view === "channel" && channel?.kind === "dm";
+  const channelName =
+    channel?.kind === "dm"
+      ? directPeer?.name || channel.name
       : channel?.name || "genel";
   const conversationMembers =
     channel?.kind === "dm" || channel?.visibility === "private"
@@ -1852,7 +1862,7 @@ export default function App() {
       fail((e as Error).message);
     }
   }
-  function renderMessage(message: Message, compact = false) {
+  function renderMessage(message: Message, compact = false, grouped = false) {
     return (
       <MessageItem
         key={message.id}
@@ -1905,6 +1915,7 @@ export default function App() {
           });
         }}
         compact={compact}
+        grouped={grouped}
         readOnly={Boolean(
           data?.channels.find((c) => c.id === message.channelId)?.archived,
         )}
@@ -2363,7 +2374,7 @@ export default function App() {
                     : view === "profile"
                       ? "Profil"
                       : channel?.kind === "dm"
-                        ? "Direkt mesajlar"
+                        ? "Özel mesajlar"
                         : "Kanallar"}
             </span>
           </div>
@@ -2452,75 +2463,97 @@ export default function App() {
             />
           ) : (
             <>
-              <section className="conversation-panel" aria-label="Sohbet">
-                <div className="channel-heading">
-                  <div className="channel-title-icon">
-                    {view === "saved" ? (
-                      <Bookmark size={23} />
-                    ) : view === "inbox" ? (
-                      <Bell size={23} />
-                    ) : view === "messages" ? (
-                      <MessageCircle size={23} />
-                    ) : channel?.kind === "dm" ? (
-                      <MessageCircle size={24} />
-                    ) : (
-                      <Hash size={25} />
-                    )}
-                  </div>
-                  <div className="channel-title">
-                    <h1>
-                      {view === "saved"
-                        ? "Kaydedilenler"
-                        : view === "inbox"
-                          ? "Aktivite"
-                          : view === "messages"
-                            ? "Özel mesajlar"
-                            : channelName}
-                      {view === "channel" && channel?.archived && (
-                        <span className="channel-archived-label">
-                          <Archive size={12} /> Arşivde
-                        </span>
+              <section
+                className={`conversation-panel${isDirectConversation ? " dm-conversation" : ""}`}
+                aria-label="Sohbet"
+              >
+                <div
+                  className={`channel-heading${isDirectConversation ? " direct-conversation-heading" : ""}`}
+                >
+                  {isDirectConversation ? (
+                    <DirectConversationIdentity
+                      peer={directPeer}
+                      name={channelName}
+                      selfId={data.user.id}
+                      online={Boolean(
+                        directPeer && data.onlineIds.includes(directPeer.id),
                       )}
-                    </h1>
-                    <p>
-                      {view === "saved"
-                        ? "Tekrar dönmek istediğin mesajlar, elinin altında."
-                        : view === "inbox"
-                          ? "Bahsetmeler, yanıtlar ve sana ulaşan bildirimler."
-                          : view === "messages"
-                            ? "Ekibinle bire bir konuşmaların, tek bir yerde."
-                            : channel?.description ||
-                              "Ekibinle aynı yerde, aynı sohbette."}
-                    </p>
-                  </div>
+                      connected={connected}
+                      onProfile={openProfile}
+                    />
+                  ) : (
+                    <>
+                      <div className="channel-title-icon">
+                        {view === "saved" ? (
+                          <Bookmark size={23} />
+                        ) : view === "inbox" ? (
+                          <Bell size={23} />
+                        ) : view === "messages" ? (
+                          <MessageCircle size={23} />
+                        ) : channel?.kind === "dm" ? (
+                          <MessageCircle size={24} />
+                        ) : (
+                          <Hash size={25} />
+                        )}
+                      </div>
+                      <div className="channel-title">
+                        <h1>
+                          {view === "saved"
+                            ? "Kaydedilenler"
+                            : view === "inbox"
+                              ? "Aktivite"
+                              : view === "messages"
+                                ? "Özel mesajlar"
+                                : channelName}
+                          {view === "channel" && channel?.archived && (
+                            <span className="channel-archived-label">
+                              <Archive size={12} /> Arşivde
+                            </span>
+                          )}
+                        </h1>
+                        <p>
+                          {view === "saved"
+                            ? "Tekrar dönmek istediğin mesajlar, elinin altında."
+                            : view === "inbox"
+                              ? "Bahsetmeler, yanıtlar ve sana ulaşan bildirimler."
+                              : view === "messages"
+                                ? "Ekibinle bire bir konuşmaların, tek bir yerde."
+                                : channel?.description ||
+                                  "Ekibinle aynı yerde, aynı sohbette."}
+                        </p>
+                      </div>
+                    </>
+                  )}
                   {view === "channel" && (
                     <div className="channel-heading-actions">
-                      <div className="member-stack">
-                        {(onlineMembers.length
-                          ? onlineMembers
-                          : conversationMembers
-                        )
-                          .slice(0, 3)
-                          .map((u) => (
-                            <ProfileIdentity
-                              key={u.id}
-                              user={u}
-                              online={data.onlineIds.includes(u.id)}
-                              connected={connected}
-                              selfId={data.user.id}
-                              onOpen={openProfile}
-                            >
-                              <Avatar user={u} size="tiny" />
-                            </ProfileIdentity>
-                          ))}
-                        <button
-                          className="member-stack-count"
-                          aria-label="Kanal üyelerini gör"
-                          onClick={() => openMembers("channel")}
-                        >
-                          {conversationMembers.length} üye
-                        </button>
-                      </div>
+                      {!isDirectConversation && (
+                        <div className="member-stack">
+                          {(onlineMembers.length
+                            ? onlineMembers
+                            : conversationMembers
+                          )
+                            .slice(0, 3)
+                            .map((u) => (
+                              <ProfileIdentity
+                                key={u.id}
+                                user={u}
+                                online={data.onlineIds.includes(u.id)}
+                                connected={connected}
+                                selfId={data.user.id}
+                                onOpen={openProfile}
+                              >
+                                <Avatar user={u} size="tiny" />
+                              </ProfileIdentity>
+                            ))}
+                          <button
+                            className="member-stack-count"
+                            aria-label="Kanal üyelerini gör"
+                            onClick={() => openMembers("channel")}
+                          >
+                            {conversationMembers.length} üye
+                          </button>
+                        </div>
+                      )}
                       <button
                         className="huddle-button"
                         aria-label="Bir araya gel"
@@ -2533,8 +2566,16 @@ export default function App() {
                       <button
                         type="button"
                         className="icon-button"
-                        title="Kanal bilgisi"
-                        aria-label="Kanal bilgisi"
+                        title={
+                          isDirectConversation
+                            ? "Sohbet bilgisi"
+                            : "Kanal bilgisi"
+                        }
+                        aria-label={
+                          isDirectConversation
+                            ? "Sohbet bilgisi"
+                            : "Kanal bilgisi"
+                        }
                         aria-haspopup="dialog"
                         disabled={!channel}
                         onClick={() => setDialog("info")}
@@ -2627,20 +2668,26 @@ export default function App() {
                         Sabitlenenler
                       </button>
                     </div>
-                    <div
-                      className="channel-tab-end"
-                      data-connected={connected}
-                      role="status"
-                      aria-atomic="true"
-                    >
-                      <span
-                        className={`small-status-dot${connected ? "" : " disconnected"}`}
-                        aria-hidden="true"
-                      />
-                      {connected
-                        ? `${onlineMembers.length} çevrimiçi`
-                        : "Bağlantı bekleniyor"}
-                    </div>
+                    {isDirectConversation ? (
+                      <span className="direct-conversation-kind">
+                        <Lock size={12} aria-hidden="true" /> Özel sohbet
+                      </span>
+                    ) : (
+                      <div
+                        className="channel-tab-end"
+                        data-connected={connected}
+                        role="status"
+                        aria-atomic="true"
+                      >
+                        <span
+                          className={`small-status-dot${connected ? "" : " disconnected"}`}
+                          aria-hidden="true"
+                        />
+                        {connected
+                          ? `${onlineMembers.length} çevrimiçi`
+                          : "Bağlantı bekleniyor"}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div
@@ -2831,7 +2878,11 @@ export default function App() {
                       )}
                     </>
                   ) : (
-                    <>
+                    <div
+                      className={
+                        isDirectConversation ? "dm-timeline" : undefined
+                      }
+                    >
                       {hasMore ? (
                         <button
                           className="load-more"
@@ -2839,6 +2890,26 @@ export default function App() {
                         >
                           Önceki mesajları yükle
                         </button>
+                      ) : isDirectConversation ? (
+                        <DirectConversationIntro
+                          peer={directPeer}
+                          name={channelName}
+                          selfId={data.user.id}
+                          online={Boolean(
+                            directPeer &&
+                            data.onlineIds.includes(directPeer.id),
+                          )}
+                          connected={connected}
+                          onProfile={openProfile}
+                          hasMessages={messages.length > 0}
+                          onCompose={() =>
+                            document
+                              .querySelector<HTMLTextAreaElement>(
+                                ".dm-conversation .composer textarea",
+                              )
+                              ?.focus()
+                          }
+                        />
                       ) : (
                         <div
                           className={`channel-welcome${messages.length ? " channel-welcome-history" : ""}`}
@@ -2864,7 +2935,7 @@ export default function App() {
                           </div>
                         </div>
                       )}
-                      {!messages.length && (
+                      {!messages.length && !isDirectConversation && (
                         <div className="first-message-note">
                           Bu kanalın ilk merhabası senden gelsin. 🌱
                         </div>
@@ -2878,10 +2949,28 @@ export default function App() {
                               <span>{dateLabel(message.createdAt)}</span>
                             </div>
                           )}
-                          {renderMessage(message)}
+                          {renderMessage(
+                            message,
+                            false,
+                            Boolean(
+                              isDirectConversation &&
+                              index > 0 &&
+                              messages[index - 1].userId === message.userId &&
+                              !messages[index - 1].pinned &&
+                              !message.pinned &&
+                              dateLabel(messages[index - 1].createdAt) ===
+                                dateLabel(message.createdAt) &&
+                              Date.parse(message.createdAt) -
+                                Date.parse(messages[index - 1].createdAt) >=
+                                0 &&
+                              Date.parse(message.createdAt) -
+                                Date.parse(messages[index - 1].createdAt) <=
+                                5 * 60_000,
+                            ),
+                          )}
                         </div>
                       ))}
-                    </>
+                    </div>
                   )}
                 </div>
                 {view === "channel" &&
@@ -2912,6 +3001,9 @@ export default function App() {
                     <div className="typing-indicator" aria-live="polite">
                       {connected && typingNames.length > 0 && (
                         <>
+                          {isDirectConversation && directPeer && (
+                            <Avatar user={directPeer} size="tiny" />
+                          )}
                           <span className="typing-dots" aria-hidden="true">
                             <i />
                             <i />
@@ -2934,6 +3026,7 @@ export default function App() {
                         workspaceId={data.workspace.id}
                         channelId={channelId}
                         channelName={channelName}
+                        isDirectMessage={channel?.kind === "dm"}
                         members={conversationMembers.map((m) => m.name)}
                         onSent={onSent}
                         onError={fail}
@@ -3007,6 +3100,7 @@ export default function App() {
                       workspaceId={data.workspace.id}
                       channelId={thread.channelId}
                       channelName={channelName}
+                      isDirectMessage={threadChannel.kind === "dm"}
                       parentId={thread.id}
                       members={conversationMembers.map((m) => m.name)}
                       onSent={onSent}

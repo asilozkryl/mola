@@ -207,26 +207,27 @@ test("live presence respects private and direct conversation membership and reco
       await expect(
         page.getByRole("heading", { name: "Deniz Akış", exact: true }),
       ).toBeVisible();
-      await expect(status).toHaveText("2 çevrimiçi");
+      const directStatus = page.locator('.direct-person-detail [role="status"]');
+      await expect(directStatus).toHaveText("Çevrimiçi");
       await peer.getByRole("button", { name: "Yeni direkt mesaj", exact: true }).click();
       await peer.getByRole("button", { name: "Ece Akış ile mesajlaş", exact: true }).click();
       await peer
-        .getByRole("textbox", { name: /kanalına mesaj yaz/ })
+        .getByRole("textbox", { name: "Ece Akış kişisine mesaj yaz", exact: true })
         .fill("Birazdan paylaşacağım");
       await expect(page.locator(".typing-indicator")).toContainText(
         "Deniz yazıyor",
       );
 
       await page.context().setOffline(true);
-      await expect(status).toHaveAttribute("data-connected", "false");
-      await expect(status).toHaveText("Bağlantı bekleniyor");
+      await expect(directStatus).toHaveAttribute("data-connected", "false");
+      await expect(directStatus).toHaveText("Bağlantı bekleniyor");
       await expect(page.locator(".connection-banner")).toBeVisible();
       await expect(page.locator(".presence-dot")).toHaveCount(0);
       await expect(page.locator(".typing-indicator")).toBeEmpty();
-      await peer.getByRole("textbox", { name: /kanalına mesaj yaz/ }).fill("");
+      await peer.getByRole("textbox", { name: "Ece Akış kişisine mesaj yaz", exact: true }).fill("");
       await page.context().setOffline(false);
-      await expect(status).toHaveAttribute("data-connected", "true");
-      await expect(status).toHaveText("2 çevrimiçi");
+      await expect(directStatus).toHaveAttribute("data-connected", "true");
+      await expect(directStatus).toHaveText("Çevrimiçi");
       await expect(page.locator(".connection-banner")).toHaveCount(0);
       await expect(page.locator(".sidebar-account-profile .presence-dot")).toHaveCount(1);
       await expect(page.locator(".typing-indicator")).toBeEmpty();

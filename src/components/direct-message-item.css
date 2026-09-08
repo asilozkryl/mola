@@ -1,0 +1,240 @@
+.dm-timeline .message[data-message-id] {
+  --message-surface: transparent;
+  width: fit-content;
+  max-width: min(82%, calc(68ch + 66px));
+  margin: 0 auto 0 0;
+  padding: 8px 0;
+  gap: 8px;
+  align-items: flex-start;
+  border-radius: 9px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dm-timeline .message[data-message-id]:is(:hover, :focus-within) {
+  --message-surface: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dm-timeline .message[data-message-id]:focus-visible {
+  outline: 2px solid #237459;
+  outline-offset: 3px;
+}
+
+.dm-timeline .message[data-self="true"] {
+  flex-direction: row-reverse;
+  margin-right: 0;
+  margin-left: auto;
+}
+
+.dm-timeline .message > .avatar,
+.dm-timeline .message .message-author-avatar > .avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+
+.dm-timeline .message > .message-author-avatar {
+  margin-top: 3px;
+}
+
+.dm-timeline .message > .message-body {
+  min-width: 0;
+  max-width: 68ch;
+  padding: 9px 11px;
+  border: 1px solid #e4ebe7;
+  border-radius: 8px;
+  background: #f4f7f6;
+}
+
+.dm-timeline .message[data-self="true"] > .message-body {
+  border-color: #d5e6dc;
+  background: #eaf4ef;
+}
+
+.dm-timeline .message .message-meta {
+  min-height: 16px;
+  margin-bottom: 5px;
+  padding: 0;
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.dm-timeline .message[data-self="true"] .message-meta {
+  justify-content: flex-end;
+}
+
+.dm-timeline .message .message-meta > strong,
+.dm-timeline .message .message-author-name > strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: #153d36;
+}
+
+.dm-timeline .message .message-meta > time,
+.dm-timeline .message .message-meta > small {
+  font-size: 10px;
+  color: #586568;
+}
+
+.dm-timeline .message .self-label {
+  padding: 0;
+  background: transparent;
+  color: #3b675a;
+  font-size: 10px;
+}
+
+.dm-timeline .message .message-text {
+  max-width: 68ch;
+  color: #283d38;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.dm-timeline .message > .message-actions {
+  top: -12px;
+  right: 0;
+  box-shadow: none;
+  border-color: #dce5e0;
+  background: #fff;
+}
+
+.dm-timeline .message[data-self="true"] > .message-actions {
+  right: 40px;
+}
+
+.dm-timeline .message > .message-menu {
+  left: 40px;
+  right: auto;
+  width: min(220px, calc(100vw - 96px));
+}
+
+.dm-timeline .message > .reaction-popover {
+  left: 40px;
+  right: auto;
+  width: min(332px, calc(100vw - 96px));
+  max-width: none;
+}
+
+.dm-timeline .message[data-self="true"] > .message-menu,
+.dm-timeline .message[data-self="true"] > .reaction-popover {
+  left: auto;
+  right: 40px;
+}
+
+.dm-timeline .message .file-attachment {
+  min-width: 0;
+  width: min(280px, 100%);
+  background: #ffffffb3;
+  border-color: #dce5e0;
+}
+
+.dm-timeline .message .file-attachment strong {
+  max-width: none;
+}
+
+.dm-timeline .message .message-reactions {
+  gap: 4px;
+  margin-top: 7px;
+}
+
+.dm-timeline .message .message-reactions > button {
+  background: #ffffffb3;
+}
+
+.dm-timeline .message .message-reactions > button.reacted {
+  background: #dceddf;
+}
+
+.dm-timeline .message .thread-preview {
+  flex-wrap: wrap;
+  margin-top: 7px;
+}
+
+.dm-timeline .message.message-pinned {
+  padding-top: 25px;
+}
+
+.dm-timeline .message.message-pinned > .message-body {
+  border-color: #a9c8b9;
+}
+
+.dm-timeline .message .message-pin-label {
+  top: 5px;
+  left: 40px;
+  font-size: 10px;
+}
+
+.dm-timeline .message[data-self="true"] .message-pin-label {
+  right: 40px;
+  left: auto;
+}
+
+.dm-timeline .message[data-grouped="true"] {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.dm-timeline .message[data-grouped="true"] > .avatar,
+.dm-timeline .message[data-grouped="true"] > .message-author-avatar {
+  visibility: hidden;
+}
+
+.dm-timeline .message[data-grouped="true"] .message-author-name,
+.dm-timeline .message[data-grouped="true"] .message-meta > strong,
+.dm-timeline .message[data-grouped="true"] .self-label,
+.dm-timeline .message[data-grouped="true"] .bot-label {
+  display: none;
+}
+
+.dm-timeline .message[data-grouped="true"] .message-meta {
+  min-height: 14px;
+  margin-bottom: 2px;
+}
+
+@media (max-width: 640px) {
+  .dm-timeline .message[data-message-id] {
+    max-width: 94%;
+  }
+}
+
+@media (max-width: 380px) {
+  .dm-timeline .message[data-message-id] {
+    max-width: 100%;
+  }
+}
+
+@media (pointer: coarse) {
+  .dm-timeline .message > .message-body {
+    padding-right: 56px;
+  }
+
+  .dm-timeline .message > .message-actions {
+    top: 9px;
+    right: 2px;
+    border: 0;
+    background: transparent;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .dm-timeline .message[data-self="true"] > .message-actions {
+    right: 42px;
+  }
+
+  .dm-timeline .message[data-grouped="true"] > .message-actions {
+    top: 3px;
+  }
+
+  .dm-timeline .message.message-pinned > .message-actions {
+    top: 26px;
+  }
+
+  .dm-timeline .message .message-actions > .icon-button {
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+}

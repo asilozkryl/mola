@@ -240,8 +240,67 @@
   font-size: 11px;
 }
 
+.composer-ux.composer-direct .composer {
+  border-color: #dce5e0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.composer-ux.composer-direct .composer.has-content {
+  border-color: #b4c9bd;
+}
+
+.composer-ux.composer-direct .composer:focus-within {
+  border-color: #153d36;
+  box-shadow: 0 0 0 2px #153d3610;
+}
+
+.composer-ux.composer-direct .composer > textarea {
+  padding-inline: 12px;
+  font-size: 14px;
+}
+
+.composer-ux.composer-direct .composer > textarea::placeholder {
+  color: #586568;
+}
+
+.composer-ux.composer-direct .composer-tools {
+  min-height: 40px;
+  padding: 4px 8px;
+}
+
+.composer-ux.composer-direct .composer-tools .icon-button {
+  color: #586568;
+}
+
+.composer-ux.composer-direct .composer-tools .icon-button:hover:not(:disabled),
+.composer-ux.composer-direct .composer-tools .icon-button[aria-pressed="true"] {
+  color: #153d36;
+  background: #eaf4ef;
+}
+
+.composer-ux.composer-direct .send-button {
+  min-height: 32px;
+}
+
+.composer-ux.composer-direct .send-button:not(:disabled) {
+  background: #153d36;
+  color: #fff;
+  box-shadow: none;
+}
+
+.composer-ux.composer-direct .send-button:hover:not(:disabled) {
+  background: #237459;
+}
+
+.composer-ux.composer-direct .composer-hint {
+  font-size: 11px;
+  color: #586568;
+}
+
 @media (max-width: 600px) {
-  .composer-ux .composer > textarea {
+  .composer-ux .composer > textarea,
+  .composer-ux.composer-direct .composer > textarea {
     font-size: 16px;
   }
 
@@ -272,8 +331,13 @@
 }
 
 @media (pointer: coarse) {
-  .composer-ux .send-button {
+  .composer-ux .send-button,
+  .composer-ux.composer-direct .send-button {
     min-height: 40px;
+  }
+
+  .composer-ux.composer-direct .composer-tools {
+    padding-block: 2px;
   }
 }
 

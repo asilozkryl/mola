@@ -12,8 +12,18 @@
   box-shadow: inset 2px 0 #237459;
 }
 
-.message .message-meta > strong {
+.message .message-meta > strong,
+.message .message-author-name > strong {
   color: var(--ink, #20292b);
+}
+
+.message .message-author-name > strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.message-compact .message-author-name > strong {
+  font-size: 11px;
 }
 
 .message .message-meta > time,

@@ -29,6 +29,7 @@ import {
 import { Avatar, fileSize, IconButton, Modal, RichText, timeLabel } from "./ui";
 import { ProfileIdentity } from "./ProfileIdentity";
 import "./message-ux.css";
+import "./direct-message-item.css";
 
 export function MessageItem({
   message,
@@ -42,6 +43,7 @@ export function MessageItem({
   onDelete,
   onEdit,
   compact = false,
+  grouped = false,
   readOnly = false,
   canModerate = false,
   fresh = false,
@@ -61,6 +63,7 @@ export function MessageItem({
   onDelete: () => void;
   onEdit: (content: string) => Promise<void>;
   compact?: boolean;
+  grouped?: boolean;
   readOnly?: boolean;
   canModerate?: boolean;
   fresh?: boolean;
@@ -85,6 +88,8 @@ export function MessageItem({
   const popupId = useId();
   const editHintId = useId();
   const authorIsSelf = message.userId === selfId;
+  const isGrouped = grouped && !compact && !message.pinned;
+  const createdAtLabel = new Date(message.createdAt).toLocaleString("tr-TR");
   const reactionSnapshot = (message.reactions || []).map((reaction) => ({
     emoji: reaction.emoji,
     count: reaction.userIds.length,
@@ -362,8 +367,10 @@ export function MessageItem({
       className={`message ${compact ? "message-compact" : ""} ${message.pinned ? "message-pinned" : ""}`}
       data-message-id={message.id}
       data-fresh={fresh || undefined}
+      data-self={authorIsSelf}
+      data-grouped={isGrouped}
       tabIndex={0}
-      aria-label={`${author?.name || "Üye"}: ${message.content.slice(0, 80)}`}
+      aria-label={`${author?.name || "Üye"}: ${message.content.slice(0, 80)}${isGrouped ? `, ${createdAtLabel}` : ""}`}
       aria-haspopup="menu"
       onContextMenu={(event) => {
         const target = event.target;
@@ -443,10 +450,7 @@ export function MessageItem({
           )}
           {authorIsSelf && <span className="self-label">sen</span>}
           {author?.isBot && <span className="bot-label">bot</span>}
-          <time
-            dateTime={message.createdAt}
-            title={new Date(message.createdAt).toLocaleString("tr-TR")}
-          >
+          <time dateTime={message.createdAt} title={createdAtLabel}>
             {timeLabel(message.createdAt)}
           </time>
           {message.editedAt && <small>düzenlendi</small>}
