@@ -18,6 +18,7 @@ import { installOperations, requestMetrics } from './observability.js';
 import { readListenerConfig } from './listeners.js';
 import { HttpError } from './errors.js';
 import { installAdminRoutes, recordAudit } from './admin.js';
+import { installProfileRoutes } from './profiles.js';
 import { installChannelPermissionRoutes, canCreateChannel, canInviteMembers, canModerateMessages } from './permissions.js';
 import { installAccountSecurity } from './account-security.js';
 import { loadAccountSecurityKey } from './security-key.js';
@@ -538,14 +539,7 @@ export function createApp(options: AppOptions = {}) {
     io.to(`workspace:${req.auth!.workspace_id}`).emit('admin:refresh');
     res.status(201).json({ url: `${origin}/?invite=${token}`, expiresAt: new Date(expiresAt).toISOString() });
   });
-  app.patch('/api/profile', (req, res) => {
-    const input = parse(z.object({ name: displayName.optional(), status: z.string().trim().max(100).optional() }).refine(v => v.name !== undefined || v.status !== undefined), req.body);
-    repo.run('UPDATE users SET name=?,status=? WHERE id=?', input.name ?? req.auth!.name, input.status ?? req.auth!.status, req.auth!.id);
-    const user = repo.user(repo.member(req.auth!.id, req.auth!.workspace_id)!);
-    for (const socket of io.sockets.sockets.values()) if (socket.data.user?.id === user.id) socket.data.user = repo.user(repo.member(user.id, socket.data.workspaceId)!);
-    for (const workspace of repo.workspaces(user.id)) { const member = repo.user(repo.member(user.id, workspace.id)!); io.to(`workspace:${workspace.id}`).emit('member:updated', member); updateCallUser(io, workspace.id, member); }
-    res.json(user);
-  });
+  const profiles = installProfileRoutes(app, { repo, io, uploadDir, requiresVerification });
 
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 0, parts: 2 } });
   const uploadLimiter = rateLimit({ windowMs: 60_000, limit: 12, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Dosya yükleme sınırına ulaştınız. Bir dakika sonra tekrar deneyin.' } });
@@ -664,6 +658,7 @@ export function createApp(options: AppOptions = {}) {
       repo.run('DELETE FROM workspaces WHERE id=? AND is_demo=1', workspace.id);
     });
     // Clear files left behind after expired demo data was removed or a process crash.
+    profiles.cleanup();
     for (const fileName of readdirSync(uploadDir)) if (/^[a-f0-9-]{36}\.bin$/.test(fileName) && !repo.get('SELECT id FROM attachments WHERE storage_name=?', fileName)) { try { if (Date.now() - statSync(join(uploadDir, fileName)).mtimeMs > 60_000) unlinkSync(join(uploadDir, fileName)); } catch {} }
   };
   maintenance();

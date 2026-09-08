@@ -11,6 +11,11 @@ export async function syncDirectory(path) {
   if (process.platform === 'win32') return; // Windows does not expose directory fsync through Node.
   const handle = await open(path, 'r'); try { await handle.sync(); } finally { await handle.close(); }
 }
+export async function syncUploadDirectories(path) {
+  try { await syncDirectory(join(path, 'avatars')); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  await syncDirectory(path);
+}
 export async function verifyBackup(directory, { requireChecksums = false } = {}) {
   const allowed = new Set(['mola.sqlite', 'manifest.json', 'checksums.json', '.mail-key', '.account-security-key', 'uploads']);
   for (const entry of await readdir(directory)) {
@@ -18,16 +23,29 @@ export async function verifyBackup(directory, { requireChecksums = false } = {})
     const info = await lstat(join(directory, entry));
     if (info.isSymbolicLink() || (entry === 'uploads' ? !info.isDirectory() : !info.isFile())) throw new Error('Backup must contain regular files and one uploads directory.');
   }
+  const uploadEntries = [];
   for (const entry of await readdir(join(directory, 'uploads'))) {
     const info = await lstat(join(directory, 'uploads', entry));
+    if (entry === 'avatars') {
+      if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Invalid backup avatar directory.');
+      for (const avatar of await readdir(join(directory, 'uploads', 'avatars'))) {
+        const file = await lstat(join(directory, 'uploads', 'avatars', avatar));
+        if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.webp$/.test(avatar) || !file.isFile() || file.isSymbolicLink()) throw new Error('Invalid backup avatar entry.');
+        uploadEntries.push(`avatars/${avatar}`);
+      }
+      continue;
+    }
     if (!/^[a-f0-9-]{36}\.bin$/.test(entry) || !info.isFile() || info.isSymbolicLink()) throw new Error('Invalid backup upload entry.');
+    uploadEntries.push(entry);
   }
   const db = new DatabaseSync(join(directory, 'mola.sqlite'), { readOnly: true });
-  let rows;
+  let rows, avatars = [];
   try {
     if (db.prepare('PRAGMA integrity_check').get().integrity_check !== 'ok') throw new Error('SQLite integrity check failed.');
     if (db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('SQLite foreign key check failed.');
     rows = db.prepare('SELECT storage_name,size FROM attachments').all();
+    // Old backups remain restorable without migrating or writing their database.
+    if (db.prepare('PRAGMA table_info(users)').all().some(column => column.name === 'avatar_version')) avatars = db.prepare('SELECT DISTINCT avatar_version FROM users WHERE avatar_version IS NOT NULL').all();
   } finally { db.close(); }
   const paths = ['mola.sqlite', 'manifest.json'];
   for (const row of rows) {
@@ -36,7 +54,13 @@ export async function verifyBackup(directory, { requireChecksums = false } = {})
     if ((await stat(join(directory, path))).size !== row.size) throw new Error('Upload size mismatch.');
     paths.push(path);
   }
-  if ((await readdir(join(directory, 'uploads'))).length !== rows.length) throw new Error('Unexpected backup upload files.');
+  for (const avatar of avatars) {
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(avatar.avatar_version)) throw new Error('Unsafe avatar storage name.');
+    const path = join('uploads', 'avatars', `${avatar.avatar_version}.webp`);
+    if ((await stat(join(directory, path))).size === 0) throw new Error('Empty avatar storage file.');
+    paths.push(path);
+  }
+  if (uploadEntries.length !== rows.length + avatars.length) throw new Error('Unexpected backup upload files.');
   for (const key of ['.mail-key', '.account-security-key']) try { await stat(join(directory, key)); paths.push(key); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   const sums = {};
   for (const path of paths) {
@@ -49,7 +73,7 @@ export async function verifyBackup(directory, { requireChecksums = false } = {})
     if (Object.keys(previous).sort().join('\n') !== Object.keys(sums).sort().join('\n')) throw new Error('Backup checksum manifest is incomplete.');
     for (const [path, hash] of Object.entries(previous)) if (sums[path] !== hash) throw new Error(`Backup checksum mismatch: ${path}`);
   } catch (error) { if (error.code !== 'ENOENT' || requireChecksums) throw error; }
-  return { files: rows.length, checksums: sums };
+  return { files: rows.length + avatars.length, checksums: sums };
 }
 
 async function performBackup(options = {}) {
@@ -72,7 +96,7 @@ async function performBackup(options = {}) {
     const verified = await verifyBackup(partial);
     await writeFile(join(partial, 'checksums.json'), JSON.stringify(verified.checksums, null, 2), { mode: 0o600 });
     for (const path of [...Object.keys(verified.checksums), 'checksums.json']) { const handle = await open(join(partial, path), 'r+'); try { await handle.sync(); } finally { await handle.close(); } }
-    await syncDirectory(join(partial, 'uploads')); await syncDirectory(partial);
+    await syncUploadDirectories(join(partial, 'uploads')); await syncDirectory(partial);
     await rename(partial, join(target, name));
     await syncDirectory(target);
     // Keep completed directories only; partial/unknown paths can never become retention targets.

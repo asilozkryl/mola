@@ -13,7 +13,7 @@ export function openDatabase(path: string) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
-  if (version > 5) { db.close(); throw new Error('This database was created by a newer Mola release. Restore the matching application version.'); }
+  if (version > 6) { db.close(); throw new Error('This database was created by a newer Mola release. Restore the matching application version.'); }
   db.function('fold_text', { deterministic: true }, value => String(value ?? '').normalize('NFKC').toLocaleLowerCase('tr-TR'));
   db.exec(`PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, is_demo INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
@@ -111,6 +111,16 @@ export function openDatabase(path: string) {
       db.exec('PRAGMA user_version=5; COMMIT;');
     } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
   }
+  if (version < 6) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(`ALTER TABLE users ADD COLUMN job_title TEXT NOT NULL DEFAULT '';
+        ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT '';
+        ALTER TABLE users ADD COLUMN location TEXT NOT NULL DEFAULT '';
+        ALTER TABLE users ADD COLUMN avatar_version TEXT;
+        PRAGMA user_version=6; COMMIT;`);
+    } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
+  }
   return db;
 }
 
@@ -144,7 +154,20 @@ export class Repository {
     try { const result = fn(); this.db.exec('COMMIT'); return result; }
     catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
-  user(row: Row): User { return { id: row.id, name: row.name, email: row.email, color: row.color, role: row.role, status: row.status || '', emailVerified: Boolean(row.email_verified), siteAdmin: Boolean(row.site_admin), suspended: Boolean(row.suspended_at || row.membership_suspended_at || row.membership_removed_at), ...(this.get('SELECT 1 FROM bot_accounts WHERE user_id=?', row.id) ? { isBot: true } : {}) }; }
+  user(row: Row): User {
+    const suspended = Boolean(row.suspended_at || row.membership_suspended_at || row.membership_removed_at);
+    return {
+      id: row.id, name: row.name, email: row.email, color: row.color, role: row.role, status: row.status || '',
+      // Inactive historical authors keep their name and color, while their profile
+      // details follow the same access rule as the dedicated member endpoint.
+      ...(!suspended ? {
+        jobTitle: row.job_title || '', bio: row.bio || '', location: row.location || '',
+        ...(row.avatar_version && row.workspace_id ? { avatarUrl: `/api/workspaces/${row.workspace_id}/members/${row.id}/avatar/${row.avatar_version}` } : {}),
+      } : {}),
+      emailVerified: Boolean(row.email_verified), siteAdmin: Boolean(row.site_admin), suspended,
+      ...(this.get('SELECT 1 FROM bot_accounts WHERE user_id=?', row.id) ? { isBot: true } : {}),
+    };
+  }
   member(userId: string, workspaceId: string): Row | undefined { return this.get('SELECT u.*,wm.workspace_id,wm.role,wm.joined_at,wm.suspended_at AS membership_suspended_at,wm.removed_at AS membership_removed_at FROM users u JOIN workspace_members wm ON wm.user_id=u.id WHERE u.id=? AND wm.workspace_id=?', userId, workspaceId); }
   members(workspaceId: string): Row[] { return this.all('SELECT u.*,wm.workspace_id,wm.role,wm.joined_at,wm.suspended_at AS membership_suspended_at,wm.removed_at AS membership_removed_at FROM users u JOIN workspace_members wm ON wm.user_id=u.id WHERE wm.workspace_id=? ORDER BY wm.joined_at,u.id', workspaceId); }
   session(hash: string): Row | undefined { return this.get('SELECT u.*,s.workspace_id,wm.role,wm.suspended_at AS membership_suspended_at,wm.removed_at AS membership_removed_at,s.expires_at FROM sessions s JOIN users u ON u.id=s.user_id JOIN workspace_members wm ON wm.user_id=u.id AND wm.workspace_id=s.workspace_id WHERE s.token_hash=? AND s.expires_at>?', hash, Date.now()); }

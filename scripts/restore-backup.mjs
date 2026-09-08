@@ -1,7 +1,7 @@
 import { cp, mkdir, open, readdir, rename, rmdir } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { syncDirectory, verifyBackup } from './backup-runner.mjs';
+import { syncDirectory, syncUploadDirectories, verifyBackup } from './backup-runner.mjs';
 
 const [sourceArg, targetArg] = process.argv.slice(2);
 if (!sourceArg || !targetArg) throw new Error('Usage: node scripts/restore-backup.mjs BACKUP_DIRECTORY NEW_EMPTY_DATA_DIRECTORY');
@@ -16,7 +16,7 @@ await verifyBackup(staging, { requireChecksums: true });
 for (const path of [...Object.keys(verified.checksums), 'checksums.json']) {
   const handle = await open(join(staging, path), 'r+'); try { await handle.sync(); } finally { await handle.close(); }
 }
-await syncDirectory(join(staging, 'uploads')); await syncDirectory(staging);
+await syncUploadDirectories(join(staging, 'uploads')); await syncDirectory(staging);
 await rmdir(target); // Only succeeds while the checked destination is still empty.
 await rename(staging, target);
 await syncDirectory(dirname(target));

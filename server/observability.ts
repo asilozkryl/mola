@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Server } from 'socket.io';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { chmodSync, copyFileSync, existsSync, linkSync, mkdirSync, readFileSync, readdirSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 
 const buckets = [0.005, 0.025, 0.1, 0.5, 1, 5];
@@ -66,12 +66,25 @@ export function installOperations(app: Express, options: { db: DatabaseSync; io:
       if (existing.length >= 3) { res.status(409).json({ error: 'Release or expire previous snapshots before creating another.' }); return; }
       mkdirSync(join(path, 'uploads'), { recursive: true, mode: 0o700 });
       const files = options.db.prepare('SELECT storage_name,size FROM attachments').all() as { storage_name: string; size: number }[];
+      const avatars = options.db.prepare('SELECT DISTINCT avatar_version FROM users WHERE avatar_version IS NOT NULL').all() as { avatar_version: string }[];
+      if (avatars.length) {
+        const info = lstatSync(join(options.uploadDir, 'avatars'));
+        if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Invalid avatar storage directory.');
+      }
+      for (const avatar of avatars) {
+        if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(avatar.avatar_version)) throw new Error('Unexpected avatar storage name.');
+        const storage_name = `avatars/${avatar.avatar_version}.webp`;
+        const info = lstatSync(join(options.uploadDir, storage_name));
+        if (!info.isFile() || info.isSymbolicLink()) throw new Error('Invalid avatar storage file.');
+        files.push({ storage_name, size: info.size });
+      }
       options.db.prepare('VACUUM INTO ?').run(join(path, 'mola.sqlite'));
       chmodSync(join(path, 'mola.sqlite'), 0o600);
       for (const file of files) {
-        if (!/^[a-f0-9-]{36}\.bin$/.test(file.storage_name)) throw new Error('Unexpected upload storage name.');
+        if (!/^[a-f0-9-]{36}\.bin$/.test(file.storage_name) && !/^avatars\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.webp$/.test(file.storage_name)) throw new Error('Unexpected upload storage name.');
         const source = join(options.uploadDir, file.storage_name);
         if (statSync(source).size !== file.size) throw new Error('Upload size does not match database.');
+        mkdirSync(dirname(join(path, 'uploads', file.storage_name)), { recursive: true, mode: 0o700 });
         try { linkSync(source, join(path, 'uploads', file.storage_name)); }
         catch (error) { if (['EXDEV', 'EPERM', 'ENOTSUP'].includes((error as NodeJS.ErrnoException).code || '')) copyFileSync(source, join(path, 'uploads', file.storage_name)); else throw error; }
       }

@@ -103,6 +103,9 @@ import IntegrationsDialog from "./components/IntegrationsDialog";
 import { NotificationSettings } from "./components/NotificationSettings";
 import type { NotificationState } from "../shared/collaboration-types";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { ProfileIdentity } from "./components/ProfileIdentity";
+import ProfilePage from "./components/ProfilePage";
+import "./components/profile-navigation.css";
 import AdminPanel from "./components/AdminPanel";
 import {
   WorkspaceSwitcher,
@@ -128,7 +131,7 @@ type Dialog =
   | "integrations"
   | "archives"
   | null;
-type View = "channel" | "saved" | "inbox";
+type View = "channel" | "saved" | "inbox" | "profile";
 let initialBootstrap: Promise<Bootstrap | null> | undefined;
 const uniqueMessages = (list: Message[]) =>
   [...new Map(list.map((m) => [m.id, m])).values()].sort((a, b) =>
@@ -180,6 +183,11 @@ export default function App() {
   const [voicePreviewId, setVoicePreviewId] = useState<string | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
   const [view, setView] = useState<View>("channel");
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const profileReturn = useRef<{
+    view: Exclude<View, "profile">;
+    scrollTop: number;
+  } | null>(null);
   const [tab, setTab] = useState<"chat" | "files" | "pins">("chat");
   const [details, setDetails] = useState(
     () => localStorage.getItem("mola:details") === "true",
@@ -265,111 +273,122 @@ export default function App() {
     (message: string) => notify(message, true),
     [notify],
   );
-  const acceptData = useCallback((next: Bootstrap) => {
-    const contextChanged =
-      dataRef.current?.workspace.id !== next.workspace.id ||
-      dataRef.current?.user.id !== next.user.id;
-    const changed =
-      dataRef.current?.workspace.id !== next.workspace.id ||
-      dataRef.current?.user.id !== next.user.id ||
-      Boolean(dataRef.current?.user.suspended) !==
-        Boolean(next.user.suspended) ||
-      Boolean(dataRef.current?.workspace.suspended) !==
-        Boolean(next.workspace.suspended);
-    setApiWorkspace(next.workspace.id);
-    initialBootstrap = Promise.resolve(next);
-    if (changed) {
-      accessVersion.current += 1;
-      callRef.current.leave();
-      socketRef.current?.removeAllListeners();
-      socketRef.current?.disconnect();
-      socketRef.current = null;
-      setSocket(null);
-      setConnected(false);
-      setMessages([]);
-      setPins([]);
-      setChannelFiles([]);
-      setReplies([]);
-      setThread(null);
-      setLinkedReply(null);
-      threadRef.current = null;
-      setTyping({});
-      setUnread({});
-      setNotificationState(null);
-      setNotificationError("");
-      setSaved([]);
-      setSavedOwner("");
-      setHasMore(false);
-      setRepliesHasMore(false);
-      setShowCall(false);
-      setCallSetupChannel(null);
-      setChannelAccess(null);
-      setChannelMenu(null);
-      setChannelAction(null);
-      setVoicePreviewId(null);
-      setView("channel");
-      setTab("chat");
-      setDialog(null);
-      setMobileNav(false);
-      if (contextChanged)
-        setAdminOpen(Boolean(next.workspace.suspended && next.user.siteAdmin));
-      else if (next.workspace.suspended && next.user.siteAdmin)
-        setAdminOpen(true);
-      else if (next.user.suspended && !next.user.siteAdmin) setAdminOpen(false);
-      highlightRef.current = null;
-    } else if (
-      !["owner", "admin"].includes(next.user.role) &&
-      !next.user.siteAdmin
-    )
-      setAdminOpen(false);
-    const selected =
-      !changed && next.channels.some((c) => c.id === channelRef.current)
-        ? channelRef.current
-        : next.channels.find((c) => c.name === "tasarım" && !c.archived)?.id ||
-          next.channels.find((c) => c.kind === "text" && !c.archived)?.id ||
-          "";
-    if (!changed) {
-      const accessible = new Set(next.channels.map((c) => c.id));
-      const allowed = new Set(
-        next.channels.filter((c) => !c.archived).map((c) => c.id),
-      );
-      setSaved((old) => old.filter((m) => accessible.has(m.channelId)));
-      setCallSetupChannel((old) => (old && allowed.has(old.id) ? old : null));
-      setChannelAccess((old) => (old && accessible.has(old.id) ? old : null));
-      if (threadRef.current && !accessible.has(threadRef.current.channelId)) {
-        threadRef.current = null;
-        setThread(null);
-        setReplies([]);
-        setLinkedReply(null);
-        setRepliesHasMore(false);
-        setThreadLoading(false);
-      }
-      if (channelRef.current !== selected) {
+  const acceptData = useCallback(
+    (next: Bootstrap, preserveProfileRoute = false) => {
+      const contextChanged =
+        dataRef.current?.workspace.id !== next.workspace.id ||
+        dataRef.current?.user.id !== next.user.id;
+      const changed =
+        dataRef.current?.workspace.id !== next.workspace.id ||
+        dataRef.current?.user.id !== next.user.id ||
+        Boolean(dataRef.current?.user.suspended) !==
+          Boolean(next.user.suspended) ||
+        Boolean(dataRef.current?.workspace.suspended) !==
+          Boolean(next.workspace.suspended);
+      if (contextChanged && dataRef.current && !preserveProfileRoute)
+        clearProfileAddress();
+      setApiWorkspace(next.workspace.id);
+      initialBootstrap = Promise.resolve(next);
+      if (changed) {
+        accessVersion.current += 1;
+        callRef.current.leave();
+        socketRef.current?.removeAllListeners();
+        socketRef.current?.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+        setConnected(false);
         setMessages([]);
-        setReplies([]);
-        setThread(null);
-        setLinkedReply(null);
         setPins([]);
         setChannelFiles([]);
-        setHasMore(false);
+        setReplies([]);
+        setThread(null);
+        setLinkedReply(null);
         threadRef.current = null;
+        setTyping({});
+        setUnread({});
+        setNotificationState(null);
+        setNotificationError("");
+        setSaved([]);
+        setSavedOwner("");
+        setHasMore(false);
+        setRepliesHasMore(false);
+        setShowCall(false);
+        setCallSetupChannel(null);
+        setChannelAccess(null);
+        setChannelMenu(null);
+        setChannelAction(null);
+        setVoicePreviewId(null);
+        setView("channel");
+        setProfileId(null);
+        profileReturn.current = null;
+        setTab("chat");
+        setDialog(null);
+        setMobileNav(false);
+        if (contextChanged)
+          setAdminOpen(
+            Boolean(next.workspace.suspended && next.user.siteAdmin),
+          );
+        else if (next.workspace.suspended && next.user.siteAdmin)
+          setAdminOpen(true);
+        else if (next.user.suspended && !next.user.siteAdmin)
+          setAdminOpen(false);
+        highlightRef.current = null;
+      } else if (
+        !["owner", "admin"].includes(next.user.role) &&
+        !next.user.siteAdmin
+      )
+        setAdminOpen(false);
+      const selected =
+        !changed && next.channels.some((c) => c.id === channelRef.current)
+          ? channelRef.current
+          : next.channels.find((c) => c.name === "tasarım" && !c.archived)
+              ?.id ||
+            next.channels.find((c) => c.kind === "text" && !c.archived)?.id ||
+            "";
+      if (!changed) {
+        const accessible = new Set(next.channels.map((c) => c.id));
+        const allowed = new Set(
+          next.channels.filter((c) => !c.archived).map((c) => c.id),
+        );
+        setSaved((old) => old.filter((m) => accessible.has(m.channelId)));
+        setCallSetupChannel((old) => (old && allowed.has(old.id) ? old : null));
+        setChannelAccess((old) => (old && accessible.has(old.id) ? old : null));
+        if (threadRef.current && !accessible.has(threadRef.current.channelId)) {
+          threadRef.current = null;
+          setThread(null);
+          setReplies([]);
+          setLinkedReply(null);
+          setRepliesHasMore(false);
+          setThreadLoading(false);
+        }
+        if (channelRef.current !== selected) {
+          setMessages([]);
+          setReplies([]);
+          setThread(null);
+          setLinkedReply(null);
+          setPins([]);
+          setChannelFiles([]);
+          setHasMore(false);
+          threadRef.current = null;
+        }
       }
-    }
-    channelRef.current = selected;
-    dataRef.current = next;
-    setData(next);
-    setBootstrapRevision((revision) => revision + 1);
-    setChannelId(selected);
-    const invite = new URLSearchParams(location.search).get("invite");
-    if (invite && !next.workspace.isDemo) {
-      setWorkspaceInvite(invite);
-      setWorkspaceMode("join");
-      setWorkspaceTarget(undefined);
-      setDialog("workspaces");
-      history.replaceState(null, "", location.pathname + location.hash);
-    }
-    setLoading(false);
-  }, []);
+      channelRef.current = selected;
+      dataRef.current = next;
+      setData(next);
+      setBootstrapRevision((revision) => revision + 1);
+      setChannelId(selected);
+      const invite = new URLSearchParams(location.search).get("invite");
+      if (invite && !next.workspace.isDemo) {
+        setWorkspaceInvite(invite);
+        setWorkspaceMode("join");
+        setWorkspaceTarget(undefined);
+        setDialog("workspaces");
+        history.replaceState(null, "", location.pathname + location.hash);
+      }
+      setLoading(false);
+    },
+    [],
+  );
   const refreshAccess = useCallback(async () => {
     const version = ++accessVersion.current;
     try {
@@ -1031,7 +1050,7 @@ export default function App() {
       const params = new URLSearchParams(location.search),
         id = params.get("message"),
         workspace = params.get("workspace");
-      if (!id || !workspace) return;
+      if (!id || !workspace || params.has("profile")) return;
       const clean = () => {
         params.delete("message");
         params.delete("workspace");
@@ -1083,6 +1102,55 @@ export default function App() {
     };
   }, [data?.workspace.id, data?.user.id, verificationPending]);
 
+  useEffect(() => {
+    if (!data || verificationPending) return;
+    let cancelled = false;
+    const followProfile = async () => {
+      const params = new URLSearchParams(location.search);
+      const id = params.get("profile");
+      if (!id) {
+        if (viewRef.current === "profile") restoreProfileReturn();
+        return;
+      }
+      const workspaceId = params.get("workspace") || data.workspace.id;
+      if (
+        !data.workspaces.some(
+          (workspace) =>
+            workspace.id === workspaceId &&
+            !workspace.membershipSuspended &&
+            !workspace.suspended,
+        )
+      ) {
+        clearProfileAddress();
+        restoreProfileReturn();
+        fail("Bu profilin çalışma alanına erişimin yok.");
+        return;
+      }
+      if (workspaceId !== data.workspace.id) {
+        if (callRef.current.joined || callRef.current.joining) {
+          openWorkspaces("list", workspaceId);
+          return;
+        }
+        try {
+          await changeWorkspace({ kind: "switch", id: workspaceId }, true);
+        } catch (error) {
+          if (!cancelled) {
+            clearProfileAddress();
+            fail((error as Error).message);
+          }
+        }
+        return;
+      }
+      if (!cancelled) showProfile(id);
+    };
+    void followProfile();
+    window.addEventListener("popstate", followProfile);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("popstate", followProfile);
+    };
+  }, [data?.user.id, data?.workspace.id, verificationPending]);
+
   const channel = data?.channels.find((c) => c.id === channelId);
   const threadChannel = data?.channels.find((c) => c.id === thread?.channelId);
   const userMap = useMemo(
@@ -1097,7 +1165,9 @@ export default function App() {
       : channel?.name || "genel";
   const conversationMembers =
     channel?.kind === "dm" || channel?.visibility === "private"
-      ? data?.members.filter((m) => channel.memberIds?.includes(m.id)) || []
+      ? data?.members.filter(
+          (m) => !m.suspended && channel.memberIds?.includes(m.id),
+        ) || []
       : data?.members.filter(
           (m) =>
             !m.suspended &&
@@ -1320,7 +1390,10 @@ export default function App() {
     setDialog("workspaces");
     setMobileNav(false);
   }
-  async function changeWorkspace(action: WorkspaceAction) {
+  async function changeWorkspace(
+    action: WorkspaceAction,
+    preserveProfileRoute = false,
+  ) {
     if (workspaceChanging.current) return;
     const actorId = dataRef.current?.user.id;
     if (!actorId) return;
@@ -1339,7 +1412,8 @@ export default function App() {
                 `/workspaces/${encodeURIComponent(action.id)}/switch`,
               );
       if (dataRef.current?.user.id !== actorId) return;
-      acceptData(next);
+      if (!preserveProfileRoute) clearProfileAddress();
+      acceptData(next, preserveProfileRoute);
       setDialog(null);
       setWorkspaceInvite("");
       notify(
@@ -1362,6 +1436,8 @@ export default function App() {
     }
   }
   function selectChannel(id: string) {
+    clearProfileAddress("push");
+    setProfileId(null);
     channelRef.current = id;
     setChannelId(id);
     setView("channel");
@@ -1369,6 +1445,78 @@ export default function App() {
     setThread(null);
     setMobileNav(false);
     setUnread((old) => ({ ...old, [id]: 0 }));
+  }
+  function clearProfileAddress(mode: "push" | "replace" = "replace") {
+    const url = new URL(location.href);
+    if (!url.searchParams.has("profile")) return;
+    url.searchParams.delete("profile");
+    if (!url.searchParams.has("message")) url.searchParams.delete("workspace");
+    if (mode === "push") history.pushState(null, "", url);
+    else history.replaceState(null, "", url);
+  }
+  function showProfile(id: string) {
+    if (viewRef.current !== "profile")
+      profileReturn.current = {
+        view: viewRef.current,
+        scrollTop: scrollRef.current?.scrollTop || 0,
+      };
+    setProfileId(id);
+    setView("profile");
+    setDialog(null);
+    setThread(null);
+    setMobileNav(false);
+    setChannelMenu(null);
+  }
+  function openProfile(id: string) {
+    if (!data) return;
+    const url = new URL(location.pathname, location.origin);
+    url.searchParams.set("workspace", data.workspace.id);
+    url.searchParams.set("profile", id);
+    if (viewRef.current === "profile")
+      history.replaceState(history.state, "", url);
+    else history.pushState({ molaProfile: true }, "", url);
+    showProfile(id);
+  }
+  function restoreProfileReturn() {
+    const previous = profileReturn.current;
+    setProfileId(null);
+    setView(previous?.view || "channel");
+    requestAnimationFrame(() => {
+      if (scrollRef.current && previous)
+        scrollRef.current.scrollTop = previous.scrollTop;
+      document.getElementById("main-content")?.focus({ preventScroll: true });
+    });
+  }
+  function closeProfile() {
+    if (history.state?.molaProfile) history.back();
+    else {
+      clearProfileAddress();
+      restoreProfileReturn();
+    }
+  }
+  function selectView(next: Exclude<View, "profile">) {
+    clearProfileAddress("push");
+    setProfileId(null);
+    setView(next);
+  }
+  function updateOwnProfile(user: User) {
+    if (
+      !data ||
+      dataRef.current?.workspace.id !== data.workspace.id ||
+      dataRef.current?.user.id !== user.id
+    )
+      return;
+    setData((old) =>
+      old
+        ? {
+            ...old,
+            user,
+            members: old.members.map((member) =>
+              member.id === user.id ? user : member,
+            ),
+          }
+        : old,
+    );
   }
   function onSent(message: Message) {
     if (
@@ -1450,6 +1598,9 @@ export default function App() {
         fresh={freshIds.has(message.id)}
         author={userMap.get(message.userId)}
         selfId={data!.user.id}
+        onOpenProfile={openProfile}
+        online={Boolean(data?.onlineIds.includes(message.userId))}
+        connected={connected}
         canModerate={Boolean(
           data &&
           (["owner", "admin", "moderator"].includes(data.user.role) ||
@@ -1498,7 +1649,7 @@ export default function App() {
       />
     );
   }
-  async function openDm(user: User) {
+  async function openDm(user: User, fromProfileId?: string) {
     if (user.id === data?.user.id) {
       setDialog("settings");
       return;
@@ -1518,6 +1669,12 @@ export default function App() {
             }
           : old,
       );
+      if (
+        fromProfileId &&
+        (viewRef.current !== "profile" ||
+          new URLSearchParams(location.search).get("profile") !== fromProfileId)
+      )
+        return;
       selectChannel(dm.id);
       setDialog(null);
     } catch (e) {
@@ -1869,7 +2026,7 @@ export default function App() {
               className={view === "inbox" ? "selected" : ""}
               aria-current={view === "inbox" ? "page" : undefined}
               onClick={() => {
-                setView("inbox");
+                selectView("inbox");
                 setMobileNav(false);
               }}
             >
@@ -1883,7 +2040,7 @@ export default function App() {
               className={view === "saved" ? "selected" : ""}
               aria-current={view === "saved" ? "page" : undefined}
               onClick={() => {
-                setView("saved");
+                selectView("saved");
                 setMobileNav(false);
               }}
             >
@@ -2030,6 +2187,8 @@ export default function App() {
                         peers={peers}
                         channelName={c.name}
                         currentUserId={data.user.id}
+                        connected={connected}
+                        onOpenProfile={openProfile}
                       />
                     )}
                   </div>
@@ -2054,37 +2213,47 @@ export default function App() {
             }
           >
             {directMessageMembers.slice(0, 5).map((user) => (
-              <button
-                key={user.id}
-                className={`channel-nav dm-nav ${channel?.kind === "dm" && channel.memberIds?.includes(user.id) && view === "channel" ? "selected" : ""}`}
-                aria-current={
-                  channel?.kind === "dm" &&
-                  channel.memberIds?.includes(user.id) &&
-                  view === "channel"
-                    ? "page"
-                    : undefined
-                }
-                onClick={() => void openDm(user)}
-              >
-                <Avatar
+              <div className="dm-nav-row" key={user.id}>
+                <button
+                  className={`channel-nav dm-nav ${channel?.kind === "dm" && channel.memberIds?.includes(user.id) && view === "channel" ? "selected" : ""}`}
+                  aria-current={
+                    channel?.kind === "dm" &&
+                    channel.memberIds?.includes(user.id) &&
+                    view === "channel"
+                      ? "page"
+                      : undefined
+                  }
+                  onClick={() => void openDm(user)}
+                >
+                  <span>{user.name}</span>
+                  {data.channels
+                    .filter(
+                      (c) =>
+                        c.kind === "dm" &&
+                        c.memberIds?.includes(user.id) &&
+                        (unread[c.id] || 0) > 0,
+                    )
+                    .map((c) => (
+                      <span key={c.id} className="count-badge">
+                        {unread[c.id]}
+                      </span>
+                    ))}
+                </button>
+                <ProfileIdentity
+                  className="dm-profile-avatar"
                   user={user}
-                  size="tiny"
-                  online={connected && data.onlineIds.includes(user.id)}
-                />
-                <span>{user.name}</span>
-                {data.channels
-                  .filter(
-                    (c) =>
-                      c.kind === "dm" &&
-                      c.memberIds?.includes(user.id) &&
-                      (unread[c.id] || 0) > 0,
-                  )
-                  .map((c) => (
-                    <span key={c.id} className="count-badge">
-                      {unread[c.id]}
-                    </span>
-                  ))}
-              </button>
+                  online={data.onlineIds.includes(user.id)}
+                  connected={connected}
+                  selfId={data.user.id}
+                  onOpen={openProfile}
+                >
+                  <Avatar
+                    user={user}
+                    size="tiny"
+                    online={connected && data.onlineIds.includes(user.id)}
+                  />
+                </ProfileIdentity>
+              </div>
             ))}
             {directMessageMembers.length > 5 && (
               <button className="add-channel" onClick={() => openMembers()}>
@@ -2199,9 +2368,11 @@ export default function App() {
                 ? "Kaydedilenler"
                 : view === "inbox"
                   ? "Gelen kutusu"
-                  : channel?.kind === "dm"
-                    ? "Direkt mesajlar"
-                    : "Kanallar"}
+                  : view === "profile"
+                    ? "Profil"
+                    : channel?.kind === "dm"
+                      ? "Direkt mesajlar"
+                      : "Kanallar"}
             </span>
           </div>
           <button
@@ -2229,13 +2400,23 @@ export default function App() {
               {quiet ? <BellOff size={18} /> : <Bell size={18} />}
             </IconButton>
             <span className="topbar-divider" />
-            <button
+            <ProfileIdentity
               className="topbar-avatar"
-              aria-label="Profil ayarları"
-              onClick={() => setDialog("settings")}
+              user={data.user}
+              online={connected}
+              connected={connected}
+              selfId={data.user.id}
+              onOpen={openProfile}
             >
               <Avatar user={data.user} size="small" online={connected} />
-            </button>
+            </ProfileIdentity>
+            <IconButton
+              label="Profil ayarları"
+              className="profile-settings-trigger"
+              onClick={() => setDialog("settings")}
+            >
+              <Settings2 size={18} />
+            </IconButton>
           </div>
         </header>
         {!connected && !data.user.suspended && !data.workspace.suspended && (
@@ -2263,6 +2444,20 @@ export default function App() {
                 Çalışma alanlarımı aç <ArrowRight size={17} />
               </button>
             </section>
+          ) : view === "profile" && profileId ? (
+            <ProfilePage
+              key={`${data.workspace.id}:${data.user.id}:${profileId}`}
+              userId={profileId}
+              workspaceId={data.workspace.id}
+              currentUserId={data.user.id}
+              connected={connected}
+              onlineIds={data.onlineIds}
+              liveUser={data.members.find((member) => member.id === profileId)}
+              onBack={closeProfile}
+              onEdit={() => setDialog("settings")}
+              onMessage={(user) => openDm(user, profileId)}
+              profileUrl={`${location.origin}${location.pathname}?workspace=${encodeURIComponent(data.workspace.id)}&profile=${encodeURIComponent(profileId)}`}
+            />
           ) : (
             <>
               <section className="conversation-panel" aria-label="Sohbet">
@@ -2302,28 +2497,32 @@ export default function App() {
                   </div>
                   {view === "channel" && (
                     <div className="channel-heading-actions">
-                      <button
-                        className="member-stack"
-                        aria-label="Kanal üyelerini gör"
-                        onClick={() => openMembers("channel")}
-                      >
+                      <div className="member-stack">
                         {(onlineMembers.length
                           ? onlineMembers
                           : conversationMembers
                         )
                           .slice(0, 3)
                           .map((u) => (
-                            <Avatar
+                            <ProfileIdentity
                               key={u.id}
                               user={u}
-                              size="tiny"
-                              online={
-                                connected && data.onlineIds.includes(u.id)
-                              }
-                            />
+                              online={data.onlineIds.includes(u.id)}
+                              connected={connected}
+                              selfId={data.user.id}
+                              onOpen={openProfile}
+                            >
+                              <Avatar user={u} size="tiny" />
+                            </ProfileIdentity>
                           ))}
-                        <span>{conversationMembers.length} üye</span>
-                      </button>
+                        <button
+                          className="member-stack-count"
+                          aria-label="Kanal üyelerini gör"
+                          onClick={() => openMembers("channel")}
+                        >
+                          {conversationMembers.length} üye
+                        </button>
+                      </div>
                       <button
                         className="huddle-button"
                         aria-label="Bir araya gel"
@@ -2862,9 +3061,13 @@ export default function App() {
                       </div>
                       <div className="detail-members">
                         {conversationMembers.slice(0, 5).map((user) => (
-                          <button
+                          <ProfileIdentity
                             key={user.id}
-                            onClick={() => void openDm(user)}
+                            user={user}
+                            online={data.onlineIds.includes(user.id)}
+                            connected={connected}
+                            selfId={data.user.id}
+                            onOpen={openProfile}
                           >
                             <Avatar
                               user={user}
@@ -2897,7 +3100,7 @@ export default function App() {
                                 ✦
                               </span>
                             )}
-                          </button>
+                          </ProfileIdentity>
                         ))}
                       </div>
                       <button
@@ -2934,7 +3137,18 @@ export default function App() {
           initialInvite={workspaceInvite}
           initialTarget={workspaceTarget}
           busy={workspaceBusy}
-          onAction={changeWorkspace}
+          onAction={(action) => {
+            const params = new URLSearchParams(location.search);
+            return changeWorkspace(
+              action,
+              Boolean(
+                params.has("profile") &&
+                action.kind === "switch" &&
+                action.id === params.get("workspace") &&
+                action.id !== data.workspace.id,
+              ),
+            );
+          }}
           onClose={() => setDialog(null)}
         />
       )}
@@ -2943,6 +3157,10 @@ export default function App() {
           channel={voicePreview}
           peers={voiceChannels.get(voicePreview.id) || []}
           currentUserId={data.user.id}
+          onOpenProfile={(id) => {
+            setVoicePreviewId(null);
+            openProfile(id);
+          }}
           isCurrentCall={call.channelId === voicePreview.id}
           busy={call.joining}
           connected={connected}
@@ -3008,6 +3226,9 @@ export default function App() {
       {dialog === "settings" && (
         <SettingsDialog
           user={data.user}
+          workspaceId={data.workspace.id}
+          connected={connected}
+          onPhotoChanged={updateOwnProfile}
           isDemo={data.workspace.isDemo}
           onClose={() => setDialog(null)}
           onSave={(user) => {
@@ -3187,18 +3408,13 @@ export default function App() {
           </div>
           <div className="members-modal-list">
             {listedMembers.map((user) => (
-              <button
+              <ProfileIdentity
                 key={user.id}
-                disabled={
-                  user.id !== data.user.id &&
-                  (Boolean(user.isBot) ||
-                    ((user.role === "guest" || data.user.role === "guest") &&
-                      !data.channels.some(
-                        (c) =>
-                          c.kind === "dm" && c.memberIds?.includes(user.id),
-                      )))
-                }
-                onClick={() => void openDm(user)}
+                user={user}
+                online={data.onlineIds.includes(user.id)}
+                connected={connected}
+                selfId={data.user.id}
+                onOpen={openProfile}
               >
                 <Avatar
                   user={user}
@@ -3215,12 +3431,8 @@ export default function App() {
                           : "Çevrimdışı")}
                   </small>
                 </span>
-                {user.id === data.user.id ? (
-                  <Settings2 size={17} />
-                ) : (
-                  <MessageCircle size={18} />
-                )}
-              </button>
+                <ChevronRight size={17} />
+              </ProfileIdentity>
             ))}
             {!listedMembers.length && (
               <p className="member-search-empty" role="status">

@@ -1,6 +1,7 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { X, LoaderCircle } from "lucide-react";
 import type { User } from "../../shared/types";
+import "./avatar.css";
 
 export function Logo({ small = false }: { small?: boolean }) {
   return (
@@ -26,24 +27,38 @@ export function Avatar({
   size = "normal",
   online = false,
 }: {
-  user?: Pick<User, "name" | "color">;
+  user?: Pick<User, "name" | "color"> & { avatarUrl?: string };
   size?: "tiny" | "small" | "normal" | "large";
   online?: boolean;
 }) {
+  const [failedUrl, setFailedUrl] = useState<string>();
+  const photo =
+    user?.avatarUrl && user.avatarUrl !== failedUrl
+      ? user.avatarUrl
+      : undefined;
   return (
     <span
       className={`avatar avatar-${size}`}
       style={{ background: user?.color || "#dce7d1" }}
       aria-label={user?.name || "Üye"}
     >
-      <span>
-        {(user?.name || "?")
-          .split(" ")
-          .map((s) => s[0])
-          .slice(0, 2)
-          .join("")
-          .toLocaleUpperCase("tr")}
-      </span>
+      {photo ? (
+        <img
+          src={photo}
+          alt=""
+          decoding="async"
+          onError={() => setFailedUrl(photo)}
+        />
+      ) : (
+        <span>
+          {(user?.name || "?")
+            .split(" ")
+            .map((s) => s[0])
+            .slice(0, 2)
+            .join("")
+            .toLocaleUpperCase("tr")}
+        </span>
+      )}
       {online && (
         <i className="presence-dot" role="img" aria-label="Çevrimiçi" />
       )}
@@ -92,11 +107,27 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
+    const opener = document.activeElement;
     ref.current?.showModal();
     const dialog = ref.current;
     // React's autoFocus runs before a closed native dialog can receive focus.
     dialog?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
-    return () => dialog?.close();
+    return () => {
+      dialog?.close();
+      requestAnimationFrame(() => {
+        if (
+          opener instanceof HTMLElement &&
+          opener.isConnected &&
+          !opener.closest("[inert], [hidden]") &&
+          opener.getClientRects().length > 0 &&
+          getComputedStyle(opener).visibility !== "hidden" &&
+          !document.querySelector(
+            'dialog[open], [role="dialog"][aria-modal="true"]',
+          )
+        )
+          opener.focus({ preventScroll: true });
+      });
+    };
   }, []);
   return (
     <dialog

@@ -27,6 +27,7 @@ import {
   type ContextMenuPosition,
 } from "./ContextMenu";
 import { Avatar, fileSize, IconButton, Modal, RichText, timeLabel } from "./ui";
+import { ProfileIdentity } from "./ProfileIdentity";
 import "./message-ux.css";
 
 export function MessageItem({
@@ -45,6 +46,9 @@ export function MessageItem({
   canModerate = false,
   fresh = false,
   onCopyLink,
+  onOpenProfile,
+  online = false,
+  connected = true,
 }: {
   message: Message;
   author?: User;
@@ -61,6 +65,9 @@ export function MessageItem({
   canModerate?: boolean;
   fresh?: boolean;
   onCopyLink: () => void;
+  onOpenProfile?: (id: string) => void;
+  online?: boolean;
+  connected?: boolean;
 }) {
   const [menu, setMenu] = useState(false);
   const [contextPosition, setContextPosition] =
@@ -404,10 +411,36 @@ export function MessageItem({
           <Pin size={11} /> Bu kanala sabitlendi
         </div>
       )}
-      <Avatar user={author} />
+      {author && !author.suspended && onOpenProfile ? (
+        <ProfileIdentity
+          user={author}
+          online={online}
+          connected={connected}
+          selfId={selfId}
+          onOpen={onOpenProfile}
+          className="message-author-avatar"
+        >
+          <Avatar user={author} />
+        </ProfileIdentity>
+      ) : (
+        <Avatar user={author} />
+      )}
       <div className="message-body">
         <div className="message-meta">
-          <strong>{author?.name || "Eski üye"}</strong>
+          {author && !author.suspended && onOpenProfile ? (
+            <ProfileIdentity
+              user={author}
+              online={online}
+              connected={connected}
+              selfId={selfId}
+              onOpen={onOpenProfile}
+              className="message-author-name"
+            >
+              <strong>{author.name}</strong>
+            </ProfileIdentity>
+          ) : (
+            <strong>{author?.name || "Eski üye"}</strong>
+          )}
           {authorIsSelf && <span className="self-label">sen</span>}
           {author?.isBot && <span className="bot-label">bot</span>}
           <time

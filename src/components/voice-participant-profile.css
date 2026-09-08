@@ -1,0 +1,18 @@
+.voice-participant > .voice-participant-profile {
+  flex: 1 1 auto;
+  gap: 7px;
+  min-width: 0;
+  min-height: 25px;
+  text-align: left;
+}
+
+.voice-participant-profile:hover .voice-participant-name,
+.voice-participant-profile[aria-expanded="true"] .voice-participant-name {
+  color: var(--forest);
+}
+
+@media (pointer: coarse) {
+  .voice-participant > .voice-participant-profile {
+    min-height: 36px;
+  }
+}

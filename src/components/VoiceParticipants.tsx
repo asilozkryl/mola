@@ -1,54 +1,80 @@
 import { MicOff, MonitorUp, Video, Headphones } from "lucide-react";
 import type { CallPeer, Channel } from "../../shared/types";
 import { Avatar, Modal } from "./ui";
+import { ProfileIdentity } from "./ProfileIdentity";
+import "./voice-participant-profile.css";
 
 export function VoiceParticipants({
   peers,
   channelName,
   currentUserId,
+  connected = true,
+  onOpenProfile,
 }: {
   peers: CallPeer[];
   channelName: string;
   currentUserId: string;
+  connected?: boolean;
+  onOpenProfile?: (id: string) => void;
 }) {
   return (
     <ul
       className="voice-participants"
       aria-label={`${channelName} katılımcıları`}
     >
-      {peers.map((peer) => (
-        <li key={peer.socketId} className="voice-participant">
-          <Avatar user={peer.user} size="tiny" />
-          <span className="voice-participant-name" title={peer.user.name}>
-            <span>{peer.user.name}</span>
-            {peer.user.id === currentUserId ? " (sen)" : ""}
-          </span>
-          <span className="voice-media-state">
-            {!peer.mic && (
-              <MicOff
-                size={13}
-                role="img"
-                aria-label={`${peer.user.name}: mikrofon kapalı`}
-              />
+      {peers.map((peer) => {
+        const identity = (
+          <>
+            <Avatar user={peer.user} size="tiny" />
+            <span className="voice-participant-name" title={peer.user.name}>
+              <span>{peer.user.name}</span>
+              {peer.user.id === currentUserId ? " (sen)" : ""}
+            </span>
+          </>
+        );
+        return (
+          <li key={peer.socketId} className="voice-participant">
+            {onOpenProfile ? (
+              <ProfileIdentity
+                user={peer.user}
+                online
+                connected={connected}
+                selfId={currentUserId}
+                onOpen={onOpenProfile}
+                className="voice-participant-profile"
+              >
+                {identity}
+              </ProfileIdentity>
+            ) : (
+              identity
             )}
-            {peer.camera && (
-              <Video
-                size={13}
-                role="img"
-                aria-label={`${peer.user.name}: kamera açık`}
-              />
-            )}
-            {peer.sharing && (
-              <MonitorUp
-                size={13}
-                className="is-sharing"
-                role="img"
-                aria-label={`${peer.user.name}: ekran paylaşıyor`}
-              />
-            )}
-          </span>
-        </li>
-      ))}
+            <span className="voice-media-state">
+              {!peer.mic && (
+                <MicOff
+                  size={13}
+                  role="img"
+                  aria-label={`${peer.user.name}: mikrofon kapalı`}
+                />
+              )}
+              {peer.camera && (
+                <Video
+                  size={13}
+                  role="img"
+                  aria-label={`${peer.user.name}: kamera açık`}
+                />
+              )}
+              {peer.sharing && (
+                <MonitorUp
+                  size={13}
+                  className="is-sharing"
+                  role="img"
+                  aria-label={`${peer.user.name}: ekran paylaşıyor`}
+                />
+              )}
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -62,6 +88,7 @@ export function VoiceRoomPreview({
   connected,
   onJoin,
   onClose,
+  onOpenProfile,
 }: {
   channel: Channel;
   peers: CallPeer[];
@@ -71,6 +98,7 @@ export function VoiceRoomPreview({
   connected: boolean;
   onJoin: () => void;
   onClose: () => void;
+  onOpenProfile?: (id: string) => void;
 }) {
   return (
     <Modal title={channel.name} onClose={onClose}>
@@ -89,6 +117,8 @@ export function VoiceRoomPreview({
               peers={peers}
               channelName={channel.name}
               currentUserId={currentUserId}
+              connected={connected}
+              onOpenProfile={onOpenProfile}
             />
           </>
         ) : (

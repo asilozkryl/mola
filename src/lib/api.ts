@@ -59,6 +59,7 @@ export async function bootstrap(): Promise<Bootstrap | null> {
       config.demoEnabled &&
       !sessionStorage.getItem("mola:logged-out") &&
       !readAuthLink() &&
+      !new URLSearchParams(location.search).has("profile") &&
       !new URLSearchParams(location.search).has("invite")
     )
       return post<Bootstrap>("/auth/demo");

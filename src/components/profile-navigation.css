@@ -1,0 +1,76 @@
+.message > .message-author-avatar {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.message-author-avatar > .avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 11px;
+}
+.message-meta .message-author-name {
+  max-width: 100%;
+  flex-shrink: 1;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.message-author-name:hover {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.dm-nav-row {
+  position: relative;
+  min-width: 0;
+}
+.dm-nav-row > .dm-nav {
+  width: 100%;
+  padding-left: 44px;
+}
+.dm-nav-row > .dm-profile-avatar {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+}
+.dm-profile-avatar .presence-dot {
+  width: 7px;
+  height: 7px;
+}
+.member-stack > .profile-identity {
+  margin-left: -7px;
+  border-radius: 50%;
+}
+.member-stack > .profile-identity:first-child {
+  margin-left: 0;
+}
+.member-stack .profile-identity > .avatar {
+  margin: 0;
+}
+.member-stack-count {
+  min-height: 30px;
+  padding: 0 0 0 7px;
+  border: 0;
+  background: transparent;
+  color: #687176;
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.members-modal-list > .profile-identity,
+.detail-members > .profile-identity {
+  flex-shrink: 0;
+  text-align: left;
+}
+@media (max-width: 640px) {
+  .topbar-actions > .icon-button.profile-settings-trigger {
+    display: inline-flex;
+    width: 36px;
+    height: 40px;
+  }
+  .message-author-avatar > .avatar {
+    width: 30px;
+    height: 30px;
+  }
+}

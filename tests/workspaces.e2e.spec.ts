@@ -86,6 +86,10 @@ async function captureResponsive(page: Page, name: string, showSidebar = false) 
 }
 
 async function accessibleModal(page: Page) {
+  // Check the settled surface, not the changing composited colors during entry.
+  await page.locator('dialog[open]').evaluate(async element => {
+    await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {})));
+  });
   const result = await new AxeBuilder({ page }).include('dialog[open]').analyze();
   expect(result.violations.filter(violation => violation.impact === 'serious' || violation.impact === 'critical')
     .map(violation => ({ rule: violation.id, nodes: violation.nodes.map(node => ({ target: node.target, reason: node.failureSummary })) }))).toEqual([]);

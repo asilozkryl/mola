@@ -1,4 +1,5 @@
-export type WorkspaceRole = "owner" | "admin" | "moderator" | "member" | "guest";
+export type WorkspaceRole =
+  "owner" | "admin" | "moderator" | "member" | "guest";
 export interface User {
   id: string;
   name: string;
@@ -6,10 +7,19 @@ export interface User {
   color: string;
   role: WorkspaceRole;
   status?: string;
+  avatarUrl?: string;
+  jobTitle?: string;
+  bio?: string;
+  location?: string;
   emailVerified: boolean;
   siteAdmin?: boolean;
   suspended?: boolean;
   isBot?: boolean;
+}
+export interface MemberProfile {
+  user: User;
+  joinedAt: string;
+  canMessage: boolean;
 }
 export interface Workspace {
   id: string;
