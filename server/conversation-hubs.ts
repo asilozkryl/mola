@@ -190,9 +190,9 @@ export function installConversationHubs(
       SELECT c.id AS sort_id,c.id AS channel_id,cm.user_id,u.name AS peer_name,
         MAX(c.created_at,
           COALESCE((SELECT MAX(created_at) FROM messages WHERE channel_id=c.id),''),
-          COALESCE((SELECT MAX(updated_at) FROM message_drafts WHERE channel_id=c.id AND user_id=? AND length(trim(content))>0),'')) AS sort_at,
+          COALESCE((SELECT MAX(updated_at) FROM message_drafts WHERE channel_id=c.id AND user_id=? AND (length(trim(content))>0 OR EXISTS(SELECT 1 FROM draft_attachments d WHERE d.user_id=message_drafts.user_id AND d.channel_id=message_drafts.channel_id AND d.parent_key=message_drafts.parent_key))),'')) AS sort_at,
         COALESCE((SELECT content FROM messages WHERE channel_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1),'') AS preview,
-        EXISTS(SELECT 1 FROM message_drafts WHERE channel_id=c.id AND user_id=? AND length(trim(content))>0) AS has_draft,
+        EXISTS(SELECT 1 FROM message_drafts WHERE channel_id=c.id AND user_id=? AND (length(trim(content))>0 OR EXISTS(SELECT 1 FROM draft_attachments d WHERE d.user_id=message_drafts.user_id AND d.channel_id=message_drafts.channel_id AND d.parent_key=message_drafts.parent_key))) AS has_draft,
         (SELECT COUNT(*) FROM messages m JOIN message_order o ON o.message_id=m.id LEFT JOIN channel_reads r ON r.channel_id=m.channel_id AND r.user_id=? WHERE m.channel_id=c.id AND m.user_id!=? AND o.sequence>COALESCE(r.last_rowid,0)) AS unread_count,
         COALESCE((SELECT user_id=? FROM messages WHERE channel_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1),0) AS last_message_by_self
       FROM channels c JOIN channel_members cm ON cm.channel_id=c.id AND cm.user_id!=?

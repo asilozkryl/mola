@@ -26,6 +26,7 @@ Erişimi kapanan veya silinen kanal bağlantısı açık bir açıklamayla eriş
 
 ## Doğrulama
 
+- `6b163d8` için [GitHub doğrulaması](https://github.com/asilozkryl/mola/actions/runs/34347654668) tamamlandı: ana tarayıcı, hesap/yönetim, TURN, bağımlılık, izleme ve Docker/Coolify adımlarının tamamı başarılı.
 - Üretim derlemesi ve TypeScript kontrolü geçti; yeni bağımlılık eklenmedi.
 - Birim/API paketi: **198/198** başarılı. Yeni testler 250 kayıt, cihaz/hesap/alan ayrımı, cursor ve arama, güncel özel/misafir erişimi, silme zincirleri ve v8 veri geçişini kapsar.
 - Yerel aktarımın 6 testi; 751 kaydın sırası, tekrarlanan/kısmi aktarım, başka alanın kayıtları ve doğrulama hatasını kapsar.

@@ -292,7 +292,7 @@ test("draft revisions reject concurrent overwrites, retain newer edits after sen
     }) => {
       assert.deepEqual(
         await (await request(owner, `/channels/${channelId}/draft`)).json(),
-        { content: "", revision: 0, updatedAt: null },
+        { content: "", attachmentIds: [], attachments: [], unavailableAttachmentIds: [], revision: 0, updatedAt: null },
       );
       const original = await (
         await request(owner, `/channels/${channelId}/draft`, "PUT", {

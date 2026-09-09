@@ -878,10 +878,10 @@ test("v7 migration preserves device and push foreign keys, keeps explicit accoun
       DROP TABLE sessions; ALTER TABLE sessions_old RENAME TO sessions;
       CREATE INDEX idx_sessions_user ON sessions(user_id); CREATE INDEX idx_sessions_workspace ON sessions(workspace_id,user_id);
       CREATE TRIGGER initial_session_workspace AFTER INSERT ON sessions WHEN NEW.workspace_id IS NULL BEGIN UPDATE sessions SET workspace_id=(SELECT workspace_id FROM users WHERE id=NEW.user_id) WHERE token_hash=NEW.token_hash; END;
-      ALTER TABLE workspace_members DROP COLUMN left_at; DROP TABLE sidebar_preferences; DROP TABLE saved_messages; PRAGMA user_version=6; COMMIT; PRAGMA foreign_keys=ON;`);
+      ALTER TABLE workspace_members DROP COLUMN left_at; DROP TABLE sidebar_preferences; DROP TABLE message_requests; DROP TABLE draft_attachments; DROP TRIGGER deleted_thread_drafts; DROP TABLE saved_messages; PRAGMA user_version=6; COMMIT; PRAGMA foreign_keys=ON;`);
     repo.close();
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get("PRAGMA user_version")!.user_version, 8);
+    assert.equal(repo.get("PRAGMA user_version")!.user_version, 9);
     assert.equal(repo.session(token)!.workspace_id, alpha.workspaceId);
     assert.equal(
       repo.get("SELECT device FROM session_devices WHERE token_hash=?", token)!

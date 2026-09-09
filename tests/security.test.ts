@@ -128,7 +128,8 @@ test('a workspace member cannot discover or access another pair’s DM', async (
 test('unpublished uploads are private and cannot be claimed by another member', async () => {
   assert.equal((await api(`/files/${unpublishedFile}`, { user: 'alice' })).status, 200);
   assert.equal((await api(`/files/${unpublishedFile}`, { user: 'bob' })).status, 404);
-  assert.equal((await api(`/channels/${channel}/messages`, { user: 'bob', method: 'POST', body: { content: 'stolen file', attachmentIds: [unpublishedFile] } })).status, 400);
+  const denied = await api(`/channels/${channel}/messages`, { user: 'bob', method: 'POST', body: { content: 'stolen file', attachmentIds: [unpublishedFile] } });
+  assert.equal(denied.status, 409); assert.equal((await denied.json()).code, 'ATTACHMENT_UNAVAILABLE');
   assert.equal(runtime.repo.get('SELECT message_id FROM attachments WHERE id=?', unpublishedFile)!.message_id, null);
 });
 

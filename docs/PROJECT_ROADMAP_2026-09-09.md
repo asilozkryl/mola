@@ -4,7 +4,7 @@
 
 Önerim, önce sürüm doğrulamasını düzeltmek; ardından mesaj, dosya ve gezinme güvenilirliğini tamamlayıp arama, ayarlar ve ilk kullanım deneyimini aynı tasarım dilinde birleştirmek. Ürün artık yalnız kanal ve mesaj ekranından ibaret değil. Yeni özelliklerin yanında, kullanıcıların mevcut özellikleri bulması ve yaptıkları işin kaybolmaması öncelikli.
 
-Bu belge ilk incelemenin bulgularını ve uygulama sırasını korur. Aşağıdaki kanıtlar belirtilen başlangıç commit'ine aittir; ilk uygulama turunun güncel kapsamı ve doğrulaması [ilk paket kaydında](FIRST_IMPROVEMENT_PACKAGE.md) izlenir. R03 ve R06 uygulaması [ikinci paket kaydında](SECOND_IMPROVEMENT_PACKAGE.md) yer alır. İnceleme kaynak kod, testler, CI sonuçları, mevcut tasarım/işletim belgeleri ve yerel arayüz üzerinden yapıldı. Canlı altyapı, gerçek kullanıcı verileri ve fiziksel cihazlar bu tur denetlenmedi. Bu çalışma tam bir güvenlik testi değildir.
+Bu belge ilk incelemenin bulgularını ve uygulama sırasını korur. Aşağıdaki kanıtlar belirtilen başlangıç commit'ine aittir; ilk uygulama turunun güncel kapsamı ve doğrulaması [ilk paket kaydında](FIRST_IMPROVEMENT_PACKAGE.md) izlenir. R03 ve R06 uygulaması [ikinci paket kaydında](SECOND_IMPROVEMENT_PACKAGE.md), R07 ve R08 ise [üçüncü paket kaydında](THIRD_IMPROVEMENT_PACKAGE.md) yer alır. İnceleme kaynak kod, testler, CI sonuçları, mevcut tasarım/işletim belgeleri ve yerel arayüz üzerinden yapıldı. Canlı altyapı, gerçek kullanıcı verileri ve fiziksel cihazlar bu tur denetlenmedi. Bu çalışma tam bir güvenlik testi değildir.
 
 ## 1. Mevcut durum ve kanıt
 

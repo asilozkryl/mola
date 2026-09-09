@@ -6,6 +6,12 @@ import webpush from "web-push";
 import { z } from "zod";
 import type { Repository, Row } from "./db.js";
 import { HttpError } from "./errors.js";
+import {
+  AttachmentUnavailableError,
+  attachmentAvailability,
+  draftAttachmentIds,
+  sameAttachmentIds,
+} from "./message-reliability.js";
 import type {
   DraftState,
   NotificationState,
@@ -68,6 +74,7 @@ export function installCollaborationData(
     io,
     key,
     origin,
+    uploadDir = "",
     sendPush = webpush.sendNotification,
     requiresVerification = () => false,
   }: {
@@ -75,6 +82,7 @@ export function installCollaborationData(
     io: Server;
     key: Buffer;
     origin: string;
+    uploadDir?: string;
     sendPush?: typeof webpush.sendNotification;
     requiresVerification?: (user: Row) => boolean;
   },
@@ -296,6 +304,15 @@ export function installCollaborationData(
     );
     return {
       content: r?.content || "",
+      attachmentIds: draftAttachmentIds(repo, userId, channelId, parent),
+      ...attachmentAvailability(
+        repo,
+        uploadDir,
+        userId,
+        repo.get("SELECT workspace_id FROM channels WHERE id=?", channelId)
+          ?.workspace_id || "",
+        draftAttachmentIds(repo, userId, channelId, parent),
+      ),
       revision: r?.revision || 0,
       updatedAt: r?.updated_at || null,
     };
@@ -323,11 +340,11 @@ export function installCollaborationData(
     res.json(draft(req.auth!.id, channelId, parent));
   });
   app.put("/api/channels/:id/draft", (req, res) => {
-    const { channelId, parent } = draftContext(req);
     const input = parse(
       z
         .object({
           content: z.string().max(10000),
+          attachmentIds: z.array(uuid).max(4).optional(),
           revision: z
             .number()
             .int()
@@ -337,23 +354,63 @@ export function installCollaborationData(
         .strict(),
       req.body,
     );
-    const current = draft(req.auth!.id, channelId, parent);
-    if (input.revision !== current.revision)
+    const result = repo.transaction(() => {
+      const { channelId, parent } = draftContext(req);
+      const current = draft(req.auth!.id, channelId, parent);
+      if (input.revision !== current.revision) return { conflict: current };
+      const attachmentIds =
+        input.attachmentIds === undefined
+          ? current.attachmentIds
+          : [...new Set(input.attachmentIds)];
+      const addedIds = attachmentIds.filter(
+        (id) => !current.attachmentIds.includes(id),
+      );
+      const unavailable = attachmentAvailability(
+        repo,
+        uploadDir,
+        req.auth!.id,
+        req.auth!.workspace_id,
+        addedIds,
+      ).unavailableAttachmentIds;
+      if (unavailable.length) throw new AttachmentUnavailableError(unavailable);
+      repo.run(
+        `INSERT INTO message_drafts VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,channel_id,parent_key) DO UPDATE SET content=excluded.content,revision=excluded.revision,updated_at=excluded.updated_at`,
+        req.auth!.id,
+        channelId,
+        parent,
+        input.content,
+        current.revision + 1,
+        new Date().toISOString(),
+      );
+      repo.run(
+        "DELETE FROM draft_attachments WHERE user_id=? AND channel_id=? AND parent_key=?",
+        req.auth!.id,
+        channelId,
+        parent,
+      );
+      attachmentIds.forEach((id, position) =>
+        repo.run(
+          "INSERT INTO draft_attachments VALUES(?,?,?,?,?)",
+          req.auth!.id,
+          channelId,
+          parent,
+          id,
+          position,
+        ),
+      );
+      return {
+        saved: draft(req.auth!.id, channelId, parent),
+        channelId,
+        parent,
+      };
+    });
+    if (result.conflict)
       return res.status(409).json({
         error: "Taslak başka bir cihazda değişti.",
         code: "DRAFT_CONFLICT",
-        draft: current,
+        draft: result.conflict,
       });
-    repo.run(
-      `INSERT INTO message_drafts VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,channel_id,parent_key) DO UPDATE SET content=excluded.content,revision=excluded.revision,updated_at=excluded.updated_at`,
-      req.auth!.id,
-      channelId,
-      parent,
-      input.content,
-      current.revision + 1,
-      new Date().toISOString(),
-    );
-    const saved = draft(req.auth!.id, channelId, parent);
+    const { saved, channelId, parent } = result;
     io.to(`workspace-user:${req.auth!.workspace_id}:${req.auth!.id}`).emit(
       "draft:changed",
       {
@@ -561,7 +618,8 @@ export function installCollaborationData(
   };
   const timer = setInterval(() => void processPush(), 5000);
   timer.unref();
-  const onMessageCreated = (messageId: string) => {
+  // The caller owns the transaction; effects are returned for after commit.
+  const prepareMessageCreated = (messageId: string) => {
     const message = repo.get(
       "SELECT m.*,c.workspace_id,c.kind FROM messages m JOIN channels c ON c.id=m.channel_id WHERE m.id=?",
       messageId,
@@ -590,77 +648,127 @@ export function installCollaborationData(
         .toLocaleLowerCase("tr-TR");
       names.set(name, (names.get(name) || 0) + 1);
     }
-    repo.transaction(() => {
-      for (const member of members) {
-        const name = member.name
-          .normalize("NFKC")
-          .replaceAll(" ", "")
-          .toLocaleLowerCase("tr-TR");
-        const explicit = normalized.includes(`@[${member.id}]`);
-        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const mentioned =
-          explicit ||
-          (names.get(name) === 1 &&
-            new RegExp(`(^|\\s)@${escaped}(?=$|[\\s.,!?;:])`, "u").test(
-              normalized,
-            ));
-        const isReply =
-          message.parent_id &&
-          repo.get(
-            "SELECT id FROM messages WHERE (id=? OR parent_id=?) AND user_id=? LIMIT 1",
-            message.parent_id,
-            message.parent_id,
-            member.id,
-          );
-        const kind = mentioned
-          ? "mention"
-          : allMention
-            ? "channel"
-            : message.kind === "dm"
-              ? "dm"
-              : isReply
-                ? "reply"
-                : null;
-        if (!kind) continue;
-        const id = randomUUID();
-        const inserted = repo.run(
-          "INSERT OR IGNORE INTO notifications(id,user_id,workspace_id,channel_id,message_id,kind,created_at) VALUES(?,?,?,?,?,?,?)",
-          id,
+    for (const member of members) {
+      const name = member.name
+        .normalize("NFKC")
+        .replaceAll(" ", "")
+        .toLocaleLowerCase("tr-TR");
+      const explicit = normalized.includes(`@[${member.id}]`);
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const mentioned =
+        explicit ||
+        (names.get(name) === 1 &&
+          new RegExp(`(^|\\s)@${escaped}(?=$|[\\s.,!?;:])`, "u").test(
+            normalized,
+          ));
+      const isReply =
+        message.parent_id &&
+        repo.get(
+          "SELECT id FROM messages WHERE (id=? OR parent_id=?) AND user_id=? LIMIT 1",
+          message.parent_id,
+          message.parent_id,
           member.id,
-          message.workspace_id,
-          message.channel_id,
-          message.id,
-          kind,
-          message.created_at,
         );
-        if (
-          Number(inserted.changes) === 1 &&
-          repo.get(
-            "SELECT 1 FROM notification_preferences WHERE user_id=? AND push_enabled=1",
-            member.id,
-          )
+      const kind = mentioned
+        ? "mention"
+        : allMention
+          ? "channel"
+          : message.kind === "dm"
+            ? "dm"
+            : isReply
+              ? "reply"
+              : null;
+      if (!kind) continue;
+      const id = randomUUID();
+      const inserted = repo.run(
+        "INSERT OR IGNORE INTO notifications(id,user_id,workspace_id,channel_id,message_id,kind,created_at) VALUES(?,?,?,?,?,?,?)",
+        id,
+        member.id,
+        message.workspace_id,
+        message.channel_id,
+        message.id,
+        kind,
+        message.created_at,
+      );
+      if (
+        Number(inserted.changes) === 1 &&
+        repo.get(
+          "SELECT 1 FROM notification_preferences WHERE user_id=? AND push_enabled=1",
+          member.id,
         )
-          for (const sub of repo.all(
-            "SELECT id FROM push_subscriptions WHERE user_id=?",
+      )
+        for (const sub of repo.all(
+          "SELECT id FROM push_subscriptions WHERE user_id=?",
+          member.id,
+        ))
+          repo.run(
+            "INSERT OR IGNORE INTO push_outbox(id,notification_id,subscription_id,next_attempt) SELECT ?,id,?,? FROM notifications WHERE user_id=? AND message_id=?",
+            randomUUID(),
+            sub.id,
+            Date.now(),
             member.id,
-          ))
-            repo.run(
-              "INSERT OR IGNORE INTO push_outbox(id,notification_id,subscription_id,next_attempt) SELECT ?,id,?,? FROM notifications WHERE user_id=? AND message_id=?",
-              randomUUID(),
-              sub.id,
-              Date.now(),
-              member.id,
-              message.id,
-            );
-      }
-    });
-    for (const member of members) emitState(member.id, message.workspace_id);
-    emitState(message.user_id, message.workspace_id);
-    void processPush();
+            message.id,
+          );
+    }
+    return () => {
+      for (const member of members) emitState(member.id, message.workspace_id);
+      emitState(message.user_id, message.workspace_id);
+      void processPush();
+    };
+  };
+  const onMessageCreated = (messageId: string) =>
+    repo.transaction(() => prepareMessageCreated(messageId))?.();
+  const prepareDraftClear = (
+    userId: string,
+    channelId: string,
+    parent = "",
+    sentContent?: string,
+    sentAttachmentIds: string[] = [],
+    sentRevision?: number,
+  ) => {
+    const current = draft(userId, channelId, parent);
+    if (
+      (sentContent !== undefined &&
+        current.content.trim() !== sentContent.trim()) ||
+      !sameAttachmentIds(current.attachmentIds, sentAttachmentIds) ||
+      (sentRevision !== undefined && current.revision !== sentRevision)
+    )
+      return;
+    if (!current.content && current.attachmentIds.length === 0) return;
+    const workspaceId = repo.get(
+      "SELECT workspace_id FROM channels WHERE id=?",
+      channelId,
+    )?.workspace_id;
+    if (!workspaceId) return;
+    repo.run(
+      "UPDATE message_drafts SET content='',revision=revision+1,updated_at=? WHERE user_id=? AND channel_id=? AND parent_key=?",
+      new Date().toISOString(),
+      userId,
+      channelId,
+      parent,
+    );
+    repo.run(
+      "DELETE FROM draft_attachments WHERE user_id=? AND channel_id=? AND parent_key=?",
+      userId,
+      channelId,
+      parent,
+    );
+    const saved = draft(userId, channelId, parent);
+    return () =>
+      io
+        .to(`workspace-user:${workspaceId}:${userId}`)
+        .emit("draft:changed", {
+          workspaceId,
+          channelId,
+          parentId: parent,
+          ...saved,
+        });
   };
   return {
     state,
     onMessageCreated,
+    prepareMessageCreated,
+    prepareDraftClear,
     emitState,
     flushPush: processPush,
     refreshChannel: (channelId: string) => {
@@ -690,34 +798,10 @@ export function installCollaborationData(
       channelId: string,
       parent = "",
       sentContent?: string,
-    ) => {
-      const current = draft(userId, channelId, parent);
-      if (
-        sentContent !== undefined &&
-        current.content.trim() !== sentContent.trim()
-      )
-        return;
-      const workspaceId = repo.get(
-        "SELECT workspace_id FROM channels WHERE id=?",
-        channelId,
-      )?.workspace_id;
-      if (!workspaceId) return;
-      repo.run(
-        `INSERT INTO message_drafts VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,channel_id,parent_key) DO UPDATE SET content='',revision=excluded.revision,updated_at=excluded.updated_at`,
-        userId,
-        channelId,
-        parent,
-        "",
-        current.revision + 1,
-        new Date().toISOString(),
-      );
-      io.to(`workspace-user:${workspaceId}:${userId}`).emit("draft:changed", {
-        workspaceId,
-        channelId,
-        parentId: parent,
-        ...draft(userId, channelId, parent),
-      });
-    },
+    ) =>
+      repo.transaction(() =>
+        prepareDraftClear(userId, channelId, parent, sentContent),
+      )?.(),
     close: async () => {
       closing = true;
       clearInterval(timer);

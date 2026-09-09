@@ -51,7 +51,7 @@ test('a delayed PUT acknowledgement cannot restore a draft already sent from ano
     await expect(input(page)).toHaveValue('');
     const after=await(await page.request.get(path)).json();
     release!();release=undefined;
-    await expect.poll(()=>page.evaluate(key=>JSON.parse(sessionStorage.getItem(key)||'null')?.revision,`mola:draft:${account.user.id}:${channel.id}::sync`)).toBe(after.revision);
+    await expect.poll(()=>page.evaluate(key=>JSON.parse(sessionStorage.getItem(key)||'null')?.revision,`mola:draft:${account.user.id}:${account.workspace.id}:${channel.id}::sync`)).toBe(after.revision);
     await page.unroute(`**${path}`);
     await page.reload();await expect(input(page)).toHaveValue('');
     expect((await(await page.request.get(path)).json()).content).toBe('');

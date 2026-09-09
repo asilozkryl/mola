@@ -308,7 +308,7 @@ test("pre-v6 backups without avatar schema remain verifiable and restorable", as
     const path = join(directory, "backups", backup.name);
     const db = new DatabaseSync(join(path, "mola.sqlite"));
     db.exec(
-      "DROP TABLE saved_messages; ALTER TABLE users DROP COLUMN job_title; ALTER TABLE users DROP COLUMN bio; ALTER TABLE users DROP COLUMN location; ALTER TABLE users DROP COLUMN avatar_version; PRAGMA user_version=5;",
+      "DROP TABLE message_requests; DROP TABLE draft_attachments; DROP TRIGGER deleted_thread_drafts; DROP TABLE saved_messages; ALTER TABLE users DROP COLUMN job_title; ALTER TABLE users DROP COLUMN bio; ALTER TABLE users DROP COLUMN location; ALTER TABLE users DROP COLUMN avatar_version; PRAGMA user_version=5;",
     );
     db.close();
     await rm(join(path, "checksums.json"));

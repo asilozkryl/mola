@@ -189,6 +189,71 @@
   color: #687176;
 }
 
+.composer-ux .composer-attachments > span > span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.composer-ux .composer-attachments > span > svg {
+  flex-shrink: 0;
+}
+
+.composer-ux .composer-attachments > span.is-unavailable {
+  color: #8c452c;
+  background: #fff4ed;
+  border-color: #ecd2c4;
+}
+
+.composer-ux .composer-attachments > span.is-unavailable small {
+  color: inherit;
+}
+
+.composer-ux .composer-delivery {
+  align-items: flex-start;
+}
+
+.composer-ux .composer-delivery > svg {
+  margin-top: 2px;
+}
+
+.composer-ux .composer-delivery strong,
+.composer-ux .composer-delivery small {
+  display: block;
+  font-size: inherit;
+}
+
+.composer-ux .composer-delivery strong {
+  margin-bottom: 2px;
+}
+
+.composer-ux .composer-delivery small {
+  margin-top: 3px;
+}
+
+.composer-ux .delivery-release {
+  min-height: 36px;
+  flex-shrink: 0;
+  padding: 6px 9px;
+  border: 1px solid #dcb59f;
+  border-radius: 5px;
+  background: #fff;
+  color: #8c452c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.composer-ux .delivery-release:focus-visible {
+  outline: 2px solid #8c452c;
+  outline-offset: 2px;
+}
+
+.composer-ux .draft-conflict-files {
+  padding-left: 18px;
+  margin-block: 8px;
+  overflow-wrap: anywhere;
+}
+
 .composer-ux .composer-attachments .icon-button {
   width: 28px;
   height: 28px;
@@ -391,6 +456,14 @@
 }
 
 @media (max-width: 380px) {
+  .composer-ux .composer-delivery {
+    flex-wrap: wrap;
+  }
+
+  .composer-ux .delivery-release {
+    margin-left: 23px;
+  }
+
   .composer-ux .send-button {
     width: 40px;
     min-width: 40px;

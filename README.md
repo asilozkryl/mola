@@ -15,7 +15,7 @@ npm run dev
 
 Üretim derlemesi ve kontroller:
 
-Son iyileştirmeler: [Kaydedilenler ve gezinme paketi](docs/SECOND_IMPROVEMENT_PACKAGE.md). Önceki tur: [ilk iyileştirme paketi](docs/FIRST_IMPROVEMENT_PACKAGE.md). Önceki kontroller: [doğrulama raporu](docs/VERIFICATION.md).
+Son iyileştirmeler: [güvenli gönderim ve ekli taslaklar](docs/THIRD_IMPROVEMENT_PACKAGE.md). Önceki turlar: [Kaydedilenler ve gezinme](docs/SECOND_IMPROVEMENT_PACKAGE.md), [ilk iyileştirme paketi](docs/FIRST_IMPROVEMENT_PACKAGE.md). Önceki kontroller: [doğrulama raporu](docs/VERIFICATION.md).
 
 ```sh
 npm run build

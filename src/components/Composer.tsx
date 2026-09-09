@@ -14,6 +14,7 @@ import {
   Code2,
   LoaderCircle,
   Paperclip,
+  RotateCcw,
   Send,
   Smile,
   X,
@@ -31,6 +32,7 @@ import {
 import { api } from "../lib/api";
 import { Avatar, fileSize, IconButton } from "./ui";
 import { useSyncedDraft } from "../lib/useSyncedDraft";
+import { useMessageSubmission } from "../lib/useMessageSubmission";
 import { useMentionHistory } from "../lib/useMentionHistory";
 import type { TextSelection } from "../../shared/mention-history";
 import "./collaboration.css";
@@ -64,13 +66,27 @@ export function Composer({
   members: User[];
 }) {
   const draft = useSyncedDraft(userId, workspaceId, channelId, parentId);
-  const mentionDocument = decodeMentions(draft.content, members);
+  const submission = useMessageSubmission({
+    userId,
+    workspaceId,
+    channelId,
+    parentId,
+  });
+  const snapshot = submission.snapshot;
+  const displayedContent = snapshot?.content ?? draft.content;
+  const files = snapshot?.attachments ?? draft.attachments;
+  const unavailable = snapshot ? [] : draft.unavailableAttachmentIds;
+  const mentionDocument = decodeMentions(displayedContent, members);
   const content = mentionDocument.text;
   const direct = isDirectMessage && !parentId;
-  const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const busy =
+    preparing ||
+    submission.status === "sending" ||
+    submission.status === "succeeded";
+  const locked = busy || Boolean(snapshot);
   const [sendAcknowledged, setSendAcknowledged] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [files, setFiles] = useState<Attachment[]>([]);
   const [picker, setPicker] = useState<"emoji" | "mention" | null>(null);
   const [mentionQuery, setMentionQuery] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -78,12 +94,15 @@ export function Composer({
   const [dragging, setDragging] = useState(false);
   const hintId = useId();
   const feedbackId = useId();
+  const deliveryId = useId();
   const root = useRef<HTMLDivElement>(null);
   const pickerPanel = useRef<HTMLDivElement>(null);
   const mentionSearch = useRef<HTMLInputElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const operation = useRef<"send" | "upload" | null>(null);
+  const uploadController = useRef<AbortController | null>(null);
+  const finishing = useRef<string | null>(null);
   const dragDepth = useRef(0);
   const alive = useRef(true);
   const history = useMentionHistory(
@@ -94,7 +113,7 @@ export function Composer({
       onTyping?.(Boolean(stored));
     },
     `${userId}:${workspaceId}:${channelId}:${parentId || ""}`,
-    busy,
+    locked,
   );
   const mentionMembers = members.filter(
     (member) => !member.suspended && !member.isBot,
@@ -110,8 +129,26 @@ export function Composer({
     alive.current = true;
     return () => {
       alive.current = false;
+      uploadController.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (submission.status !== "succeeded" || !submission.message || !snapshot)
+      return;
+    const message = submission.message;
+    if (finishing.current === message.id) return;
+    finishing.current = message.id;
+    void (async () => {
+      await draft.sent(snapshot);
+      if (!alive.current) return;
+      onTyping?.(false);
+      onSent(message);
+      submission.acknowledge();
+      setSendAcknowledged(true);
+      restoreInputFocus();
+    })();
+  }, [submission.status, submission.message, snapshot]);
 
   useEffect(() => {
     if (!sendAcknowledged) return;
@@ -164,8 +201,52 @@ export function Composer({
     onError(message);
   }
 
+  function restoreInputFocus() {
+    requestAnimationFrame(() => {
+      const focused = window.document.activeElement;
+      if (
+        alive.current &&
+        input.current &&
+        !input.current.disabled &&
+        (focused === window.document.body || root.current?.contains(focused))
+      ) {
+        input.current.focus();
+      }
+    });
+  }
+
+  function removeAttachment(id: string) {
+    draft.removeAttachment(id);
+    input.current?.focus();
+  }
+
+  function resolveDraft(useRemote: boolean) {
+    uploadController.current?.abort();
+    draft.resolve(useRemote);
+    restoreInputFocus();
+  }
+
+  async function releaseSubmission() {
+    if (busy || operation.current) return;
+    const released = submission.restoreOnRelease ? submission.snapshot : null;
+    draft.failed();
+    setPreparing(true);
+    setFeedback("");
+    try {
+      if (released) await draft.restoreSnapshot(released);
+      else await draft.retry();
+      // Keep the durable attempt until its draft has been restored in this scope.
+      if (alive.current) submission.release();
+    } finally {
+      if (alive.current) {
+        setPreparing(false);
+        restoreInputFocus();
+      }
+    }
+  }
+
   function update(next: MentionText, nextSelection?: TextSelection) {
-    if (busy) return;
+    if (locked) return;
     setSendAcknowledged(false);
     const stored = encodeMentions(next);
     if (stored.length > MAX_MESSAGE_LENGTH) {
@@ -270,47 +351,42 @@ export function Composer({
   async function send() {
     if (
       operation.current ||
-      draft.conflict ||
-      (!content.trim() && !files.length)
+      busy ||
+      (!snapshot &&
+        (draft.conflict ||
+          unavailable.length ||
+          (!content.trim() && !files.length)))
     )
       return;
     operation.current = "send";
     setSendAcknowledged(false);
-    setBusy(true);
+    setPreparing(true);
     setFeedback("");
     setPicker(null);
+    let prepared = Boolean(snapshot);
     try {
-      await draft.beginSend(draft.content);
-      const message = await api<Message>(`/channels/${channelId}/messages`, {
-        method: "POST",
-        headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
-        body: JSON.stringify({
-          content: draft.content.trim(),
-          ...(parentId ? { parentId } : {}),
-          attachmentIds: files.map((f) => f.id),
-        }),
-      });
-      await draft.sent();
-      setFiles([]);
-      onTyping?.(false);
-      onSent(message);
-      if (alive.current) setSendAcknowledged(true);
-      input.current?.focus();
+      if (snapshot) await submission.retry();
+      else {
+        const ready = await draft.beginSend(draft.content);
+        prepared = true;
+        await submission.submit(ready);
+      }
     } catch (e) {
       draft.failed();
-      if (alive.current) reportError((e as Error).message);
+      // Submission errors stay attached to their frozen message, including after navigation.
+      if (alive.current && !prepared) reportError((e as Error).message);
     } finally {
       operation.current = null;
       if (alive.current) {
-        setBusy(false);
-        requestAnimationFrame(() => input.current?.focus());
+        setPreparing(false);
+        restoreInputFocus();
       }
     }
   }
   async function upload(selected: File[]) {
     if (fileInput.current) fileInput.current.value = "";
-    if (!selected.length || operation.current) return;
-    const available = MAX_ATTACHMENTS - files.length;
+    if (!selected.length || operation.current || locked) return;
+    const available = MAX_ATTACHMENTS - draft.attachmentIds.length;
     const errors: string[] = [];
     const valid = selected.filter((file) => {
       if (file.size <= MAX_FILE_SIZE) return true;
@@ -331,9 +407,11 @@ export function Composer({
     setUploading(true);
     setFeedback("");
     setPicker(null);
+    const controller = new AbortController();
+    uploadController.current = controller;
     try {
       for (const [index, file] of queue.entries()) {
-        if (!alive.current) break;
+        if (!alive.current || controller.signal.aborted) break;
         setUploadLabel(
           `${file.name} yükleniyor${queue.length > 1 ? ` (${index + 1}/${queue.length})` : ""}…`,
         );
@@ -343,15 +421,20 @@ export function Composer({
           const attachment = await api<Attachment>("/uploads", {
             method: "POST",
             headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
+            signal: controller.signal,
             body,
           });
-          if (alive.current) setFiles((old) => [...old, attachment]);
+          if (alive.current && !controller.signal.aborted)
+            draft.updateAttachments((old) => [...old, attachment]);
         } catch (e) {
-          errors.push(`${file.name}: ${(e as Error).message}`);
+          if (!controller.signal.aborted)
+            errors.push(`${file.name}: ${(e as Error).message}`);
         }
       }
     } finally {
       operation.current = null;
+      if (uploadController.current === controller)
+        uploadController.current = null;
       if (alive.current) {
         setUploading(false);
         setUploadLabel("");
@@ -386,12 +469,13 @@ export function Composer({
         if (!event.dataTransfer.types.includes("Files")) return;
         event.preventDefault();
         dragDepth.current += 1;
-        if (!operation.current) setDragging(true);
+        if (!operation.current && !locked) setDragging(true);
       }}
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return;
         event.preventDefault();
-        event.dataTransfer.dropEffect = operation.current ? "none" : "copy";
+        event.dataTransfer.dropEffect =
+          operation.current || locked ? "none" : "copy";
       }}
       onDragLeave={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return;
@@ -416,7 +500,7 @@ export function Composer({
             <span>En fazla 4 dosya, dosya başına 10 MB</span>
           </div>
         )}
-        {draft.conflict && (
+        {draft.conflict && !snapshot && (
           <div className="draft-conflict" role="status">
             <p>
               Bu taslak başka bir cihazda değişti. Yazdıkların burada duruyor;
@@ -428,35 +512,104 @@ export function Composer({
                 {mentionPreview(draft.conflict.content, members) ||
                   "(Boş taslak)"}
               </pre>
+              {draft.conflict.attachmentIds.length > 0 && (
+                <ul className="draft-conflict-files">
+                  {draft.conflict.attachmentIds.map((id) => (
+                    <li key={id}>
+                      {draft.conflict!.attachments.find(
+                        (file) => file.id === id,
+                      )?.name || "Kullanılamayan dosya"}
+                      {draft.conflict!.unavailableAttachmentIds.includes(id)
+                        ? " — Dosya kullanılamıyor"
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </details>
-            <button type="button" onClick={() => draft.resolve(true)}>
+            <button type="button" onClick={() => resolveDraft(true)}>
               Diğer taslağı kullan
             </button>
-            <button type="button" onClick={() => draft.resolve(false)}>
+            <button type="button" onClick={() => resolveDraft(false)}>
               Buradaki taslağı kullan
             </button>
           </div>
         )}
-        {files.length > 0 && (
+        {(files.length > 0 || unavailable.length > 0) && (
           <div className="composer-attachments">
             {files.map((f) => (
-              <span key={f.id} title={f.name}>
-                <Paperclip size={14} />
+              <span
+                key={f.id}
+                title={f.name}
+                className={unavailable.includes(f.id) ? "is-unavailable" : ""}
+              >
+                {unavailable.includes(f.id) ? (
+                  <AlertCircle size={14} />
+                ) : (
+                  <Paperclip size={14} />
+                )}
                 <span>
                   {f.name}
-                  <small>{fileSize(f.size)}</small>
+                  <small>
+                    {unavailable.includes(f.id)
+                      ? "Dosya kullanılamıyor"
+                      : fileSize(f.size)}
+                  </small>
                 </span>
                 <IconButton
                   label={`${f.name} dosyasını kaldır`}
-                  disabled={busy || uploading}
-                  onClick={() =>
-                    setFiles((old) => old.filter((x) => x.id !== f.id))
-                  }
+                  disabled={locked || uploading}
+                  onClick={() => removeAttachment(f.id)}
                 >
                   <X size={14} />
                 </IconButton>
               </span>
             ))}
+            {unavailable
+              .filter((id) => !files.some((file) => file.id === id))
+              .map((id) => (
+                <span key={id} className="is-unavailable">
+                  <AlertCircle size={14} />
+                  <span>
+                    Kullanılamayan dosya<small>Kaldırıp yeniden ekle</small>
+                  </span>
+                  <IconButton
+                    label="Kullanılamayan dosyayı kaldır"
+                    disabled={locked || uploading}
+                    onClick={() => removeAttachment(id)}
+                  >
+                    <X size={14} />
+                  </IconButton>
+                </span>
+              ))}
+          </div>
+        )}
+        {submission.status === "failed" && (
+          <div
+            id={deliveryId}
+            className="composer-feedback composer-delivery is-error"
+            role="alert"
+          >
+            <AlertCircle size={16} aria-hidden="true" />
+            <span>
+              <strong>{submission.ambiguous ? "Gönderim onayı bekleniyor" : "Mesaj gönderilemedi"}</strong>
+              {submission.error}
+              {submission.ambiguous && (
+                <small>
+                  Sonucu doğrulayamadık. Yeniden denediğinde aynı mesaj iki kez
+                  gönderilmez.
+                </small>
+              )}
+            </span>
+            {submission.canRelease && (
+              <button
+                type="button"
+                className="delivery-release"
+                onClick={() => void releaseSubmission()}
+              >
+                Taslağa dön
+              </button>
+            )}
           </div>
         )}
         {(uploading || feedback) && (
@@ -520,14 +673,18 @@ export function Composer({
             void upload(pasted);
           }}
           rows={1}
-          disabled={busy}
+          disabled={locked}
         />
         <div className="composer-tools">
           <div className="composer-tools-left">
             <IconButton
               label="Dosya ekle"
               onClick={() => fileInput.current?.click()}
-              disabled={busy || uploading || files.length >= MAX_ATTACHMENTS}
+              disabled={
+                locked ||
+                uploading ||
+                draft.attachmentIds.length >= MAX_ATTACHMENTS
+              }
             >
               {uploading ? (
                 <LoaderCircle size={18} className="spin" />
@@ -538,21 +695,21 @@ export function Composer({
             <span className="tool-divider" />
             <IconButton
               label="Kalın yazı"
-              disabled={busy}
+              disabled={locked}
               onClick={() => insert("**", true)}
             >
               <Bold size={17} />
             </IconButton>
             <IconButton
               label="Kod ekle"
-              disabled={busy}
+              disabled={locked}
               onClick={() => insert("`", true)}
             >
               <Code2 size={19} />
             </IconButton>
             <IconButton
               label="Emoji ekle"
-              disabled={busy}
+              disabled={locked}
               pressed={picker === "emoji"}
               onClick={() => setPicker(picker === "emoji" ? null : "emoji")}
             >
@@ -560,7 +717,7 @@ export function Composer({
             </IconButton>
             <IconButton
               label="Birinden bahset"
-              disabled={busy}
+              disabled={locked}
               pressed={picker === "mention"}
               onClick={() => setPicker(picker === "mention" ? null : "mention")}
             >
@@ -570,19 +727,30 @@ export function Composer({
           <button
             type="button"
             className={`send-button ${sendAcknowledged ? "is-sent" : ""}`}
-            title="Mesaj gönder"
+            title={
+              submission.status === "failed"
+                ? "Gönderimi yeniden dene"
+                : "Mesaj gönder"
+            }
             aria-label={parentId ? "Yanıt gönder" : "Mesaj gönder"}
+            aria-describedby={
+              submission.status === "failed" ? deliveryId : undefined
+            }
             aria-busy={busy}
             onClick={() => void send()}
             disabled={
               busy ||
               uploading ||
-              Boolean(draft.conflict) ||
-              (!content.trim() && !files.length)
+              (!snapshot &&
+                (Boolean(draft.conflict) ||
+                  unavailable.length > 0 ||
+                  (!content.trim() && !files.length)))
             }
           >
             {busy ? (
               <LoaderCircle size={17} className="spin" aria-hidden="true" />
+            ) : submission.status === "failed" ? (
+              <RotateCcw size={17} aria-hidden="true" />
             ) : sendAcknowledged ? (
               <Check size={17} aria-hidden="true" />
             ) : (
@@ -590,7 +758,7 @@ export function Composer({
             )}
             <span className="send-button-label" aria-hidden="true">
               <span className={sendAcknowledged ? "is-hidden" : ""}>
-                Gönder
+                {submission.status === "failed" ? "Yeniden dene" : "Gönder"}
               </span>
               <span className={sendAcknowledged ? "" : "is-hidden"}>
                 Gönderildi
@@ -697,7 +865,9 @@ export function Composer({
           ref={fileInput}
           type="file"
           multiple
-          disabled={busy || uploading || files.length >= MAX_ATTACHMENTS}
+          disabled={
+            locked || uploading || draft.attachmentIds.length >= MAX_ATTACHMENTS
+          }
           tabIndex={-1}
           className="visually-hidden"
           aria-label="Paylaşılacak dosya"
@@ -713,7 +883,15 @@ export function Composer({
           <kbd>Enter</kbd> ile gönder · <kbd>Shift + Enter</kbd> ile yeni satır
         </span>
         <span className="draft-status" aria-live="polite">
-          {draft.status === "offline" ? (
+          {snapshot ? (
+            submission.status === "failed" ? (
+              "Mesajın yeniden denemek için korunuyor"
+            ) : (
+              "Mesaj gönderiliyor…"
+            )
+          ) : unavailable.length ? (
+            "Göndermeden önce kullanılamayan dosyayı kaldırıp yeniden ekle"
+          ) : draft.status === "offline" ? (
             <>
               Taslak bu cihazda ·{" "}
               <button onClick={() => void draft.retry()}>Yeniden dene</button>

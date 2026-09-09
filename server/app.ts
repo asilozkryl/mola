@@ -28,6 +28,7 @@ import { installWorkspaceLifecycle } from './workspace-lifecycle.js';
 import { installSidebarRoutes } from './sidebar-preferences.js';
 import { installConversationHubs } from './conversation-hubs.js';
 import { installSavedMessages } from './saved-messages.js';
+import { AttachmentUnavailableError, installReliableMessages } from './message-reliability.js';
 import type { SessionBootstrap, Message } from '../shared/types.js';
 
 declare global { namespace Express { interface Request { auth?: Row; sessionHash?: string; } } }
@@ -403,7 +404,7 @@ export function createApp(options: AppOptions = {}) {
   installSidebarRoutes(app,{repo,io});
   installConversationHubs(app, { repo, key: featureKey });
   installSavedMessages(app, { repo, io, key: featureKey });
-  collaborationData = installCollaborationData(app,{repo,io,key:featureKey,origin,requiresVerification});
+  collaborationData = installCollaborationData(app,{repo,io,key:featureKey,origin,uploadDir,requiresVerification});
   integrations.installRoutes(app);
   app.get('/api/rtc/config', (_req, res) => res.json(getRtcConfig()));
   const requireChannel = (req: Request, channelId: string) => {
@@ -449,24 +450,7 @@ export function createApp(options: AppOptions = {}) {
     const rows = repo.all(`SELECT * FROM messages WHERE channel_id=? AND parent_id IS ? ${before ? 'AND (created_at<? OR (created_at=? AND id<?))' : ''} ORDER BY created_at DESC,id DESC LIMIT 51`, channel.id, input.parentId || null, ...(before ? [before.created_at, before.created_at, before.id] : []));
     res.json({ messages: rows.slice(0, 50).reverse().map(row => repo.message(row)), hasMore: rows.length > 50 });
   });
-  app.post('/api/channels/:id/messages', (req, res) => {
-    const channel = requireChannel(req, String(req.params.id));
-    const input = parse(z.object({ content: z.string().trim().max(10000).default(''), parentId: idSchema.optional(), attachmentIds: z.array(idSchema).max(4).default([]) }).refine(v => v.content.length > 0 || v.attachmentIds.length > 0, { message: 'Bir mesaj yazın veya dosya ekleyin.' }), req.body);
-    if (input.parentId) { const parent = requireMessage(req, input.parentId); if (parent.channel_id !== channel.id || parent.parent_id) throw new HttpError(400, 'Geçersiz mesaj dizisi.'); }
-    const messageId = repo.transaction(() => {
-      const attachmentIds = [...new Set(input.attachmentIds)];
-      for (const id of attachmentIds) if (!repo.get('SELECT id FROM attachments WHERE id=? AND user_id=? AND workspace_id=? AND message_id IS NULL', id, req.auth!.id, req.auth!.workspace_id)) throw new HttpError(400, 'Dosya kullanılamıyor. Yeniden yükleyin.');
-      const id = randomUUID();
-      repo.run('INSERT INTO messages VALUES (?,?,?,?,?,?,?,?)', id, channel.id, req.auth!.id, input.content, new Date().toISOString(), null, input.parentId || null, 0);
-      for (const attachmentId of attachmentIds) repo.run('UPDATE attachments SET message_id=? WHERE id=?', id, attachmentId);
-      return id;
-    });
-    const message = broadcastMessage(messageId, 'message:created');
-    collaborationData.clearDraft(req.auth!.id,channel.id,input.parentId||'',input.content);
-    collaborationData.onMessageCreated(messageId);
-    if (input.parentId) broadcastMessage(input.parentId);
-    res.status(201).json(message);
-  });
+  installReliableMessages(app, { repo, uploadDir, collaboration: collaborationData, requireActiveWorkspace, requireChannel, requireMessage, broadcastMessage });
   app.patch('/api/messages/:id', (req, res) => {
     const message = requireMessage(req, String(req.params.id));
     const input = parse(z.object({ content: z.string().trim().min(1).max(10000).optional(), pinned: z.boolean().optional() }).refine(v => v.content !== undefined || v.pinned !== undefined, { message: 'Değişiklik bulunamadı.' }), req.body);
@@ -619,6 +603,7 @@ export function createApp(options: AppOptions = {}) {
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (res.headersSent) return;
     if (error instanceof multer.MulterError) return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'Dosya en fazla 10 MB olabilir.' : 'Tek seferde bir dosya yükleyin.' });
+    if (error instanceof AttachmentUnavailableError) return res.status(error.status).json({ error: error.message, code: error.code, unavailableAttachmentIds: error.unavailableAttachmentIds });
     if (error instanceof HttpError) return res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
     if (error && typeof error === 'object' && 'type' in error && error.type === 'entity.too.large') return res.status(413).json({ error: 'Gönderilen içerik çok büyük.' });
     if (error instanceof SyntaxError && 'body' in error) return res.status(400).json({ error: 'Geçersiz istek.' });
@@ -675,7 +660,7 @@ export function createApp(options: AppOptions = {}) {
     repo.run('DELETE FROM sessions WHERE expires_at<?', Date.now());
     repo.run('DELETE FROM invites WHERE expires_at<?', Date.now() - 30 * 24 * 60 * 60_000);
     repo.run('DELETE FROM auth_tokens WHERE expires_at<?', Date.now() - 7 * 24 * 60 * 60_000);
-    const orphaned = repo.all('SELECT id,storage_name FROM attachments WHERE message_id IS NULL AND created_at<?', new Date(Date.now() - 24 * 60 * 60_000).toISOString());
+    const orphaned = repo.all('SELECT id,storage_name FROM attachments WHERE message_id IS NULL AND created_at<? AND NOT EXISTS(SELECT 1 FROM draft_attachments d WHERE d.attachment_id=attachments.id AND d.user_id=attachments.user_id)', new Date(Date.now() - 24 * 60 * 60_000).toISOString());
     for (const file of orphaned) { try { unlinkSync(join(uploadDir, file.storage_name)); } catch {} repo.run('DELETE FROM attachments WHERE id=?', file.id); }
     const expiredDemos = repo.all('SELECT id FROM workspaces WHERE is_demo=1 AND created_at<? AND NOT EXISTS (SELECT 1 FROM sessions s WHERE s.workspace_id=workspaces.id)', new Date(Date.now() - SESSION_MS).toISOString());
     for (const workspace of expiredDemos) repo.transaction(() => {

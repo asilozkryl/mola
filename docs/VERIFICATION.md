@@ -1,6 +1,6 @@
 # Doğrulama kaydı
 
-Güncel R03/R06 kapsamı ve doğrulaması: [ikinci iyileştirme paketi](SECOND_IMPROVEMENT_PACKAGE.md).
+Güncel R07/R08 kapsamı ve doğrulaması: [üçüncü iyileştirme paketi](THIRD_IMPROVEMENT_PACKAGE.md). R03/R06 kaydı: [ikinci iyileştirme paketi](SECOND_IMPROVEMENT_PACKAGE.md).
 
 ## İlk iyileştirme paketi — 9 Eylül 2026
 

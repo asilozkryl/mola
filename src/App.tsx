@@ -870,6 +870,14 @@ export default function App() {
     });
     client.on("message:created", (message: Message) => {
       if (message.attachments.length) setCollectionVersion((v) => v + 1);
+      if (
+        message.parentId &&
+        threadRef.current?.id === message.parentId &&
+        threadRef.current.channelId === message.channelId
+      ) {
+        received(message.id);
+        setReplies((old) => uniqueMessages([...old, message]));
+      }
       if (message.channelId === channelRef.current) {
         if (message.parentId) {
           setMessages((old) =>
@@ -879,10 +887,6 @@ export default function App() {
                 : m,
             ),
           );
-          if (threadRef.current?.id === message.parentId) {
-            received(message.id);
-            setReplies((old) => uniqueMessages([...old, message]));
-          }
         } else {
           const conversationVisible =
             viewRef.current === "channel" && tabRef.current === "chat";
@@ -2133,15 +2137,19 @@ export default function App() {
     if (
       !data ||
       dataRef.current?.user.id !== data.user.id ||
-      dataRef.current?.workspace.id !== data.workspace.id ||
-      message.channelId !== channelRef.current
+      dataRef.current?.workspace.id !== data.workspace.id
     )
       return;
-    received(message.id);
     if (message.parentId) {
-      if (threadRef.current?.id === message.parentId)
+      if (
+        threadRef.current?.id === message.parentId &&
+        threadRef.current.channelId === message.channelId
+      ) {
+        received(message.id);
         setReplies((old) => uniqueMessages([...old, message]));
-    } else {
+      }
+    } else if (message.channelId === channelRef.current) {
+      received(message.id);
       setMessages((old) => uniqueMessages([...old, message]));
       scrollToLatestSoon(
         message.channelId,
@@ -3391,7 +3399,7 @@ export default function App() {
                       </p>
                     ) : (
                       <Composer
-                        key={`${data.user.id}:${channelId}`}
+                        key={`${data.user.id}:${data.workspace.id}:${channelId}`}
                         userId={data.user.id}
                         workspaceId={data.workspace.id}
                         channelId={channelId}
@@ -3465,7 +3473,7 @@ export default function App() {
                     </p>
                   ) : (
                     <Composer
-                      key={`${data.user.id}:${thread.id}`}
+                      key={`${data.user.id}:${data.workspace.id}:${thread.channelId}:${thread.id}`}
                       userId={data.user.id}
                       workspaceId={data.workspace.id}
                       channelId={thread.channelId}

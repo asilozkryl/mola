@@ -65,7 +65,11 @@ Push bildirimi mesaj metnini taşımaz; yalnız yeni bildirim olduğunu söyler.
 
 ## Taslaklar
 
-Ana sohbet ve mesaj yanıtı taslakları kullanıcı, kanal ve yanıt dizisine göre ayrı tutulur. Yazma kısa süre durduğunda sunucuya eşitlenir; aynı hesaptaki başka cihaz taslağı açabilir. Durum yazısı eşitlemenin tamamlanıp tamamlanmadığını gösterir.
+Ana sohbet ve mesaj yanıtı taslakları kullanıcı, çalışma alanı, kanal ve yanıt dizisine göre ayrı tutulur. Metin ve yüklemesi tamamlanmış dosya seçimleri birlikte sunucuya eşitlenir; aynı hesaptaki başka cihaz taslağı açabilir. Kanal veya profile gidip geri dönmek ve sayfayı yenilemek ekli taslağı korur. Durum yazısı eşitlemenin tamamlanıp tamamlanmadığını gösterir. Kanal değişirken henüz tamamlanmamış yükleme iptal edilir; dosya yeni konuşmaya eklenmez.
+
+İki cihaz aynı taslağı değiştirirse sürüm seçimi hem metne hem dosyalara uygulanır. Kullanılamayan bir ek kendi yerinde işaretlenir; göndermeden önce kaldırıp yeniden ekleyin.
+
+Gönderimin sonucu alınamazsa mesaj **Yeniden dene** için korunur. Düğme aynı gönderimi tekrar kontrol eder; yanıt kaybolmadan önce kaydedilmiş mesajdan ikinci bir kopya oluşturmaz. Bekleyen mesaj bu konuşmaya ve hesaba bağlıdır; aynı sekmede kanal/profil değişimi veya yenilemeden sonra da elle yeniden denenebilir. Sonuç çözülene kadar mesaj metni ve ekleri sabit kalır. Uygulama bağlantı geri geldiğinde kendi kendine göndermez. Sunucunun kesin olarak reddettiği düzeltilebilir hatalarda **Taslağa dön** ile düzenlemeye devam edin.
 
 İki cihaz aynı taslağı değiştirmişse sürümler sessizce birbirinin üstüne yazılmaz. **Diğer cihazdaki taslağı göster** ile karşılaştırıp **Diğer taslağı kullan** veya **Buradaki taslağı kullan** seçeneklerinden birini seçin. Ağ sorunu sırasında açık sekmedeki metin korunur; **Yeniden dene** ile eşitleme başlatılır. Dosya ekleri bu metin taslağı eşitlemesinin parçası değildir.
 

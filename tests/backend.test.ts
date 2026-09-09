@@ -111,7 +111,8 @@ test('uploads are validated and can be attached only once by the uploader', asyn
   const sent = await request(`/api/channels/${channelId}/messages`, { method: 'POST', json: { attachmentIds: [attachment.id] } });
   assert.equal(sent.status, 201);
   assert.equal((await sent.json()).attachments[0].name, 'tasarım-notları.txt');
-  assert.equal((await request(`/api/channels/${channelId}/messages`, { method: 'POST', json: { attachmentIds: [attachment.id] } })).status, 400);
+  const unavailable = await request(`/api/channels/${channelId}/messages`, { method: 'POST', json: { attachmentIds: [attachment.id] } });
+  assert.equal(unavailable.status, 409); assert.equal((await unavailable.json()).code, 'ATTACHMENT_UNAVAILABLE');
 }));
 
 test('pins and files include older channel history and direct message reads remain isolated', async () => fixture(async ({ runtime, request, getCookie, setCookie }) => {

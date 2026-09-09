@@ -33,7 +33,7 @@ function legacy(path: string) {
     created.workspaceId,
   );
   repo.db.exec(
-    "DROP TRIGGER saved_messages_workspace; DROP TABLE saved_messages; PRAGMA user_version=7;",
+    "DROP TRIGGER saved_messages_workspace; DROP TABLE message_requests; DROP TABLE draft_attachments; DROP TRIGGER deleted_thread_drafts; DROP TABLE saved_messages; PRAGMA user_version=7;",
   );
   const history = repo.all("SELECT * FROM messages"),
     sessions = repo.all("SELECT * FROM sessions"),
@@ -49,7 +49,7 @@ test("v7 to v8 preserves accounts, sessions and history, then persists personal 
   try {
     const previous = legacy(path);
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get("PRAGMA user_version")!.user_version, 8);
+    assert.equal(repo.get("PRAGMA user_version")!.user_version, 9);
     assert.deepEqual(repo.all("SELECT * FROM messages"), previous.history);
     assert.deepEqual(repo.all("SELECT * FROM sessions"), previous.sessions);
     assert.deepEqual(
