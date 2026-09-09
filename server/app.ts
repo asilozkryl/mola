@@ -27,6 +27,7 @@ import { createIntegrations } from './integrations.js';
 import { installWorkspaceLifecycle } from './workspace-lifecycle.js';
 import { installSidebarRoutes } from './sidebar-preferences.js';
 import { installConversationHubs } from './conversation-hubs.js';
+import { installSavedMessages } from './saved-messages.js';
 import type { SessionBootstrap, Message } from '../shared/types.js';
 
 declare global { namespace Express { interface Request { auth?: Row; sessionHash?: string; } } }
@@ -401,6 +402,7 @@ export function createApp(options: AppOptions = {}) {
   installChannelPermissionRoutes(app,{repo,io});
   installSidebarRoutes(app,{repo,io});
   installConversationHubs(app, { repo, key: featureKey });
+  installSavedMessages(app, { repo, io, key: featureKey });
   collaborationData = installCollaborationData(app,{repo,io,key:featureKey,origin,requiresVerification});
   integrations.installRoutes(app);
   app.get('/api/rtc/config', (_req, res) => res.json(getRtcConfig()));

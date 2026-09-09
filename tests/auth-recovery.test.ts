@@ -155,7 +155,7 @@ test('v1 migration preserves accounts and sessions while adding the verification
       setCookie(`mola_session=${token}`);
       const response = await request('/auth/me'); assert.equal(response.status, 200);
       const state = await response.json(); assert.equal(state.user.id, user); assert.equal(state.workspace.name, 'Preserved team'); assert.equal(state.user.emailVerified, false);
-      assert.equal(runtime.repo.get('PRAGMA user_version')!.user_version, 7);
+      assert.equal(runtime.repo.get('PRAGMA user_version')!.user_version, 8);
     }, { databasePath });
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

@@ -13,6 +13,7 @@ import {
   FileText,
   MessageSquare,
   MoreHorizontal,
+  LoaderCircle,
   Link,
   Pencil,
   Pin,
@@ -44,6 +45,7 @@ export function MessageItem({
   selfId,
   members,
   saved,
+  saveBusy = false,
   onReply,
   onReact,
   onSave,
@@ -65,6 +67,7 @@ export function MessageItem({
   selfId: string;
   members: User[];
   saved: boolean;
+  saveBusy?: boolean;
   onReply: () => void;
   onReact: (emoji: string) => void;
   onSave: () => void;
@@ -347,7 +350,12 @@ export function MessageItem({
     },
     {
       label: saved ? "Kaydedilenlerden kaldır" : "Mesajı kaydet",
-      icon: <Bookmark size={15} fill={saved ? "currentColor" : "none"} />,
+      icon: saveBusy ? (
+        <LoaderCircle size={15} className="spin" />
+      ) : (
+        <Bookmark size={15} fill={saved ? "currentColor" : "none"} />
+      ),
+      disabled: saveBusy,
       onSelect: onSave,
     },
     {
@@ -671,8 +679,13 @@ export function MessageItem({
           label={saved ? "Kaydedilenlerden kaldır" : "Mesajı kaydet"}
           onClick={onSave}
           pressed={saved}
+          disabled={saveBusy}
         >
-          <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
+          {saveBusy ? (
+            <LoaderCircle size={16} className="spin" />
+          ) : (
+            <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
+          )}
         </IconButton>
         <button
           type="button"
@@ -766,12 +779,18 @@ export function MessageItem({
             <button
               className="message-touch-action"
               aria-pressed={saved}
+              aria-busy={saveBusy}
+              disabled={saveBusy}
               onClick={() => {
                 onSave();
                 closePopovers(true);
               }}
             >
-              <Bookmark size={15} fill={saved ? "currentColor" : "none"} />
+              {saveBusy ? (
+                <LoaderCircle size={15} className="spin" />
+              ) : (
+                <Bookmark size={15} fill={saved ? "currentColor" : "none"} />
+              )}
               {saved ? "Kaydedilenlerden kaldır" : "Mesajı kaydet"}
             </button>
             <button

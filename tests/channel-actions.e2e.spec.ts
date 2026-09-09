@@ -411,6 +411,17 @@ test("deleting another channel closes its saved-message thread and removes cache
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Kaydedilenler",
   );
+  expect(new URL(page.url()).searchParams.get("thread")).toBe(parent.id);
+  await expect(replyInput).toHaveValue(
+    "Silinmiş kanala gönderilmemesi gereken taslak",
+  );
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Kaydedilenler",
+  );
+  await expect(
+    thread.locator(`article[data-message-id="${reply.id}"]`),
+  ).toBeVisible();
 
   // The visible thread belongs to B, while the main selected channel remains A.
   // A server refresh from another page must invalidate B's thread independently.

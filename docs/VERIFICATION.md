@@ -1,5 +1,7 @@
 # Doğrulama kaydı
 
+Güncel R03/R06 kapsamı ve doğrulaması: [ikinci iyileştirme paketi](SECOND_IMPROVEMENT_PACKAGE.md).
+
 ## İlk iyileştirme paketi — 9 Eylül 2026
 
 Kimlikli bahsetme, profil taslağı koruması, koleksiyon hata/yeniden deneme, DM kaynak adları ve canlı profil yarışı düzeltmesinin güncel kapsamı ve test sonuçları [ilk paket kaydında](FIRST_IMPROVEMENT_PACKAGE.md). Aşağıdaki bölümler önceki sürümlerin tarihsel kanıtlarıdır.

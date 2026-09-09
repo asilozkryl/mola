@@ -32,6 +32,14 @@ Kanal oluştururken görünürlüğü seçin. Yeni özel kanal ilk olarak oluşt
 
 Özel kanalı herkese açmak geçmiş mesaj ve dosyaları da ekip üyelerine açar. Arayüz kaydetmeden önce bu sonucu ayrıca belirtir. Kanalı arşivlemek geçmişi korur, yeni mesajları durdurur ve görüşmesini kapatır.
 
+## Kaydedilenler ve ekran adresleri
+
+Mesaj menüsünden **Mesajı kaydet** seçeneğini kullanın. Kaydedilenler kişisel ve çalışma alanına özeldir; hesabınıza giriş yaptığınız diğer cihazlarda aynı liste açılır. Arama mesaj metni, gönderen, kanal/özel konuşma adı ve dosya adını kapsar. **Daha fazla göster** ile sonraki kayıtları yükleyin. Kanal/konuşma adına basınca kaydın kaynak mesajı açılır. Erişiminiz kaldırılan mesajlar listede gösterilmez.
+
+Önceki tarayıcı kayıtları açılışta otomatik aktarılır. Aktarma veya liste yükleme başarısız olursa Kaydedilenler ekranındaki **Yeniden dene** düğmesini kullanın; aktarım tamamlanmadan yerel kayıtlar kaldırılmaz. Kaldırma işlemi başarısızsa mesajın kayıt işareti korunur.
+
+Kanal ve özel konuşmalar, merkezler, Dosyalar/Sabitlenenler sekmeleri ve mesaj dizileri adres çubuğunda yer alır. Sayfayı yenilemek aynı ekranı açar; tarayıcı geri/ileri düğmeleri önceki ekranlara döner. Profil sayfasından dönüş konuşma taslağını ve kaydırmasını korur. Bağlantı başka bir çalışma alanını açacaksa devam eden görüşmeden ayrılma onayı gösterilir.
+
 ## Bildirimler ve okunmamışlar
 
 Kanallardaki okunmamış sayıları sunucuda hesaba kaydedilir. Bir kanalı okuduğunuzda aynı hesabın o çalışma alanını açık tuttuğu diğer oturumlar da güncellenir. Yeni şema kurulurken eski mesaj geçmişi okunmuş kabul edilir; sonraki mesajlar sayılmaya devam eder.

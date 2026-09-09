@@ -203,7 +203,7 @@ test('messages can be saved, pinned, edited and deleted with state preserved aft
   await expect(page.getByText(updated, { exact: true })).toHaveCount(0);
   await page.getByRole('navigation').getByRole('button', { name: /^Kaydedilenler/ }).click();
   await expect(page.getByText(updated, { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Aklında kalmasın, burada kalsın.', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Kaydettiğin mesajlar burada', exact: true })).toBeVisible();
 });
 
 test('an uploaded file appears in the channel files tab and downloads with the original contents', async ({ page }) => {

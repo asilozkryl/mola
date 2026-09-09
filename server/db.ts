@@ -7,6 +7,7 @@ import { migrateAccountSecurity } from './account-security.js';
 import { migrateCollaborationData } from './collaboration-data.js';
 import { migrateIntegrations } from './integrations.js';
 import { migrateSidebarPreferences } from './sidebar-preferences.js';
+import { migrateSavedMessages } from './saved-messages.js';
 
 export type Row = Record<string, any>;
 
@@ -14,7 +15,7 @@ export function openDatabase(path: string) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
-  if (version > 7) { db.close(); throw new Error('This database was created by a newer Mola release. Restore the matching application version.'); }
+  if (version > 8) { db.close(); throw new Error('This database was created by a newer Mola release. Restore the matching application version.'); }
   db.function('fold_text', { deterministic: true }, value => String(value ?? '').normalize('NFKC').toLocaleLowerCase('tr-TR'));
   db.exec(`PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, is_demo INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
@@ -146,6 +147,14 @@ export function openDatabase(path: string) {
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
     finally { if (db.isOpen) db.exec('PRAGMA foreign_keys=ON'); }
+  }
+  if (version < 8) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      migrateSavedMessages(db);
+      if (db.prepare('PRAGMA foreign_key_check').all().length > 0) throw new Error('Saved messages migration found invalid references. Restore a consistent database backup.');
+      db.exec('PRAGMA user_version=8; COMMIT;');
+    } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
   }
   return db;
 }

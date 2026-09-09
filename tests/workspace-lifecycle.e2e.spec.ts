@@ -217,8 +217,21 @@ test("deleting one workspace switches to the surviving team and refreshes a seco
   });
   expect(create.status()).toBe(200);
   const second = (await create.json()) as Bootstrap;
-  await page.reload();
+  const secondChannel = second.channels.find(
+    (channel) => channel.name === "genel",
+  )!;
+  // The existing URL intentionally restores the first workspace on reload.
+  // This API fixture must open the workspace it just created explicitly.
+  await page.goto(
+    `/?workspace=${second.workspace.id}&channel=${secondChannel.id}`,
+  );
   await ready(page);
+  await expect(
+    page.getByRole("button", { name: "Çalışma alanı menüsü", exact: true }),
+  ).toContainText(second.workspace.name);
+  expect(
+    (await (await page.request.get("/api/auth/me")).json()).workspace.id,
+  ).toBe(second.workspace.id);
   const otherTab = await page.context().newPage();
   await otherTab.goto("/");
   await ready(otherTab);
@@ -252,6 +265,7 @@ test("a member can leave and rejoin by workspace invite without regaining previo
       data: { inviteToken: new URL(inviteUrl).searchParams.get("invite") },
     });
     expect(join.status()).toBe(200);
+    const joined = (await join.json()) as Bootstrap;
     const secretName = `gizli-${randomUUID().slice(0, 8)}`;
     const channelResponse = await page.request.post("/api/channels", {
       headers: { Origin: origin },
@@ -264,8 +278,17 @@ test("a member can leave and rejoin by workspace invite without regaining previo
     });
     expect(channelResponse.status()).toBe(201);
     const secret = await channelResponse.json();
-    await guest.reload();
+    const joinedChannel = joined.channels.find(
+      (channel) => channel.name === "genel",
+    )!;
+    // Follow the joined workspace, rather than reloading the member's old URL.
+    await guest.goto(
+      `/?workspace=${joined.workspace.id}&channel=${joinedChannel.id}`,
+    );
     await ready(guest);
+    expect(
+      (await (await guest.request.get("/api/auth/me")).json()).workspace.id,
+    ).toBe(owner.data.workspace.id);
     expect(
       (await (await guest.request.get("/api/auth/me")).json()).channels.some(
         (c: { id: string }) => c.id === secret.id,

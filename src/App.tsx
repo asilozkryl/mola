@@ -68,11 +68,19 @@ import type {
 } from "../shared/types";
 import { api, bootstrap, post, ApiError, setApiWorkspace } from "./lib/api";
 import {
+  appRouteAddress,
+  readAppRoute,
+  type AppRoute,
+  type ConversationTab,
+} from "./lib/navigation";
+import {
   conversationIdentity,
   getConversationMembers,
 } from "./lib/conversationIdentity";
 import { mentionPreview } from "../shared/mentions";
 import { CollectionError } from "./components/CollectionError";
+import { SavedMessages } from "./components/SavedMessages";
+import { useSavedMessages } from "./lib/useSavedMessages";
 import { ConversationLabel } from "./components/ConversationLabel";
 import { WorkspaceNavigation } from "./components/WorkspaceNavigation";
 import { useSidebarPreferences } from "./lib/useSidebarPreferences";
@@ -210,7 +218,6 @@ export default function App() {
   const collectionRetryFocus = useRef<string | null>(null);
   const [repliesHasMore, setRepliesHasMore] = useState(false);
   const [collectionVersion, setCollectionVersion] = useState(0);
-  const [savedOwner, setSavedOwner] = useState("");
   const [dialog, setDialog] = useState<Dialog>(null);
   const [channelToMove, setChannelToMove] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("list");
@@ -224,6 +231,14 @@ export default function App() {
   const profileReturn = useRef<{
     view: Exclude<View, "profile">;
     scrollTop: number;
+    route: AppRoute;
+  } | null>(null);
+  const routeSequence = useRef(0);
+  const appliedAddress = useRef("");
+  const routeScroll = useRef<{
+    sequence: number;
+    channelId: string;
+    top: number;
   } | null>(null);
   const [tab, setTab] = useState<"chat" | "files" | "pins">("chat");
   const [mobileNav, setMobileNav] = useState(false);
@@ -251,7 +266,6 @@ export default function App() {
   const [notificationError, setNotificationError] = useState("");
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [typing, setTyping] = useState<Record<string, number>>({});
-  const [saved, setSaved] = useState<Message[]>([]);
   const [showCall, setShowCall] = useState(false);
   const [callSetupChannel, setCallSetupChannel] = useState<Channel | null>(
     null,
@@ -330,8 +344,23 @@ export default function App() {
     (message: string) => notify(message, true),
     [notify],
   );
+  const savedState = useSavedMessages({
+    userId: data?.user.id || "",
+    workspaceId: data?.workspace.id || "",
+    active: view === "saved",
+    channels: data?.channels || [],
+    socket,
+    onError: fail,
+    enabled: Boolean(
+      data &&
+      !verificationPending &&
+      !authLink &&
+      !data.user.suspended &&
+      !data.workspace.suspended,
+    ),
+  });
   const acceptData = useCallback(
-    (next: SessionBootstrap, preserveProfileRoute = false) => {
+    (next: SessionBootstrap, preserveRoute = false) => {
       if (next.accountOnly) {
         liveMemberUpdates.current.clear();
         accessVersion.current += 1;
@@ -357,8 +386,6 @@ export default function App() {
         setTyping({});
         setUnread({});
         setNotificationState(null);
-        setSaved([]);
-        setSavedOwner("");
         setShowCall(false);
         setCallSetupChannel(null);
         setCallSwitchTarget(null);
@@ -375,7 +402,7 @@ export default function App() {
         setView("channel");
         setProfileId(null);
         profileReturn.current = null;
-        clearProfileAddress();
+        clearNavigationAddress();
         setLoading(false);
         return;
       }
@@ -384,6 +411,7 @@ export default function App() {
       const contextChanged =
         dataRef.current?.workspace.id !== next.workspace.id ||
         dataRef.current?.user.id !== next.user.id;
+      const hadContext = Boolean(dataRef.current);
       if (contextChanged) liveMemberUpdates.current.clear();
       const changed =
         dataRef.current?.workspace.id !== next.workspace.id ||
@@ -392,11 +420,10 @@ export default function App() {
           Boolean(next.user.suspended) ||
         Boolean(dataRef.current?.workspace.suspended) !==
           Boolean(next.workspace.suspended);
-      if (contextChanged && dataRef.current && !preserveProfileRoute)
-        clearProfileAddress();
       setApiWorkspace(next.workspace.id);
       initialBootstrap = Promise.resolve(next);
       if (changed) {
+        appliedAddress.current = "";
         accessVersion.current += 1;
         callRef.current.leave();
         socketRef.current?.removeAllListeners();
@@ -415,8 +442,6 @@ export default function App() {
         setUnread({});
         setNotificationState(null);
         setNotificationError("");
-        setSaved([]);
-        setSavedOwner("");
         setHasMore(false);
         setRepliesHasMore(false);
         setShowCall(false);
@@ -459,7 +484,6 @@ export default function App() {
         const allowed = new Set(
           next.channels.filter((c) => !c.archived).map((c) => c.id),
         );
-        setSaved((old) => old.filter((m) => accessible.has(m.channelId)));
         setCallSetupChannel((old) => (old && allowed.has(old.id) ? old : null));
         setCallSwitchTarget((old) =>
           old && allowed.has(old.id)
@@ -474,16 +498,46 @@ export default function App() {
           setLinkedReply(null);
           setRepliesHasMore(false);
           setThreadLoading(false);
+          if (viewRef.current === "channel")
+            writeAddress(
+              {
+                workspaceId: next.workspace.id,
+                view: "channel",
+                channelId: selected,
+                tab: tabRef.current,
+              },
+              "replace",
+            );
+          else if (viewRef.current !== "profile")
+            writeAddress(
+              { workspaceId: next.workspace.id, view: viewRef.current },
+              "replace",
+            );
         }
         if (channelRef.current !== selected) {
           setMessages([]);
-          setReplies([]);
-          setThread(null);
-          setLinkedReply(null);
           setPins([]);
           setChannelFiles([]);
           setHasMore(false);
-          threadRef.current = null;
+          if (viewRef.current === "channel") {
+            setReplies([]);
+            setThread(null);
+            setLinkedReply(null);
+            threadRef.current = null;
+            writeAddress(
+              {
+                workspaceId: next.workspace.id,
+                view: "channel",
+                channelId: selected,
+                tab: "chat",
+              },
+              "replace",
+            );
+            setTab("chat");
+            fail(
+              "Bu kanala artık erişemiyorsun veya kanal silinmiş. Erişebildiğin bir kanala döndün.",
+            );
+          }
         }
       }
       channelRef.current = selected;
@@ -491,6 +545,16 @@ export default function App() {
       setData(next);
       setBootstrapRevision((revision) => revision + 1);
       setChannelId(selected);
+      if (contextChanged && hadContext && !preserveRoute)
+        writeAddress(
+          {
+            workspaceId: next.workspace.id,
+            view: "channel",
+            channelId: selected,
+            tab: "chat",
+          },
+          "replace",
+        );
       const invite = new URLSearchParams(location.search).get("invite");
       if (invite && !next.workspace.isDemo) {
         setWorkspaceInvite(invite);
@@ -498,6 +562,7 @@ export default function App() {
         setWorkspaceTarget(undefined);
         setDialog("workspaces");
         history.replaceState(null, "", location.pathname + location.hash);
+        writeAddress(defaultRoute(next), "replace");
       }
       setLoading(false);
     },
@@ -740,39 +805,6 @@ export default function App() {
     return () => document.removeEventListener("keydown", key);
   }, [adminOpen, workspaceLifecycle, accountData]);
   useEffect(() => {
-    if (!data) return;
-    try {
-      const stored: unknown = JSON.parse(
-        localStorage.getItem(
-          `mola:saved:${data.user.id}:${data.workspace.id}`,
-        ) ||
-          localStorage.getItem(`mola:saved:${data.user.id}`) ||
-          "[]",
-      );
-      setSaved(
-        Array.isArray(stored)
-          ? stored
-              .filter(
-                (m): m is Message =>
-                  m &&
-                  typeof m.id === "string" &&
-                  typeof m.channelId === "string" &&
-                  data.channels.some((c) => c.id === m.channelId) &&
-                  typeof m.userId === "string" &&
-                  typeof m.createdAt === "string" &&
-                  typeof m.content === "string" &&
-                  Array.isArray(m.attachments) &&
-                  Array.isArray(m.reactions),
-              )
-              .slice(-200)
-          : [],
-      );
-    } catch {
-      setSaved([]);
-    }
-    setSavedOwner(`${data.user.id}:${data.workspace.id}`);
-  }, [data?.user.id, data?.workspace.id]);
-  useEffect(() => {
     if (
       !data?.user.id ||
       verificationPending ||
@@ -883,15 +915,18 @@ export default function App() {
       setReplies((old) => old.map((m) => (m.id === message.id ? message : m)));
       setThread((old) => (old?.id === message.id ? message : old));
       setLinkedReply((old) => (old?.id === message.id ? message : old));
-      setSaved((old) => old.map((m) => (m.id === message.id ? message : m)));
       setCollectionVersion((v) => v + 1);
     });
     client.on("message:deleted", ({ id }: { id: string }) => {
       forget(id);
       setMessages((old) => old.filter((m) => m.id !== id));
       setReplies((old) => old.filter((m) => m.id !== id));
-      setSaved((old) => old.filter((m) => m.id !== id));
       setThread((old) => (old?.id === id ? null : old));
+      if (threadRef.current?.id === id) {
+        threadRef.current = null;
+        if (viewRef.current !== "profile")
+          writeAddress(contentRoute(), "replace");
+      }
       setLinkedReply((old) => (old?.id === id ? null : old));
       setCollectionVersion((v) => v + 1);
     });
@@ -991,7 +1026,15 @@ export default function App() {
           void document.fonts.ready.then(() =>
             requestAnimationFrame(() => {
               if (cancelled) return;
-              if (highlightRef.current) {
+              const restoration = routeScroll.current;
+              if (
+                restoration?.sequence === routeSequence.current &&
+                restoration.channelId === channelId
+              ) {
+                if (scrollRef.current)
+                  scrollRef.current.scrollTop = restoration.top;
+                routeScroll.current = null;
+              } else if (highlightRef.current) {
                 document
                   .querySelector(
                     `[data-message-id="${CSS.escape(highlightRef.current)}"]`,
@@ -1048,20 +1091,6 @@ export default function App() {
       cancelled = true;
     };
   }, [thread?.id, fail]);
-  useEffect(() => {
-    if (data && savedOwner === `${data.user.id}:${data.workspace.id}`) {
-      try {
-        localStorage.setItem(
-          `mola:saved:${data.user.id}:${data.workspace.id}`,
-          JSON.stringify(saved),
-        );
-      } catch {
-        fail(
-          "Tarayıcı depolaması dolu. Kaydedilenlerden birkaç mesaj kaldırabilirsin.",
-        );
-      }
-    }
-  }, [saved, data?.user.id, data?.workspace.id, savedOwner, fail]);
   useEffect(() => {
     if (!data || !channelId || tab === "chat" || view !== "channel") {
       collectionRetryFocus.current = null;
@@ -1266,112 +1295,181 @@ export default function App() {
     };
   }, [data?.workspace.id, thread?.id, threadLoading, replies.at(-1)?.id, view]);
   useEffect(() => {
-    if (!data || verificationPending) return;
-    let cancelled = false;
-    const open = async () => {
-      const params = new URLSearchParams(location.search),
-        id = params.get("message"),
-        workspace = params.get("workspace");
-      if (!id || !workspace || params.has("profile")) return;
-      const clean = () => {
-        params.delete("message");
-        params.delete("workspace");
-        history.replaceState(
-          null,
-          "",
-          location.pathname + (params.size ? "?" + params : "") + location.hash,
-        );
+    if (
+      !data ||
+      verificationPending ||
+      authLink ||
+      data.user.suspended ||
+      data.workspace.suspended
+    )
+      return;
+    let disposed = false;
+    const followAddress = async () => {
+      const data = dataRef.current;
+      if (!data) return;
+      const address = location.pathname + location.search + location.hash;
+      if (appliedAddress.current === address) return;
+      const sequence = ++routeSequence.current;
+      const requested = readAppRoute(location.search, data.workspace.id);
+      const current = () => !disposed && sequence === routeSequence.current;
+      const fallback = (message: string) => {
+        if (!current()) return;
+        const route = defaultRoute(dataRef.current!);
+        applyConversationRoute(route);
+        writeAddress(route, "replace");
+        fail(message);
       };
-      if (!data.workspaces.some((w) => w.id === workspace)) {
-        clean();
-        fail("Bu mesajın çalışma alanına erişimin yok.");
-        return;
-      }
-      if (workspace !== data.workspace.id) {
-        if (callRef.current.joined || callRef.current.joining) {
-          openWorkspaces("list", workspace);
-          return;
-        }
-        try {
-          await changeWorkspace({ kind: "switch", id: workspace });
-        } catch (e) {
-          clean();
-          fail((e as Error).message);
-        }
-        return;
-      }
-      try {
-        const message = await api<Message>(
-          `/messages/${encodeURIComponent(id)}`,
-        );
-        if (cancelled) return;
-        clean();
-        await navigateMessage(message);
-      } catch (e) {
-        if (!cancelled) {
-          clean();
-          fail((e as Error).message);
-        }
-      }
-    };
-    void open();
-    window.addEventListener("popstate", open);
-    window.addEventListener("focus", open);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("popstate", open);
-      window.removeEventListener("focus", open);
-    };
-  }, [data?.workspace.id, data?.user.id, verificationPending]);
-
-  useEffect(() => {
-    if (!data || verificationPending) return;
-    let cancelled = false;
-    const followProfile = async () => {
-      const params = new URLSearchParams(location.search);
-      const id = params.get("profile");
-      if (!id) {
-        if (viewRef.current === "profile") restoreProfileReturn();
-        return;
-      }
-      const workspaceId = params.get("workspace") || data.workspace.id;
       if (
         !data.workspaces.some(
           (workspace) =>
-            workspace.id === workspaceId &&
+            workspace.id === requested.workspaceId &&
             !workspace.membershipSuspended &&
             !workspace.suspended,
         )
       ) {
-        clearProfileAddress();
-        restoreProfileReturn();
-        fail("Bu profilin çalışma alanına erişimin yok.");
+        fallback(
+          "Bu çalışma alanına artık erişemiyorsun. Erişebildiğin alana döndün.",
+        );
         return;
       }
-      if (workspaceId !== data.workspace.id) {
+      if (requested.workspaceId !== data.workspace.id) {
         if (callRef.current.joined || callRef.current.joining) {
-          openWorkspaces("list", workspaceId);
+          openWorkspaces("list", requested.workspaceId);
           return;
         }
         try {
-          await changeWorkspace({ kind: "switch", id: workspaceId }, true);
+          await changeWorkspace(
+            { kind: "switch", id: requested.workspaceId },
+            true,
+          );
         } catch (error) {
-          if (!cancelled) {
-            clearProfileAddress();
-            fail((error as Error).message);
+          fallback((error as Error).message);
+        }
+        return;
+      }
+      appliedAddress.current = address;
+      if (requested.view === "profile") {
+        showProfile(requested.profileId);
+        return;
+      }
+      const returnScroll = history.state?.molaScrollTop;
+      if (requested.view !== "channel") {
+        setProfileId(null);
+        viewRef.current = requested.view;
+        setView(requested.view);
+        setThread(null);
+        threadRef.current = null;
+        setLinkedReply(null);
+        setDialog(null);
+        setMobileNav(false);
+        restoreRouteScroll(returnScroll);
+        if (requested.threadId) {
+          try {
+            const message = await api<Message>(
+              `/messages/${encodeURIComponent(requested.threadId)}`,
+              { headers: { "X-Workspace-Id": data.workspace.id } },
+            );
+            if (!current()) return;
+            const root = message.parentId
+              ? await api<Message>(
+                  `/messages/${encodeURIComponent(message.parentId)}`,
+                  { headers: { "X-Workspace-Id": data.workspace.id } },
+                )
+              : message;
+            if (!current()) return;
+            if (
+              !dataRef.current?.channels.some(
+                (channel) => channel.id === root.channelId,
+              )
+            )
+              throw new Error("Bu mesaja artık erişemiyorsun.");
+            setThread(root);
+            threadRef.current = root;
+          } catch (error) {
+            if (current()) {
+              writeAddress(
+                { workspaceId: requested.workspaceId, view: requested.view },
+                "replace",
+              );
+              fail((error as Error).message);
+            }
           }
         }
         return;
       }
-      if (!cancelled) showProfile(id);
+      if (
+        requested.channelId &&
+        !data.channels.some(
+          (channel) =>
+            channel.id === requested.channelId && channel.kind !== "voice",
+        )
+      ) {
+        fallback(
+          "Bu kanala artık erişemiyorsun veya kanal silinmiş. Erişebildiğin bir kanala döndün.",
+        );
+        return;
+      }
+      const route = {
+        ...requested,
+        channelId: requested.channelId || defaultRoute(data).channelId,
+      };
+      applyConversationRoute(route);
+      if (!requested.channelId && !requested.messageId && !requested.threadId)
+        writeAddress(route, "replace");
+      restoreRouteScroll(returnScroll);
+      try {
+        if (requested.messageId || requested.threadId) {
+          const message = await api<Message>(
+            `/messages/${encodeURIComponent(requested.messageId || requested.threadId!)}`,
+            {
+              headers: { "X-Workspace-Id": data.workspace.id },
+            },
+          );
+          if (!current()) return;
+          if (
+            !dataRef.current?.channels.some(
+              (channel) => channel.id === message.channelId,
+            ) ||
+            (requested.channelId && requested.channelId !== message.channelId)
+          ) {
+            fallback("Bu mesaja artık erişemiyorsun.");
+            return;
+          }
+          if (requested.messageId) await navigateMessage(message, false);
+          else {
+            const root = message.parentId
+              ? await api<Message>(
+                  `/messages/${encodeURIComponent(message.parentId)}`,
+                  {
+                    headers: { "X-Workspace-Id": data.workspace.id },
+                  },
+                )
+              : message;
+            if (!current()) return;
+            if (!requested.channelId)
+              applyConversationRoute({ ...route, channelId: root.channelId });
+            setThread(root);
+            threadRef.current = root;
+          }
+        }
+      } catch (error) {
+        fallback((error as Error).message);
+      }
     };
-    void followProfile();
-    window.addEventListener("popstate", followProfile);
+    void followAddress();
+    window.addEventListener("popstate", followAddress);
     return () => {
-      cancelled = true;
-      window.removeEventListener("popstate", followProfile);
+      disposed = true;
+      window.removeEventListener("popstate", followAddress);
     };
-  }, [data?.user.id, data?.workspace.id, verificationPending]);
+  }, [
+    data?.workspace.id,
+    data?.user.id,
+    data?.user.suspended,
+    data?.workspace.suspended,
+    verificationPending,
+    authLink,
+  ]);
 
   const sidebar = useSidebarPreferences({
     userId: data?.user.id,
@@ -1752,7 +1850,7 @@ export default function App() {
   }
   async function changeWorkspace(
     action: WorkspaceAction,
-    preserveProfileRoute = false,
+    preserveRoute = false,
   ) {
     if (workspaceChanging.current) return;
     const actorId = dataRef.current?.user.id || accountRef.current?.user.id;
@@ -1773,8 +1871,16 @@ export default function App() {
               );
       if ((dataRef.current?.user.id || accountRef.current?.user.id) !== actorId)
         return;
-      if (!preserveProfileRoute) clearProfileAddress();
-      acceptData(next, preserveProfileRoute);
+      if (!preserveRoute)
+        history.replaceState(
+          {
+            ...history.state,
+            molaScrollTop: scrollRef.current?.scrollTop || 0,
+          },
+          "",
+        );
+      acceptData(next, true);
+      if (!preserveRoute) writeAddress(defaultRoute(next));
       setDialog(null);
       setWorkspaceInvite("");
       notify(
@@ -1796,30 +1902,170 @@ export default function App() {
       void refreshAccess();
     }
   }
-  function selectChannel(id: string) {
-    clearProfileAddress("push");
+  function defaultRoute(snapshot: Bootstrap): AppRoute & { view: "channel" } {
+    return {
+      workspaceId: snapshot.workspace.id,
+      view: "channel",
+      tab: "chat",
+      channelId:
+        snapshot.channels.find(
+          (channel) =>
+            channel.id === channelRef.current && channel.kind !== "voice",
+        )?.id ||
+        snapshot.channels.find(
+          (channel) => channel.kind === "text" && !channel.archived,
+        )?.id,
+    };
+  }
+  function conversationRoute(): AppRoute & { view: "channel" } {
+    return {
+      workspaceId: dataRef.current?.workspace.id || "",
+      view: "channel",
+      channelId: channelRef.current,
+      tab: tabRef.current,
+      ...(threadRef.current ? { threadId: threadRef.current.id } : {}),
+    };
+  }
+  function contentRoute(): Exclude<AppRoute, { view: "profile" }> {
+    return viewRef.current === "channel" || viewRef.current === "profile"
+      ? conversationRoute()
+      : {
+          workspaceId: dataRef.current?.workspace.id || "",
+          view: viewRef.current,
+          ...(threadRef.current ? { threadId: threadRef.current.id } : {}),
+        };
+  }
+  function writeAddress(
+    route: AppRoute,
+    mode: "push" | "replace" = "push",
+    profile = false,
+  ) {
+    routeSequence.current++;
+    const address = appRouteAddress(route, location.href);
+    if (
+      mode === "push" &&
+      address !== location.pathname + location.search + location.hash
+    ) {
+      history.replaceState(
+        { ...history.state, molaScrollTop: scrollRef.current?.scrollTop || 0 },
+        "",
+      );
+      history.pushState(
+        { molaRoute: true, ...(profile ? { molaProfile: true } : {}) },
+        "",
+        address,
+      );
+    } else
+      history.replaceState({ ...history.state, molaRoute: true }, "", address);
+    appliedAddress.current = address;
+  }
+  function restoreRouteScroll(scrollTop: unknown) {
+    if (typeof scrollTop !== "number") return;
+    const sequence = routeSequence.current;
+    routeScroll.current = {
+      sequence,
+      channelId: channelRef.current,
+      top: scrollTop,
+    };
+    requestAnimationFrame(() => {
+      if (sequence === routeSequence.current && scrollRef.current)
+        scrollRef.current.scrollTop = scrollTop;
+    });
+  }
+  function applyConversationRoute(route: AppRoute & { view: "channel" }) {
+    const id = route.channelId || "";
+    if (channelRef.current !== id) {
+      setMessages([]);
+      setPins([]);
+      setChannelFiles([]);
+    }
     setProfileId(null);
     channelRef.current = id;
     setChannelId(id);
+    viewRef.current = "channel";
     setView("channel");
-    setTab("chat");
+    tabRef.current = route.tab;
+    setTab(route.tab);
     setThread(null);
+    threadRef.current = null;
+    setLinkedReply(null);
+    setReplies([]);
     setMobileNav(false);
+    setDialog(null);
     setUnread((old) => ({ ...old, [id]: 0 }));
   }
-  function clearProfileAddress(mode: "push" | "replace" = "replace") {
-    const url = new URL(location.href);
-    if (!url.searchParams.has("profile")) return;
-    url.searchParams.delete("profile");
-    if (!url.searchParams.has("message")) url.searchParams.delete("workspace");
-    if (mode === "push") history.pushState(null, "", url);
-    else history.replaceState(null, "", url);
+  function selectChannel(id: string) {
+    const route: AppRoute & { view: "channel" } = {
+      workspaceId: dataRef.current?.workspace.id || "",
+      view: "channel",
+      channelId: id,
+      tab: "chat",
+    };
+    writeAddress(route);
+    applyConversationRoute(route);
+  }
+  function selectTab(next: ConversationTab) {
+    writeAddress({ ...conversationRoute(), tab: next });
+    tabRef.current = next;
+    setTab(next);
+  }
+  function openThread(message: Message) {
+    if (viewRef.current === "saved") {
+      writeAddress({
+        workspaceId: dataRef.current?.workspace.id || "",
+        view: "saved",
+        threadId: message.id,
+      });
+      setLinkedReply(null);
+      threadRef.current = message;
+      setThread(message);
+      return;
+    }
+    const route: AppRoute & { view: "channel" } = {
+      workspaceId: dataRef.current?.workspace.id || "",
+      view: "channel",
+      channelId: message.channelId,
+      tab: "chat",
+      threadId: message.id,
+    };
+    writeAddress(route);
+    if (
+      viewRef.current !== "channel" ||
+      channelRef.current !== message.channelId ||
+      tabRef.current !== "chat"
+    )
+      applyConversationRoute(route);
+    setLinkedReply(null);
+    threadRef.current = message;
+    setThread(message);
+  }
+  function closeThread() {
+    writeAddress({ ...contentRoute(), threadId: undefined });
+    threadRef.current = null;
+    setThread(null);
+    setLinkedReply(null);
+  }
+  function clearNavigationAddress(mode: "push" | "replace" = "replace") {
+    if (dataRef.current) writeAddress(defaultRoute(dataRef.current), mode);
+    else {
+      history.replaceState(
+        null,
+        "",
+        appRouteAddress(
+          { workspaceId: "", view: "channel", tab: "chat" },
+          location.href,
+        ),
+      );
+      appliedAddress.current = "";
+      routeSequence.current++;
+    }
   }
   function showProfile(id: string) {
     if (viewRef.current !== "profile")
       profileReturn.current = {
         view: viewRef.current,
         scrollTop: scrollRef.current?.scrollTop || 0,
+        route: contentRoute(),
       };
     setProfileId(id);
     setView("profile");
@@ -1830,36 +2076,38 @@ export default function App() {
   }
   function openProfile(id: string) {
     if (!data) return;
-    const url = new URL(location.pathname, location.origin);
-    url.searchParams.set("workspace", data.workspace.id);
-    url.searchParams.set("profile", id);
-    if (viewRef.current === "profile")
-      history.replaceState(history.state, "", url);
-    else history.pushState({ molaProfile: true }, "", url);
     showProfile(id);
-  }
-  function restoreProfileReturn() {
-    const previous = profileReturn.current;
-    setProfileId(null);
-    setView(previous?.view || "channel");
-    requestAnimationFrame(() => {
-      if (scrollRef.current && previous)
-        scrollRef.current.scrollTop = previous.scrollTop;
-      document.getElementById("main-content")?.focus({ preventScroll: true });
-    });
+    writeAddress(
+      { workspaceId: data.workspace.id, view: "profile", profileId: id },
+      viewRef.current === "profile" ? "replace" : "push",
+      true,
+    );
   }
   function closeProfile() {
     if (history.state?.molaProfile) history.back();
     else {
-      clearProfileAddress();
-      restoreProfileReturn();
+      const previous = profileReturn.current;
+      writeAddress(
+        previous?.route || defaultRoute(dataRef.current!),
+        "replace",
+      );
+      appliedAddress.current = "";
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      restoreRouteScroll(previous?.scrollTop);
     }
   }
   function selectView(next: Exclude<View, "profile">) {
-    clearProfileAddress("push");
+    writeAddress(
+      next === "channel"
+        ? conversationRoute()
+        : { workspaceId: dataRef.current?.workspace.id || "", view: next },
+    );
     setProfileId(null);
+    viewRef.current = next;
     setView(next);
     setThread(null);
+    threadRef.current = null;
+    setLinkedReply(null);
     setChannelMenu(null);
   }
   function updateOwnProfile(user: User) {
@@ -1935,13 +2183,6 @@ export default function App() {
       throw e;
     }
   }
-  function saveMessage(message: Message) {
-    setSaved((old) =>
-      old.some((m) => m.id === message.id)
-        ? old.filter((m) => m.id !== message.id)
-        : [...old, message],
-    );
-  }
   async function deleteMessage(message: Message) {
     try {
       await api(`/messages/${message.id}`, { method: "DELETE" });
@@ -1981,12 +2222,12 @@ export default function App() {
               fail("Bağlantı kopyalanamadı. Tarayıcı izinlerini kontrol et."),
             );
         }}
-        saved={saved.some((m) => m.id === message.id)}
-        onSave={() => saveMessage(message)}
-        onReply={() => {
-          setLinkedReply(null);
-          setThread(message);
-        }}
+        saved={savedState.ids.has(message.id)}
+        saveBusy={
+          !savedState.saveReady || savedState.pendingIds.has(message.id)
+        }
+        onSave={() => void savedState.toggle(message)}
+        onReply={() => openThread(message)}
         onReact={(emoji) => {
           void mutate(`/messages/${message.id}/reactions`, {
             method: "POST",
@@ -2061,7 +2302,6 @@ export default function App() {
       accountRef.current = null;
       setDialog(null);
       setMessages([]);
-      setSaved([]);
       setUnread({});
     } catch (e) {
       if (accountRef.current) throw e;
@@ -2088,26 +2328,45 @@ export default function App() {
       fail((e as Error).message);
     }
   }
-  async function navigateMessage(message: Message) {
+  async function navigateMessage(message: Message, updateAddress = true) {
     if (!dataRef.current?.channels.some((c) => c.id === message.channelId)) {
       fail("Bu mesaja artık erişemiyorsun.");
       return;
     }
-    selectChannel(message.channelId);
-    setDialog(null);
+    const route: AppRoute & { view: "channel" } = {
+      workspaceId: dataRef.current.workspace.id,
+      view: "channel",
+      channelId: message.channelId,
+      tab: "chat",
+      messageId: message.id,
+    };
+    if (updateAddress) writeAddress(route);
+    const sequence = routeSequence.current;
+    const workspaceId = dataRef.current.workspace.id;
+    const current = () =>
+      sequence === routeSequence.current &&
+      dataRef.current?.workspace.id === workspaceId &&
+      channelRef.current === message.channelId;
+    applyConversationRoute(route);
     try {
       const result = await api<{ messages: Message[] }>(
         `/channels/${message.channelId}/messages`,
+        { headers: { "X-Workspace-Id": workspaceId } },
       );
-      if (channelRef.current !== message.channelId) return;
+      if (!current()) return;
       if (
         message.parentId ||
         !result.messages.some((m) => m.id === message.id)
       ) {
         const root = message.parentId
-          ? await api<Message>(`/messages/${message.parentId}`)
-          : await api<Message>(`/messages/${message.id}`);
-        if (channelRef.current === message.channelId) {
+          ? await api<Message>(`/messages/${message.parentId}`, {
+              headers: { "X-Workspace-Id": workspaceId },
+            })
+          : await api<Message>(`/messages/${message.id}`, {
+              headers: { "X-Workspace-Id": workspaceId },
+            });
+        if (current()) {
+          threadRef.current = root;
           setLinkedReply(message.parentId ? message : null);
           setThread(root);
         }
@@ -2125,7 +2384,7 @@ export default function App() {
         });
       }
     } catch (error) {
-      fail((error as Error).message);
+      if (current()) fail((error as Error).message);
     }
   }
   async function loadMoreReplies() {
@@ -2266,7 +2525,6 @@ export default function App() {
           setData(null);
           setChannelId("");
           setMessages([]);
-          setSaved([]);
           setUnread({});
         }}
       />
@@ -2389,7 +2647,7 @@ export default function App() {
           unread={unread}
           currentId={channelId}
           view={view}
-          savedCount={saved.length}
+          savedCount={savedState.ids.size}
           activityCount={
             notificationState?.workspaceId === data.workspace.id
               ? notificationState.unreadNotifications
@@ -2724,7 +2982,7 @@ export default function App() {
                                   : -1;
                         if (next < 0) return;
                         event.preventDefault();
-                        setTab(tabs[next]);
+                        selectTab(tabs[next]);
                         event.currentTarget
                           .querySelectorAll<HTMLButtonElement>('[role="tab"]')
                           [next]?.focus();
@@ -2737,7 +2995,7 @@ export default function App() {
                         tabIndex={tab === "chat" ? 0 : -1}
                         aria-selected={tab === "chat"}
                         className={tab === "chat" ? "active" : ""}
-                        onClick={() => setTab("chat")}
+                        onClick={() => selectTab("chat")}
                       >
                         <MessageSquare size={16} />
                         Sohbet
@@ -2749,7 +3007,7 @@ export default function App() {
                         tabIndex={tab === "files" ? 0 : -1}
                         aria-selected={tab === "files"}
                         className={tab === "files" ? "active" : ""}
-                        onClick={() => setTab("files")}
+                        onClick={() => selectTab("files")}
                       >
                         <FileText size={16} />
                         Dosyalar
@@ -2761,7 +3019,7 @@ export default function App() {
                         tabIndex={tab === "pins" ? 0 : -1}
                         aria-selected={tab === "pins"}
                         className={tab === "pins" ? "active" : ""}
-                        onClick={() => setTab("pins")}
+                        onClick={() => selectTab("pins")}
                       >
                         <Pin size={15} />
                         Sabitlenenler
@@ -2800,43 +3058,42 @@ export default function App() {
                   tabIndex={0}
                 >
                   {view === "saved" ? (
-                    <>
-                      {saved.length ? (
-                        <>
-                          <div className="list-intro">
-                            <Bookmark size={20} />
-                            <h2>İyi ki kaydetmişim.</h2>
-                            <p>{saved.length} mesaj seni burada bekliyor.</p>
-                          </div>
-                          {saved.map((message) => (
-                            <div key={message.id}>
-                              <button
-                                className="saved-channel-label"
-                                onClick={() => {
-                                  selectChannel(message.channelId);
-                                }}
-                              >
-                                <ConversationLabel
-                                  channel={data.channels.find(
-                                    (c) => c.id === message.channelId,
-                                  )}
-                                  selfId={data.user.id}
-                                  members={data.members}
-                                />
-                                <ArrowRight size={13} />
-                              </button>
-                              {renderMessage(message)}
-                            </div>
-                          ))}
-                        </>
-                      ) : (
-                        <EmptyState
-                          icon={<Bookmark size={29} />}
-                          title="Aklında kalmasın, burada kalsın."
-                          text="Bir mesajın üzerindeki yer imi simgesine tıkla. Kaydettiklerini burada bulacaksın."
-                        />
-                      )}
-                    </>
+                    <SavedMessages
+                      state={savedState}
+                      channels={data.channels}
+                      members={data.members}
+                      selfId={data.user.id}
+                      renderMessage={renderMessage}
+                      onOpen={async (id) => {
+                        const workspaceId = data.workspace.id;
+                        const sequence = routeSequence.current;
+                        try {
+                          const message = await api<Message>(
+                            `/messages/${encodeURIComponent(id)}`,
+                            { headers: { "X-Workspace-Id": workspaceId } },
+                          );
+                          if (
+                            dataRef.current?.workspace.id === workspaceId &&
+                            routeSequence.current === sequence
+                          )
+                            await navigateMessage(message);
+                        } catch (error) {
+                          if (
+                            dataRef.current?.workspace.id === workspaceId &&
+                            routeSequence.current === sequence
+                          ) {
+                            if (
+                              error instanceof ApiError &&
+                              (error.status === 403 || error.status === 404)
+                            ) {
+                              savedState.invalidateUnavailable(id);
+                              void refreshAccess();
+                            }
+                            throw error;
+                          }
+                        }
+                      }}
+                    />
                   ) : view === "messages" ? (
                     <DirectMessagesCenter
                       key={sidebarScope}
@@ -2982,7 +3239,7 @@ export default function App() {
                           extra={
                             <button
                               className="secondary-button"
-                              onClick={() => setTab("chat")}
+                              onClick={() => selectTab("chat")}
                             >
                               <MessageSquare size={16} /> Sohbete dön
                             </button>
@@ -3166,7 +3423,7 @@ export default function App() {
                     <h2>Mesaj dizisi</h2>
                     <IconButton
                       label="Mesaj dizisini kapat"
-                      onClick={() => setThread(null)}
+                      onClick={closeThread}
                     >
                       <X size={19} />
                     </IconButton>
@@ -3262,14 +3519,29 @@ export default function App() {
             return changeWorkspace(
               action,
               Boolean(
-                params.has("profile") &&
                 action.kind === "switch" &&
                 action.id === params.get("workspace") &&
                 action.id !== data.workspace.id,
               ),
             );
           }}
-          onClose={() => setDialog(null)}
+          onClose={() => {
+            setDialog(null);
+            if (
+              new URLSearchParams(location.search).get("workspace") !==
+              data.workspace.id
+            )
+              writeAddress(
+                viewRef.current === "profile" && profileId
+                  ? {
+                      workspaceId: data.workspace.id,
+                      view: "profile",
+                      profileId,
+                    }
+                  : contentRoute(),
+                "replace",
+              );
+          }}
         />
       )}
       {voicePreview && (

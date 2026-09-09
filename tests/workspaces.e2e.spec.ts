@@ -221,8 +221,13 @@ test('voice room sidebars show both accounts and update remote microphone and de
       headers: { Origin: appOrigin }, data: { inviteToken: invitation.token },
     });
     expect(joined.status()).toBe(200);
-    await guestPage.reload();
+    const shared = await joined.json() as Bootstrap;
+    const sharedChannel = shared.channels.find(channel => channel.name === 'genel')!;
+    // Reloading the old explicit URL would correctly reopen the guest's own team.
+    await guestPage.goto(`/?workspace=${shared.workspace.id}&channel=${sharedChannel.id}`);
     await ready(guestPage);
+    expect((await snapshot(guestPage)).workspace.id).toBe(owner.data.workspace.id);
+    await expect(guestPage.getByRole('button', { name: 'Çalışma alanı menüsü', exact: true })).toContainText(owner.data.workspace.name);
     const voice = owner.data.channels.find(channel => channel.kind === 'voice')!;
     expect(voice).toBeTruthy();
     const ownerRoster = ownerPage.getByRole('list', { name: `${voice.name} katılımcıları`, exact: true });

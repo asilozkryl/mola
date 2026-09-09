@@ -181,8 +181,21 @@ test("mentions persist through reload, open their message and synchronize read s
         .getByRole("button", { name: "Okunmamış", exact: true }),
     ).toContainText("1");
     await page.reload();
-    await expect(composer(page)).toBeVisible();
-    await page.getByRole("button", { name: "Aktivite", exact: true }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Aktivite", exact: true }),
+    ).toBeVisible();
+    const activity = page.getByRole("region", {
+      name: "Aktivite akışı",
+      exact: true,
+    });
+    await expect(activity).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("workspace")).toBe(
+      data.workspace.id,
+    );
+    expect(new URL(page.url()).searchParams.get("view")).toBe("inbox");
+    await expect(
+      activity.getByRole("button", { name: "Okunmamış", exact: true }),
+    ).toContainText("1");
     await expect(
       page.locator(".activity-open").filter({ hasText: content }),
     ).toBeVisible();
