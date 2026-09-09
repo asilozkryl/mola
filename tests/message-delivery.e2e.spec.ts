@@ -7,6 +7,7 @@ import {
 import { randomUUID } from "node:crypto";
 import type { Attachment, Bootstrap, Channel, Message } from "../shared/types";
 import type { NotificationState } from "../shared/collaboration-types";
+import type { ChannelFilesPage } from "../shared/collection-types";
 
 const origin = "http://127.0.0.1:5174";
 const headers = { Origin: origin };
@@ -170,9 +171,24 @@ test("retrying a committed message after its response is lost creates one messag
       `/api/channels/${channel.id}/files`,
     );
     expect(filesResponse.status()).toBe(200);
+    const filesPage = (await filesResponse.json()) as ChannelFilesPage;
     expect(
-      ((await filesResponse.json()) as { files: Attachment[] }).files,
+      filesPage.files.map(({ id, name, size, mime, url }) => ({
+        id,
+        name,
+        size,
+        mime,
+        url,
+      })),
     ).toEqual(committed.attachments);
+    expect(filesPage.total).toBe(committed.attachments.length);
+    expect(filesPage.nextCursor).toBeNull();
+    for (const file of filesPage.files) {
+      expect(file.messageId).toBe(committed.id);
+      expect(file.channelId).toBe(channel.id);
+      expect(file.user.id).toBe(committed.userId);
+      expect(file.parentId).toBeNull();
+    }
     const download = await page.request.get(committed.attachments[0].url);
     expect(download.status()).toBe(200);
     expect(await download.text()).toBe(fileText);

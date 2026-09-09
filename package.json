@@ -29,6 +29,7 @@
     "lucide-react": "^1.41.0",
     "multer": "^2.3.0",
     "nodemailer": "^10.0.0",
+    "pdfjs-dist": "6.3.289",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

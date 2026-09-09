@@ -210,7 +210,11 @@ test("deleting one workspace switches to the surviving team and refreshes a seco
   });
   await composer.fill(keepMessage);
   await page.getByRole("button", { name: "Mesaj gönder", exact: true }).click();
-  await expect(page.getByText(keepMessage, { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(keepMessage, { exact: true }).and(page.locator(".message-text")),
+  ).toBeVisible();
+  await expect(composer).toHaveValue("");
+  await expect(composer).toBeEnabled();
   const create = await page.request.post("/api/workspaces", {
     headers: { Origin: origin },
     data: { name: "Silinecek İkinci Alan" },
@@ -238,8 +242,14 @@ test("deleting one workspace switches to the surviving team and refreshes a seco
   await confirmDelete(page, second.workspace.name);
   await ready(page);
   await ready(otherTab);
-  await expect(page.getByText(keepMessage, { exact: true })).toBeVisible();
-  await expect(otherTab.getByText(keepMessage, { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(keepMessage, { exact: true }).and(page.locator(".message-text")),
+  ).toBeVisible();
+  await expect(
+    otherTab
+      .getByText(keepMessage, { exact: true })
+      .and(otherTab.locator(".message-text")),
+  ).toBeVisible();
   const state = await (await page.request.get("/api/auth/me")).json();
   expect(state.workspace.id).toBe(account.data.workspace.id);
   expect(state.workspaces).toHaveLength(1);

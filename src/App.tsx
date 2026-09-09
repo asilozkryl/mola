@@ -57,7 +57,6 @@ import {
   WifiOff,
 } from "lucide-react";
 import type {
-  Attachment,
   Bootstrap,
   AccountBootstrap,
   SessionBootstrap,
@@ -77,11 +76,15 @@ import {
   conversationIdentity,
   getConversationMembers,
 } from "./lib/conversationIdentity";
-import { mentionPreview } from "../shared/mentions";
-import { CollectionError } from "./components/CollectionError";
+import { ChannelCollections } from "./components/ChannelCollections";
+import { SearchDialog } from "./components/SearchDialog";
+import {
+  AttachmentPreview,
+  type AttachmentPreviewTarget,
+} from "./components/AttachmentPreview";
+import type { MessageHistoryPage } from "../shared/collection-types";
 import { SavedMessages } from "./components/SavedMessages";
 import { useSavedMessages } from "./lib/useSavedMessages";
-import { ConversationLabel } from "./components/ConversationLabel";
 import { WorkspaceNavigation } from "./components/WorkspaceNavigation";
 import { useSidebarPreferences } from "./lib/useSidebarPreferences";
 import type { SidebarOrder, SidebarChannelGroup } from "../shared/sidebar";
@@ -99,7 +102,6 @@ import { clearAuthLink, readAuthLink, type AuthLink } from "./lib/auth-links";
 import {
   Avatar,
   dateLabel,
-  fileSize,
   IconButton,
   Logo,
   Modal,
@@ -165,8 +167,9 @@ type Dialog =
 type View = "channel" | "saved" | "inbox" | "profile" | "messages";
 let initialBootstrap: Promise<SessionBootstrap | null> | undefined;
 const uniqueMessages = (list: Message[]) =>
-  [...new Map(list.map((m) => [m.id, m])).values()].sort((a, b) =>
-    a.createdAt.localeCompare(b.createdAt),
+  [...new Map(list.map((m) => [m.id, m])).values()].sort(
+    (a, b) =>
+      a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
   );
 
 export default function App() {
@@ -208,15 +211,22 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [pins, setPins] = useState<Message[]>([]);
-  const [channelFiles, setChannelFiles] = useState<Attachment[]>([]);
-  const [collectionLoading, setCollectionLoading] = useState(false);
-  const [collectionError, setCollectionError] = useState<{
-    scope: string;
-    message: string;
-  } | null>(null);
-  const collectionRetryFocus = useRef<string | null>(null);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyRetry, setHistoryRetry] = useState(0);
+  const historyRequest = useRef(0);
+  const historyPending = useRef(false);
   const [repliesHasMore, setRepliesHasMore] = useState(false);
+  const [replyCursor, setReplyCursor] = useState<string | null>(null);
+  const [replyBusy, setReplyBusy] = useState(false);
+  const [replyError, setReplyError] = useState("");
+  const [replyRetry, setReplyRetry] = useState(0);
+  const replyRequest = useRef(0);
+  const replyPending = useRef(false);
+  const [preview, setPreview] = useState<AttachmentPreviewTarget | null>(null);
+  const previewRef = useRef(preview);
+  previewRef.current = preview;
   const [collectionVersion, setCollectionVersion] = useState(0);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [channelToMove, setChannelToMove] = useState<string | null>(null);
@@ -377,8 +387,6 @@ export default function App() {
         setData(null);
         setAccountData(next);
         setMessages([]);
-        setPins([]);
-        setChannelFiles([]);
         setReplies([]);
         setThread(null);
         threadRef.current = null;
@@ -432,8 +440,6 @@ export default function App() {
         setSocket(null);
         setConnected(false);
         setMessages([]);
-        setPins([]);
-        setChannelFiles([]);
         setReplies([]);
         setThread(null);
         setLinkedReply(null);
@@ -516,8 +522,6 @@ export default function App() {
         }
         if (channelRef.current !== selected) {
           setMessages([]);
-          setPins([]);
-          setChannelFiles([]);
           setHasMore(false);
           if (viewRef.current === "channel") {
             setReplies([]);
@@ -825,14 +829,23 @@ export default function App() {
       setConnected(true);
       void refreshAccess();
       const requestedChannel = channelRef.current;
+      const requestedHistory = historyRequest.current;
       if (requestedChannel)
-        api<{ messages: Message[]; hasMore: boolean }>(
-          `/channels/${requestedChannel}/messages`,
-        )
+        api<MessageHistoryPage>(`/channels/${requestedChannel}/messages`)
           .then((result) => {
-            if (disposed || requestedChannel !== channelRef.current) return;
+            if (
+              disposed ||
+              requestedChannel !== channelRef.current ||
+              requestedHistory !== historyRequest.current
+            )
+              return;
+            historyRequest.current++;
+            historyPending.current = false;
+            setHistoryBusy(false);
+            setHistoryError("");
             setMessages(result.messages);
             setHasMore(result.hasMore);
+            setHistoryCursor(result.nextCursor);
           })
           .catch(() => {});
     });
@@ -923,6 +936,9 @@ export default function App() {
     });
     client.on("message:deleted", ({ id }: { id: string }) => {
       forget(id);
+      setPreview((old) =>
+        old?.messageId === id || old?.parentId === id ? null : old,
+      );
       setMessages((old) => old.filter((m) => m.id !== id));
       setReplies((old) => old.filter((m) => m.id !== id));
       setThread((old) => (old?.id === id ? null : old));
@@ -1012,21 +1028,33 @@ export default function App() {
   useEffect(() => {
     if (!channelId || !data) return;
     let cancelled = false;
+    const controller = new AbortController();
+    const workspaceId = data.workspace.id;
+    const userId = data.user.id;
+    historyRequest.current++;
+    historyPending.current = false;
+    setHistoryBusy(false);
+    setHistoryCursor(null);
+    setHistoryError("");
     setMessagesLoading(true);
     setMessages([]);
     setTyping({});
     setHasMore(false);
-    api<{ messages: Message[]; hasMore: boolean }>(
-      `/channels/${channelId}/messages`,
-    )
+    api<MessageHistoryPage>(`/channels/${channelId}/messages`, {
+      signal: controller.signal,
+      headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
+    })
       .then((result) => {
         if (
           !cancelled &&
+          dataRef.current?.workspace.id === workspaceId &&
+          dataRef.current?.user.id === userId &&
           channelRef.current === channelId &&
           dataRef.current?.channels.some((c) => c.id === channelId)
         ) {
           setMessages(result.messages);
           setHasMore(result.hasMore);
+          setHistoryCursor(result.nextCursor);
           void document.fonts.ready.then(() =>
             requestAnimationFrame(() => {
               if (cancelled) return;
@@ -1060,112 +1088,72 @@ export default function App() {
         }
       })
       .catch((error) => {
-        if (!cancelled) fail(error.message);
+        if (!cancelled) setHistoryError(error.message);
       })
       .finally(() => {
         if (!cancelled) setMessagesLoading(false);
       });
     return () => {
       cancelled = true;
-    };
-  }, [channelId, data?.workspace.id, fail]);
-  useEffect(() => {
-    if (!thread) return;
-    let cancelled = false;
-    setThreadLoading(true);
-    setReplies([]);
-    api<{ messages: Message[]; hasMore: boolean }>(
-      `/channels/${thread.channelId}/messages?parentId=${encodeURIComponent(thread.id)}`,
-    )
-      .then((result) => {
-        if (
-          !cancelled &&
-          threadRef.current?.id === thread.id &&
-          dataRef.current?.channels.some((c) => c.id === thread.channelId)
-        ) {
-          setReplies(result.messages);
-          setRepliesHasMore(result.hasMore);
-        }
-      })
-      .catch((error) => fail(error.message))
-      .finally(() => {
-        if (!cancelled) setThreadLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [thread?.id, fail]);
-  useEffect(() => {
-    if (!data || !channelId || tab === "chat" || view !== "channel") {
-      collectionRetryFocus.current = null;
-      setCollectionLoading(false);
-      setCollectionError(null);
-      return;
-    }
-    const workspaceId = data.workspace.id;
-    const userId = data.user.id;
-    const scope = `${userId}:${workspaceId}:${channelId}:${tab}`;
-    const restoreRetryFocus = collectionRetryFocus.current === scope;
-    collectionRetryFocus.current = null;
-    const controller = new AbortController();
-    let cancelled = false;
-    const current = () =>
-      !cancelled &&
-      dataRef.current?.user.id === userId &&
-      dataRef.current?.workspace.id === workspaceId &&
-      channelRef.current === channelId &&
-      dataRef.current.channels.some((c) => c.id === channelId);
-    setCollectionLoading(true);
-    setCollectionError(null);
-    setPins([]);
-    setChannelFiles([]);
-    const path = `/channels/${channelId}/${tab}`;
-    api<{ messages?: Message[]; files?: Attachment[] }>(path, {
-      signal: controller.signal,
-      headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
-    })
-      .then((result) => {
-        if (!current()) return;
-        if (tab === "pins") setPins(result.messages || []);
-        else setChannelFiles(result.files || []);
-      })
-      .catch((error) => {
-        if (current())
-          setCollectionError({
-            scope,
-            message:
-              error instanceof ApiError
-                ? error.message
-                : "Bağlantını kontrol edip yeniden dene.",
-          });
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setCollectionLoading(false);
-          if (restoreRetryFocus) {
-            requestAnimationFrame(() => {
-              if (
-                current() &&
-                (document.activeElement === document.body ||
-                  document.activeElement === scrollRef.current)
-              )
-                scrollRef.current?.focus({ preventScroll: true });
-            });
-          }
-        }
-      });
-    return () => {
-      cancelled = true;
       controller.abort();
     };
-  }, [
-    channelId,
-    tab,
-    view,
-    collectionVersion,
-    data?.user.id,
-    data?.workspace.id,
-  ]);
+  }, [channelId, data?.workspace.id, data?.user.id, historyRetry]);
+  useEffect(() => {
+    replyRequest.current++;
+    replyPending.current = false;
+    setReplyBusy(false);
+    setReplyCursor(null);
+    setRepliesHasMore(false);
+    setReplyError("");
+    if (!thread || !data) return;
+    const controller = new AbortController();
+    const workspaceId = data.workspace.id;
+    const userId = data.user.id;
+    const current = () =>
+      !controller.signal.aborted &&
+      threadRef.current?.id === thread.id &&
+      dataRef.current?.user.id === userId &&
+      dataRef.current?.workspace.id === workspaceId &&
+      dataRef.current.channels.some((c) => c.id === thread.channelId);
+    setThreadLoading(true);
+    setReplies([]);
+    api<MessageHistoryPage>(
+      `/channels/${thread.channelId}/messages?parentId=${encodeURIComponent(thread.id)}`,
+      {
+        signal: controller.signal,
+        headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
+      },
+    )
+      .then((result) => {
+        if (current()) {
+          setReplies(result.messages);
+          setRepliesHasMore(result.hasMore);
+          setReplyCursor(result.nextCursor);
+        }
+      })
+      .catch((error: Error) => {
+        if (current()) setReplyError(error.message);
+      })
+      .finally(() => {
+        if (current()) setThreadLoading(false);
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [thread?.id, data?.user.id, data?.workspace.id, replyRetry]);
+
+  useEffect(() => {
+    if (
+      preview &&
+      (!data ||
+        data.user.id !== preview.userId ||
+        data.workspace.id !== preview.workspaceId ||
+        data.user.suspended ||
+        data.workspace.suspended ||
+        !data.channels.some((c) => c.id === preview.channelId))
+    )
+      setPreview(null);
+  }, [data, preview]);
 
   useEffect(() => {
     if (
@@ -1980,8 +1968,6 @@ export default function App() {
     const id = route.channelId || "";
     if (channelRef.current !== id) {
       setMessages([]);
-      setPins([]);
-      setChannelFiles([]);
     }
     setProfileId(null);
     channelRef.current = id;
@@ -2195,6 +2181,11 @@ export default function App() {
     try {
       await api(`/messages/${message.id}`, { method: "DELETE" });
       forget(message.id);
+      setPreview((old) =>
+        old?.messageId === message.id || old?.parentId === message.id
+          ? null
+          : old,
+      );
       setMessages((old) => old.filter((m) => m.id !== message.id));
       setReplies((old) => old.filter((m) => m.id !== message.id));
       notify("Mesaj silindi.");
@@ -2212,6 +2203,16 @@ export default function App() {
         author={userMap.get(message.userId)}
         selfId={data!.user.id}
         onOpenProfile={openProfile}
+        onOpenFile={(file) =>
+          setPreview({
+            file,
+            channelId: message.channelId,
+            messageId: message.id,
+            parentId: message.parentId,
+            workspaceId: data!.workspace.id,
+            userId: data!.user.id,
+          })
+        }
         online={Boolean(data?.onlineIds.includes(message.userId))}
         connected={connected}
         canModerate={Boolean(
@@ -2317,23 +2318,61 @@ export default function App() {
     }
   }
   async function loadMore() {
-    if (!messages.length) return;
-    const requestedChannel = channelId;
+    if (!data || !historyCursor || historyPending.current) return;
+    const workspaceId = data.workspace.id,
+      userId = data.user.id,
+      requestedChannel = channelId;
+    const sequence = ++historyRequest.current;
+    const current = () =>
+      sequence === historyRequest.current &&
+      dataRef.current?.user.id === userId &&
+      dataRef.current?.workspace.id === workspaceId &&
+      channelRef.current === requestedChannel &&
+      dataRef.current.channels.some((c) => c.id === requestedChannel);
     const currentHeight = scrollRef.current?.scrollHeight || 0;
+    const currentTop = scrollRef.current?.scrollTop || 0;
+    historyPending.current = true;
+    setHistoryBusy(true);
+    setHistoryError("");
     try {
-      const result = await api<{ messages: Message[]; hasMore: boolean }>(
-        `/channels/${channelId}/messages?before=${encodeURIComponent(messages[0].id)}`,
+      const result = await api<MessageHistoryPage>(
+        `/channels/${requestedChannel}/messages?cursor=${encodeURIComponent(historyCursor)}`,
+        { headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId } },
       );
-      if (requestedChannel !== channelRef.current) return;
+      if (!current()) return;
       setMessages((old) => uniqueMessages([...result.messages, ...old]));
       setHasMore(result.hasMore);
+      setHistoryCursor(result.nextCursor);
       requestAnimationFrame(() => {
-        if (scrollRef.current)
+        if (current() && scrollRef.current)
           scrollRef.current.scrollTop =
-            scrollRef.current.scrollHeight - currentHeight;
+            currentTop + scrollRef.current.scrollHeight - currentHeight;
       });
-    } catch (e) {
-      fail((e as Error).message);
+    } catch (error) {
+      if (current()) {
+        setHistoryError((error as Error).message);
+        if (
+          error instanceof ApiError &&
+          error.code === "INVALID_COLLECTION_CURSOR"
+        ) {
+          setHistoryCursor(null);
+          setHasMore(false);
+        }
+        if (
+          error instanceof ApiError &&
+          [401, 403, 404].includes(error.status)
+        ) {
+          setMessages([]);
+          setHistoryCursor(null);
+          setHasMore(false);
+          void refreshAccess();
+        }
+      }
+    } finally {
+      if (sequence === historyRequest.current) {
+        historyPending.current = false;
+        setHistoryBusy(false);
+      }
     }
   }
   async function navigateMessage(message: Message, updateAddress = true) {
@@ -2351,7 +2390,9 @@ export default function App() {
     if (updateAddress) writeAddress(route);
     const sequence = routeSequence.current;
     const workspaceId = dataRef.current.workspace.id;
+    const userId = dataRef.current.user.id;
     const current = () =>
+      dataRef.current?.user.id === userId &&
       sequence === routeSequence.current &&
       dataRef.current?.workspace.id === workspaceId &&
       channelRef.current === message.channelId;
@@ -2359,7 +2400,7 @@ export default function App() {
     try {
       const result = await api<{ messages: Message[] }>(
         `/channels/${message.channelId}/messages`,
-        { headers: { "X-Workspace-Id": workspaceId } },
+        { headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId } },
       );
       if (!current()) return;
       if (
@@ -2368,10 +2409,10 @@ export default function App() {
       ) {
         const root = message.parentId
           ? await api<Message>(`/messages/${message.parentId}`, {
-              headers: { "X-Workspace-Id": workspaceId },
+              headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
             })
           : await api<Message>(`/messages/${message.id}`, {
-              headers: { "X-Workspace-Id": workspaceId },
+              headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
             });
         if (current()) {
           threadRef.current = root;
@@ -2396,17 +2437,55 @@ export default function App() {
     }
   }
   async function loadMoreReplies() {
-    if (!thread || !replies.length) return;
-    const currentThread = thread.id;
+    if (!thread || !data || !replyCursor || replyPending.current) return;
+    const workspaceId = data.workspace.id,
+      userId = data.user.id,
+      currentThread = thread.id;
+    const sequence = ++replyRequest.current;
+    const current = () =>
+      sequence === replyRequest.current &&
+      threadRef.current?.id === currentThread &&
+      dataRef.current?.user.id === userId &&
+      dataRef.current?.workspace.id === workspaceId &&
+      dataRef.current.channels.some((c) => c.id === thread.channelId);
+    replyPending.current = true;
+    setReplyBusy(true);
+    setReplyError("");
     try {
-      const result = await api<{ messages: Message[]; hasMore: boolean }>(
-        `/channels/${thread.channelId}/messages?parentId=${thread.id}&before=${replies[0].id}`,
+      const result = await api<MessageHistoryPage>(
+        `/channels/${thread.channelId}/messages?parentId=${encodeURIComponent(currentThread)}&cursor=${encodeURIComponent(replyCursor)}`,
+        { headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId } },
       );
-      if (threadRef.current?.id !== currentThread) return;
-      setReplies((old) => uniqueMessages([...result.messages, ...old]));
-      setRepliesHasMore(result.hasMore);
+      if (current()) {
+        setReplies((old) => uniqueMessages([...result.messages, ...old]));
+        setRepliesHasMore(result.hasMore);
+        setReplyCursor(result.nextCursor);
+      }
     } catch (error) {
-      fail((error as Error).message);
+      if (current()) {
+        setReplyError((error as Error).message);
+        if (
+          error instanceof ApiError &&
+          error.code === "INVALID_COLLECTION_CURSOR"
+        ) {
+          setReplyCursor(null);
+          setRepliesHasMore(false);
+        }
+        if (
+          error instanceof ApiError &&
+          [401, 403, 404].includes(error.status)
+        ) {
+          setReplies([]);
+          setReplyCursor(null);
+          setRepliesHasMore(false);
+          void refreshAccess();
+        }
+      }
+    } finally {
+      if (sequence === replyRequest.current) {
+        replyPending.current = false;
+        setReplyBusy(false);
+      }
     }
   }
   function startCall(target = channel) {
@@ -3153,7 +3232,71 @@ export default function App() {
                           await navigateMessage(message);
                       }}
                     />
-                  ) : messagesLoading || collectionLoading ? (
+                  ) : tab !== "chat" ? (
+                    <ChannelCollections
+                      key={`${data.user.id}:${data.workspace.id}:${channelId}:${tab}`}
+                      userId={data.user.id}
+                      workspaceId={data.workspace.id}
+                      channelId={channelId}
+                      kind={tab}
+                      members={data.members}
+                      version={collectionVersion}
+                      renderMessage={renderMessage}
+                      onOpenFile={(file) =>
+                        setPreview({
+                          file,
+                          channelId: file.channelId,
+                          messageId: file.messageId,
+                          parentId: file.parentId,
+                          workspaceId: data.workspace.id,
+                          userId: data.user.id,
+                        })
+                      }
+                      onOpenMessage={async (id, isCurrent) => {
+                        const sequence = routeSequence.current;
+                        const scope = `${data.user.id}:${data.workspace.id}:${channelId}:${tab}`;
+                        const message = await api<Message>(
+                          `/messages/${encodeURIComponent(id)}`,
+                          {
+                            headers: {
+                              "X-Workspace-Id": data.workspace.id,
+                              "X-User-Id": data.user.id,
+                            },
+                          },
+                        ).catch((error) => {
+                          if (
+                            isCurrent() &&
+                            sequence === routeSequence.current &&
+                            error instanceof ApiError &&
+                            [401, 403, 404].includes(error.status)
+                          ) {
+                            setCollectionVersion((v) => v + 1);
+                            void refreshAccess();
+                          }
+                          throw error;
+                        });
+                        if (
+                          isCurrent() &&
+                          sequence === routeSequence.current &&
+                          scope ===
+                            `${dataRef.current?.user.id}:${dataRef.current?.workspace.id}:${channelRef.current}:${tabRef.current}` &&
+                          viewRef.current === "channel"
+                        )
+                          await navigateMessage(message);
+                      }}
+                      onBackToChat={() => selectTab("chat")}
+                      onShareFile={
+                        !channel?.archived
+                          ? () =>
+                              document
+                                .querySelector<HTMLInputElement>(
+                                  '.conversation-panel input[type="file"]',
+                                )
+                                ?.click()
+                          : undefined
+                      }
+                    />
+                  ) : messagesLoading ? (
                     <div className="messages-loading">
                       <Spinner label="Sohbet yükleniyor" />
                       {[1, 2, 3, 4].map((i) => (
@@ -3167,94 +3310,6 @@ export default function App() {
                         </div>
                       ))}
                     </div>
-                  ) : tab !== "chat" &&
-                    collectionError?.scope ===
-                      `${data.user.id}:${data.workspace.id}:${channelId}:${tab}` ? (
-                    <CollectionError
-                      kind={tab}
-                      message={collectionError.message}
-                      onRetry={() => {
-                        collectionRetryFocus.current = collectionError.scope;
-                        setCollectionVersion((value) => value + 1);
-                      }}
-                    />
-                  ) : tab === "files" ? (
-                    <>
-                      <div className="list-intro">
-                        <FileText size={21} />
-                        <h2>Paylaşılan dosyalar</h2>
-                        <p>Bu kanalda paylaşılan dosyalar.</p>
-                      </div>
-                      {channelFiles.length ? (
-                        <div className="channel-file-list">
-                          {channelFiles.map((file: Attachment) => (
-                            <a
-                              key={file.id}
-                              href={file.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              download={file.name}
-                            >
-                              <span className="file-icon">
-                                <FileText size={23} />
-                              </span>
-                              <span>
-                                <strong>{file.name}</strong>
-                                <small>{fileSize(file.size)}</small>
-                              </span>
-                              <ArrowDown size={18} />
-                            </a>
-                          ))}
-                        </div>
-                      ) : (
-                        <EmptyState
-                          icon={<FileText size={27} />}
-                          title="İlk dosyaya yer açtık."
-                          text="Mesaj kutusundaki ataş simgesinden dosya paylaşabilirsin."
-                          extra={
-                            !channel?.archived && channel ? (
-                              <button
-                                className="secondary-button"
-                                onClick={() =>
-                                  document
-                                    .querySelector<HTMLInputElement>(
-                                      '.conversation-panel input[type="file"]',
-                                    )
-                                    ?.click()
-                                }
-                              >
-                                <Plus size={16} /> Dosya paylaş
-                              </button>
-                            ) : undefined
-                          }
-                        />
-                      )}
-                    </>
-                  ) : tab === "pins" ? (
-                    <>
-                      <div className="list-intro">
-                        <Pin size={20} />
-                        <h2>Sabitlenen mesajlar</h2>
-                        <p>Ekibin için önemli mesajlar.</p>
-                      </div>
-                      {pins.length ? (
-                        pins.map((m) => renderMessage(m))
-                      ) : (
-                        <EmptyState
-                          icon={<Pin size={27} />}
-                          title="Henüz sabitlenen mesaj yok."
-                          text="Mesaj menüsünden “Kanala sabitle” seçeneğiyle önemli notları buraya ekle."
-                          extra={
-                            <button
-                              className="secondary-button"
-                              onClick={() => selectTab("chat")}
-                            >
-                              <MessageSquare size={16} /> Sohbete dön
-                            </button>
-                          }
-                        />
-                      )}
-                    </>
                   ) : (
                     <div
                       className={
@@ -3264,6 +3319,7 @@ export default function App() {
                       {hasMore ? (
                         <button
                           className="load-more"
+                          disabled={historyBusy}
                           onClick={() => void loadMore()}
                         >
                           Önceki mesajları yükle
@@ -3313,11 +3369,29 @@ export default function App() {
                           </div>
                         </div>
                       )}
-                      {!messages.length && !isDirectConversation && (
-                        <div className="first-message-note">
-                          Bu kanalın ilk merhabası senden gelsin. 🌱
+                      {historyError && (
+                        <div className="history-error" role="alert">
+                          <span>{historyError}</span>
+                          <button
+                            className="secondary-button"
+                            disabled={historyBusy}
+                            onClick={() =>
+                              historyCursor
+                                ? void loadMore()
+                                : setHistoryRetry((v) => v + 1)
+                            }
+                          >
+                            Tekrar dene
+                          </button>
                         </div>
                       )}
+                      {!messages.length &&
+                        !historyError &&
+                        !isDirectConversation && (
+                          <div className="first-message-note">
+                            Bu kanalın ilk merhabası senden gelsin. 🌱
+                          </div>
+                        )}
                       {messages.map((message, index) => (
                         <div key={message.id}>
                           {(index === 0 ||
@@ -3456,10 +3530,27 @@ export default function App() {
                     {repliesHasMore && (
                       <button
                         className="load-more"
+                        disabled={replyBusy}
                         onClick={() => void loadMoreReplies()}
                       >
                         Önceki yanıtları yükle
                       </button>
+                    )}
+                    {replyError && (
+                      <div className="history-error" role="alert">
+                        <span>{replyError}</span>
+                        <button
+                          className="secondary-button"
+                          disabled={replyBusy}
+                          onClick={() =>
+                            replyCursor
+                              ? void loadMoreReplies()
+                              : setReplyRetry((v) => v + 1)
+                          }
+                        >
+                          Tekrar dene
+                        </button>
+                      </div>
                     )}
                     {threadLoading ? (
                       <Spinner label="Yanıtlar yükleniyor" />
@@ -3576,11 +3667,59 @@ export default function App() {
           }}
         />
       )}
+      {preview &&
+        preview.userId === data.user.id &&
+        preview.workspaceId === data.workspace.id &&
+        data.channels.some((c) => c.id === preview.channelId) && (
+          <AttachmentPreview
+            key={`${preview.userId}:${preview.workspaceId}:${preview.file.id}`}
+            target={preview}
+            onClose={() => setPreview(null)}
+            onOpenMessage={async () => {
+              const target = preview;
+              const sequence = routeSequence.current;
+              const message = await api<Message>(
+                `/messages/${encodeURIComponent(target.messageId)}`,
+                {
+                  headers: {
+                    "X-Workspace-Id": target.workspaceId,
+                    "X-User-Id": target.userId,
+                  },
+                },
+              ).catch((error) => {
+                if (
+                  previewRef.current === target &&
+                  error instanceof ApiError &&
+                  [401, 403, 404].includes(error.status)
+                )
+                  void refreshAccess();
+                throw error;
+              });
+              if (
+                previewRef.current !== target ||
+                sequence !== routeSequence.current ||
+                dataRef.current?.user.id !== target.userId ||
+                dataRef.current?.workspace.id !== target.workspaceId ||
+                !dataRef.current.channels.some((c) => c.id === target.channelId)
+              )
+                return;
+              setPreview(null);
+              await navigateMessage(message);
+            }}
+          />
+        )}
       {dialog === "search" && (
         <SearchDialog
           data={data}
+          onAccessChanged={() => void refreshAccess()}
           onClose={() => setDialog(null)}
-          onSelect={(message) => void navigateMessage(message)}
+          onSelect={async (message) => {
+            if (
+              dataRef.current?.user.id === data.user.id &&
+              dataRef.current?.workspace.id === data.workspace.id
+            )
+              await navigateMessage(message);
+          }}
         />
       )}
       {dialog === "integrations" && canManage && (
@@ -4434,261 +4573,6 @@ function CreateChannel({
           </button>
         </div>
       </form>
-    </Modal>
-  );
-}
-function SearchDialog({
-  data,
-  onClose,
-  onSelect,
-}: {
-  data: Bootstrap;
-  onClose: () => void;
-  onSelect: (message: Message) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState({
-    channelId: "",
-    userId: "",
-    from: "",
-    until: "",
-    hasFiles: false,
-  });
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const accessKey = data.channels
-    .map((c) => c.id)
-    .sort()
-    .join(",");
-  const canSearch =
-    query.trim().length >= 2 ||
-    Boolean(
-      filters.channelId ||
-      filters.userId ||
-      filters.from ||
-      filters.until ||
-      filters.hasFiles,
-    );
-  const [results, setResults] = useState<Message[]>([]);
-  const visibleResults = results.filter((m) =>
-    data.channels.some((c) => c.id === m.channelId),
-  );
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    if (!canSearch) {
-      setResults([]);
-      setLoading(false);
-      setError("");
-      setHasMore(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    const timer = setTimeout(() => {
-      const params = new URLSearchParams({
-        q: query.trim(),
-        offset: String(offset),
-      });
-      for (const [key, value] of Object.entries(filters))
-        if (value) params.set(key, String(value));
-      api<{ messages: Message[]; hasMore: boolean }>(`/search?${params}`)
-        .then((r) => {
-          if (!cancelled) {
-            setResults(r.messages);
-            setHasMore(r.hasMore);
-            setError("");
-          }
-        })
-        .catch((e) => {
-          if (!cancelled) setError(e.message);
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [query, filters, offset, canSearch, accessKey]);
-  return (
-    <Modal title="Çalışma alanında ara" onClose={onClose} wide>
-      <div className="search-input-wrap">
-        <Search size={21} />
-        <input
-          aria-label="Mesajlarda ara"
-          data-autofocus
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOffset(0);
-          }}
-          placeholder="Bir mesaj, bir fikir, bir kelime..."
-          autoFocus
-          maxLength={100}
-        />
-        <kbd>Esc</kbd>
-      </div>
-      <div className="search-filters">
-        <label>
-          Kanal
-          <select
-            aria-label="Kanal"
-            value={filters.channelId}
-            onChange={(e) => {
-              setFilters({ ...filters, channelId: e.target.value });
-              setOffset(0);
-            }}
-          >
-            <option value="">Tüm kanallar</option>
-            {data.channels.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.kind === "dm"
-                  ? "Özel mesaj · "
-                  : c.visibility === "private"
-                    ? "🔒 "
-                    : ""}
-                {conversationIdentity(c, data.user.id, data.members).name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Gönderen
-          <select
-            aria-label="Gönderen"
-            value={filters.userId}
-            onChange={(e) => {
-              setFilters({ ...filters, userId: e.target.value });
-              setOffset(0);
-            }}
-          >
-            <option value="">Herkes</option>
-            {data.members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Başlangıç tarihi (UTC)
-          <input
-            type="date"
-            value={filters.from}
-            onChange={(e) => {
-              setFilters({ ...filters, from: e.target.value });
-              setOffset(0);
-            }}
-          />
-        </label>
-        <label>
-          Bitiş tarihi (UTC)
-          <input
-            type="date"
-            value={filters.until}
-            min={filters.from}
-            onChange={(e) => {
-              setFilters({ ...filters, until: e.target.value });
-              setOffset(0);
-            }}
-          />
-        </label>
-        <label className="search-files">
-          <input
-            type="checkbox"
-            checked={filters.hasFiles}
-            onChange={(e) => {
-              setFilters({ ...filters, hasFiles: e.target.checked });
-              setOffset(0);
-            }}
-          />
-          Yalnızca dosya içerenler
-        </label>
-        <button
-          className="text-button"
-          onClick={() => {
-            setFilters({
-              channelId: "",
-              userId: "",
-              from: "",
-              until: "",
-              hasFiles: false,
-            });
-            setOffset(0);
-          }}
-        >
-          Filtreleri temizle
-        </button>
-      </div>
-      <div className="search-results">
-        {error ? (
-          <p role="alert" className="form-error">
-            {error}
-          </p>
-        ) : loading ? (
-          <Spinner label="Mesajlar aranıyor" />
-        ) : !canSearch ? (
-          <div className="search-empty">
-            <Search size={29} />
-            <p>Aramak için en az 2 karakter yaz veya filtre seç.</p>
-            <small>Erişebildiğin kanallarda ve özel mesajlarında arar.</small>
-          </div>
-        ) : !visibleResults.length ? (
-          <div className="search-empty">
-            <MessageCircle size={29} />
-            <p>“{query}” için bir mesaj bulamadık.</p>
-            <small>Başka bir kelimeyle tekrar deneyebilirsin.</small>
-          </div>
-        ) : (
-          <>
-            <div className="search-count">
-              {offset + 1}–{offset + visibleResults.length}. sonuçlar
-            </div>
-            {visibleResults.map((message) => (
-              <button
-                key={message.id}
-                className="search-result"
-                onClick={() => onSelect(message)}
-              >
-                <span className="search-result-channel">
-                  <ConversationLabel
-                    channel={data.channels.find(
-                      (c) => c.id === message.channelId,
-                    )}
-                    selfId={data.user.id}
-                    members={data.members}
-                  />
-                  <time>{dateLabel(message.createdAt)}</time>
-                </span>
-                <strong>
-                  {data.members.find((m) => m.id === message.userId)?.name}
-                </strong>
-                <p>{mentionPreview(message.content, data.members)}</p>
-              </button>
-            ))}
-          </>
-        )}
-      </div>
-      {(offset > 0 || hasMore) && (
-        <div className="modal-actions">
-          <button
-            className="secondary-button"
-            disabled={!offset || loading}
-            onClick={() => setOffset(Math.max(0, offset - 50))}
-          >
-            Önceki sayfa
-          </button>
-          <button
-            className="secondary-button"
-            disabled={!hasMore || loading}
-            onClick={() => setOffset(offset + 50)}
-          >
-            Sonraki sayfa
-          </button>
-        </div>
-      )}
     </Modal>
   );
 }

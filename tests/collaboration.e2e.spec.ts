@@ -277,11 +277,12 @@ test("advanced search filters attachments, author, channel and date; message lin
     .getByLabel("Gönderen", { exact: true })
     .selectOption(data.user.id);
   await dialog.getByLabel("Yalnızca dosya içerenler", { exact: true }).check();
-  const today = new Date().toISOString().slice(0, 10);
-  await dialog
-    .getByLabel("Başlangıç tarihi (UTC)", { exact: true })
-    .fill(today);
-  await dialog.getByLabel("Bitiş tarihi (UTC)", { exact: true }).fill(today);
+  const today = await page.evaluate(() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  });
+  await dialog.getByLabel("Başlangıç tarihi", { exact: true }).fill(today);
+  await dialog.getByLabel("Bitiş tarihi", { exact: true }).fill(today);
   await expect(dialog.locator(".search-result")).toHaveCount(1);
   await audit(page);
   await dialog.locator(".search-result").click();

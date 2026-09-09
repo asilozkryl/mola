@@ -1,0 +1,63 @@
+.search-result-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+.search-result-files > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 4px 7px;
+  background: #f0f5f2;
+  border-radius: 5px;
+  font-size: 11px;
+  color: #38594a;
+}
+.search-result-files svg {
+  flex-shrink: 0;
+}
+.search-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: #fff7f3;
+  color: #8c452c;
+  border-radius: 6px;
+}
+.search-load-error p {
+  margin: 0;
+}
+.search-load-error button {
+  flex-shrink: 0;
+}
+.search-result:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.history-error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #8c452c;
+  font-size: 12px;
+  padding: 12px;
+}
+@media (max-width: 480px) {
+  .search-filters > label {
+    min-width: 0;
+  }
+  .search-filters input[type="date"] {
+    min-width: 0;
+    width: 100%;
+  }
+  .search-load-error {
+    flex-wrap: wrap;
+  }
+}

@@ -11,6 +11,7 @@ import {
   Check,
   Download,
   FileText,
+  Eye,
   MessageSquare,
   MoreHorizontal,
   LoaderCircle,
@@ -21,7 +22,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { Message, User } from "../../shared/types";
+import type { Attachment, Message, User } from "../../shared/types";
 import {
   decodeMentions,
   encodeMentions,
@@ -59,6 +60,7 @@ export function MessageItem({
   fresh = false,
   onCopyLink,
   onOpenProfile,
+  onOpenFile,
   online = false,
   connected = true,
 }: {
@@ -81,6 +83,7 @@ export function MessageItem({
   fresh?: boolean;
   onCopyLink: () => void;
   onOpenProfile?: (id: string) => void;
+  onOpenFile?: (file: Attachment) => void;
   online?: boolean;
   connected?: boolean;
 }) {
@@ -567,42 +570,53 @@ export function MessageItem({
         {!!message.attachments?.length && (
           <div className="message-files">
             {message.attachments.map((file) => (
-              <a
-                className="file-attachment"
-                key={file.id}
-                href={file.url}
-                download={file.name}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`${file.name} dosyasını indir, ${fileSize(file.size)}`}
-                title={file.name}
-              >
-                <span className="file-icon" aria-hidden="true">
-                  <FileText size={21} />
-                  {/^image\/(png|jpeg|gif|webp)$/.test(file.mime) &&
-                    /^\/api\/files\/[^/?#]+$/.test(file.url) && (
-                      <img
-                        src={file.url}
-                        alt=""
-                        width={40}
-                        height={40}
-                        loading="lazy"
-                        decoding="async"
-                        onError={(event) => {
-                          event.currentTarget.hidden = true;
-                        }}
-                      />
-                    )}
-                </span>
-                <span>
-                  <strong>{file.name}</strong>
-                  <small>
-                    {fileSize(file.size)} ·{" "}
-                    {file.mime.split("/")[1]?.toUpperCase()} · İndir
-                  </small>
-                </span>
-                <Download size={16} />
-              </a>
+              <div className="message-file-with-preview" key={file.id}>
+                <a
+                  className="file-attachment"
+                  href={file.url}
+                  download={file.name}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${file.name} dosyasını indir, ${fileSize(file.size)}`}
+                  title={file.name}
+                >
+                  <span className="file-icon" aria-hidden="true">
+                    <FileText size={21} />
+                    {/^image\/(png|jpeg|gif|webp)$/.test(file.mime) &&
+                      /^\/api\/files\/[^/?#]+$/.test(file.url) && (
+                        <img
+                          src={file.url}
+                          alt=""
+                          width={40}
+                          height={40}
+                          loading="lazy"
+                          decoding="async"
+                          onError={(event) => {
+                            event.currentTarget.hidden = true;
+                          }}
+                        />
+                      )}
+                  </span>
+                  <span>
+                    <strong>{file.name}</strong>
+                    <small>
+                      {fileSize(file.size)} ·{" "}
+                      {file.mime.split("/")[1]?.toUpperCase()} · İndir
+                    </small>
+                  </span>
+                  <Download size={16} />
+                </a>
+                {onOpenFile && (
+                  <button
+                    className="message-file-preview"
+                    aria-label={`${file.name} dosyasını önizle`}
+                    title="Önizle"
+                    onClick={() => onOpenFile(file)}
+                  >
+                    <Eye size={16} />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         )}

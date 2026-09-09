@@ -28,6 +28,7 @@ import { installWorkspaceLifecycle } from './workspace-lifecycle.js';
 import { installSidebarRoutes } from './sidebar-preferences.js';
 import { installConversationHubs } from './conversation-hubs.js';
 import { installSavedMessages } from './saved-messages.js';
+import { installCollections } from './collections.js';
 import { AttachmentUnavailableError, installReliableMessages } from './message-reliability.js';
 import type { SessionBootstrap, Message } from '../shared/types.js';
 
@@ -127,7 +128,7 @@ export function createApp(options: AppOptions = {}) {
     next();
   });
   app.use((_req, res, next) => { res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self), geolocation=()'); next(); });
-  app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'blob:'], mediaSrc: ["'self'", 'blob:'], connectSrc: ["'self'", origin.replace(/^http/, 'ws')], objectSrc: ["'none'"], frameAncestors: ["'none'"], upgradeInsecureRequests: production ? [] : null } }, crossOriginEmbedderPolicy: false }));
+  app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'blob:'], mediaSrc: ["'self'", 'blob:'], connectSrc: ["'self'", 'blob:', origin.replace(/^http/, 'ws')], objectSrc: ["'none'"], workerSrc: ["'self'"], frameAncestors: ["'none'"], upgradeInsecureRequests: production ? [] : null } }, crossOriginEmbedderPolicy: false }));
   integrations.installPublicRoutes(app);
   app.use(express.json({ limit: '96kb' }));
   app.use(cookieParser());
@@ -426,30 +427,7 @@ export function createApp(options: AppOptions = {}) {
   };
 
   app.get('/api/messages/:id', (req, res) => res.json(repo.message(requireMessage(req, String(req.params.id)))));
-  app.get('/api/channels/:id/pins', (req, res) => {
-    const channel = requireChannel(req, String(req.params.id));
-    const messages = repo.all('SELECT * FROM messages WHERE channel_id=? AND pinned=1 ORDER BY created_at DESC,id DESC LIMIT 100', channel.id);
-    res.json({ messages: messages.map(message => repo.message(message)) });
-  });
-  app.get('/api/channels/:id/files', (req, res) => {
-    const channel = requireChannel(req, String(req.params.id));
-    const files = repo.all('SELECT a.* FROM attachments a JOIN messages m ON m.id=a.message_id WHERE m.channel_id=? ORDER BY a.created_at DESC,a.id DESC LIMIT 100', channel.id);
-    res.json({ files: files.map(file => repo.attachment(file)) });
-  });
-
-  app.get('/api/channels/:id/messages', (req, res) => {
-    const channel = requireChannel(req, String(req.params.id));
-    const input = parse(z.object({ parentId: idSchema.optional(), before: z.string().max(64).optional() }), req.query);
-    if (input.parentId) { const parent = requireMessage(req, input.parentId); if (parent.channel_id !== channel.id || parent.parent_id) throw new HttpError(400, 'Geçersiz mesaj dizisi.'); }
-    let before: Row | undefined;
-    if (input.before) {
-      before = repo.get('SELECT * FROM messages WHERE id=? AND channel_id=?', input.before, channel.id);
-      if (!before && !Number.isNaN(Date.parse(input.before))) before = { created_at: new Date(input.before).toISOString(), id: '' };
-      if (!before) throw new HttpError(400, 'Geçersiz sayfalama bilgisi.');
-    }
-    const rows = repo.all(`SELECT * FROM messages WHERE channel_id=? AND parent_id IS ? ${before ? 'AND (created_at<? OR (created_at=? AND id<?))' : ''} ORDER BY created_at DESC,id DESC LIMIT 51`, channel.id, input.parentId || null, ...(before ? [before.created_at, before.created_at, before.id] : []));
-    res.json({ messages: rows.slice(0, 50).reverse().map(row => repo.message(row)), hasMore: rows.length > 50 });
-  });
+  installCollections(app, { repo, key: featureKey, requireActiveWorkspace, requireChannel, requireMessage });
   installReliableMessages(app, { repo, uploadDir, collaboration: collaborationData, requireActiveWorkspace, requireChannel, requireMessage, broadcastMessage });
   app.patch('/api/messages/:id', (req, res) => {
     const message = requireMessage(req, String(req.params.id));
@@ -514,20 +492,6 @@ export function createApp(options: AppOptions = {}) {
     for (const userId of [req.auth!.id, other.id]) { io.in(`workspace-user:${req.auth!.workspace_id}:${userId}`).socketsJoin(`channel:${id}`); io.to(`workspace-user:${req.auth!.workspace_id}:${userId}`).emit('channel:created', channel); }
     res.status(201).json(channel);
   });
-  app.get('/api/search', (req, res) => {
-    const input = parse(z.object({ q: z.string().trim().max(100).default(''), channelId:z.string().uuid().optional(),userId:z.string().uuid().optional(),from:z.iso.date().optional(),until:z.iso.date().optional(),hasFiles:z.enum(['true','false']).optional(),offset:z.coerce.number().int().min(0).max(10000).default(0) }).refine(v=>v.q.length>=2||Boolean(v.channelId||v.userId||v.from||v.until||v.hasFiles==='true'),'Aramak için en az 2 karakter yazın veya filtre seçin.').refine(v=>!v.from||!v.until||v.from<=v.until,'Bitiş tarihi başlangıçtan önce olamaz.'), req.query);
-    const pattern = `%${input.q.normalize('NFKC').toLocaleLowerCase('tr-TR').replace(/[\\%_]/g, value => `\\${value}`)}%`;
-    const allowed = repo.channels(req.auth!.id,req.auth!.workspace_id).filter(c=>!input.channelId||c.id===input.channelId).map(c=>c.id);
-    if (!allowed.length) {res.json({messages:[],hasMore:false});return;}
-    const conditions = ["m.channel_id IN (SELECT value FROM json_each(?))","fold_text(m.content) LIKE ? ESCAPE '\\'"];
-    const values:(string|number)[] = [JSON.stringify(allowed),pattern];
-    if(input.userId){conditions.push('m.user_id=?');values.push(input.userId);}
-    if(input.from){conditions.push('m.created_at>=?');values.push(`${input.from}T00:00:00.000Z`);}
-    if(input.until){conditions.push('m.created_at<?');values.push(new Date(Date.parse(`${input.until}T00:00:00Z`)+86400000).toISOString());}
-    if(input.hasFiles==='true')conditions.push('EXISTS(SELECT 1 FROM attachments a WHERE a.message_id=m.id)');
-    const rows = repo.all(`SELECT m.* FROM messages m WHERE ${conditions.join(' AND ')} ORDER BY m.created_at DESC,m.id DESC LIMIT 51 OFFSET ?`,...values,input.offset);
-    res.json({messages:rows.slice(0,50).map(row=>repo.message(row)),hasMore:rows.length>50});
-  });
   app.post('/api/invites', (req, res) => {
     if (!canInviteMembers(req.auth! as any)) throw new HttpError(403, 'Davet bağlantısını alan sahibi veya yöneticisi oluşturabilir.');
     if (repo.workspace(req.auth!.workspace_id).isDemo) throw new HttpError(400, 'Ekibinizi davet etmek için kendi çalışma alanınızı oluşturun.');
@@ -579,6 +543,7 @@ export function createApp(options: AppOptions = {}) {
       const message = repo.get('SELECT * FROM messages WHERE id=?', file.message_id);
       if (!message || !repo.canAccessChannel(req.auth!.id, message.channel_id, req.auth!.workspace_id)) throw new HttpError(404, 'Dosya bulunamadı.');
     } else if (file.user_id !== req.auth!.id) throw new HttpError(404, 'Dosya bulunamadı.');
+    res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('Content-Type', file.mime);
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     res.setHeader('X-Content-Type-Options', 'nosniff');

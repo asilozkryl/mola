@@ -1,0 +1,123 @@
+.modal:has(.attachment-preview) {
+  width: min(1080px, calc(100vw - 32px));
+  max-width: none;
+}
+.attachment-preview {
+  min-width: 0;
+}
+.attachment-preview-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  color: #62716c;
+}
+.attachment-preview-meta > div {
+  min-width: 0;
+}
+.attachment-preview-meta svg {
+  flex-shrink: 0;
+}
+.attachment-preview-meta h3 {
+  color: #293730;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.attachment-preview-meta span {
+  font-size: 11px;
+}
+.attachment-preview-stage {
+  min-height: 180px;
+  height: min(58vh, 620px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid #e2e8e5;
+  border-radius: 8px;
+  background: #f5f7f8;
+}
+.attachment-preview-stage img {
+  display: block;
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.attachment-preview-fallback {
+  text-align: center;
+  color: #62716c;
+  padding: 20px;
+}
+.attachment-preview-fallback p {
+  color: #293730;
+  font-weight: 600;
+}
+.attachment-preview-fallback span {
+  font-size: 12px;
+  color: #62716c;
+}
+.attachment-preview-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+}
+.attachment-preview-actions a {
+  text-decoration: none;
+}
+.attachment-preview-error {
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fff7f3;
+  color: #8c452c;
+  border-radius: 6px;
+}
+.attachment-preview-error p {
+  margin: 0 0 10px;
+}
+.message-file-with-preview {
+  display: flex;
+  align-items: stretch;
+  max-width: 100%;
+  min-width: 0;
+  gap: 4px;
+}
+.message-file-with-preview .file-attachment {
+  min-width: 0;
+}
+.message-file-preview {
+  align-self: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e2e8e5;
+  border-radius: 6px;
+  background: white;
+  color: #62716c;
+  display: grid;
+  place-items: center;
+}
+.message-file-preview:hover {
+  background: #eff6f1;
+  color: #237459;
+}
+@media (max-width: 480px) {
+  .modal:has(.attachment-preview) {
+    width: calc(100vw - 16px);
+    padding: 16px;
+  }
+  .attachment-preview-stage {
+    height: 48vh;
+  }
+  .attachment-preview-actions {
+    flex-wrap: wrap;
+  }
+  .attachment-preview-actions > * {
+    flex: 1;
+    justify-content: center;
+    white-space: nowrap;
+  }
+}

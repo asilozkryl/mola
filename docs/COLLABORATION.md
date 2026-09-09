@@ -77,7 +77,7 @@ Tarayıcı verilerini temizlemek yerel, henüz eşitlenmemiş taslağı silebili
 
 ## Arama ve mesaja bağlantı
 
-Arama penceresinde en az iki karakter yazabilir veya doğrudan filtre seçebilirsiniz. Kanal, gönderen, başlangıç/bitiş tarihi ve yalnız dosya içeren mesajlar birlikte kullanılabilir. Tarih alanları UTC günlerini temsil eder; bitiş tarihi seçilen günün tamamını kapsar. Sonuçlar yalnız eriştiğiniz kanallardan ve özel sohbetlerden gelir.
+Arama penceresinde en az iki karakter yazabilir veya doğrudan filtre seçebilirsiniz. Kanal, gönderen, başlangıç/bitiş tarihi ve yalnız dosya içeren mesajlar birlikte kullanılabilir. Tarih alanları tarayıcınızın yerel takvim günlerini temsil eder; bitiş tarihi seçilen günün tamamını kapsar. Sunucuya başlangıç dahil, bitiş hariç kesin zaman aralığı gönderilir. Mesaj metniyle birlikte dosya adları da aranır. Sonraki sayfalar kararlı bir devam anahtarıyla yüklenir. Sonuçlar yalnız eriştiğiniz kanallardan ve özel sohbetlerden gelir.
 
 Mesaj işlemlerindeki bağlantı kopyalama seçeneği çalışma alanını ve mesajı belirleyen bir adres üretir. Alıcı üyeyse ilgili alana geçip mesaja ulaşabilir; bağlantı erişim yetkisi vermez.
 

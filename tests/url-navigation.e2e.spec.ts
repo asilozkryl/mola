@@ -168,7 +168,10 @@ test("channel and collection URLs survive reload without falling back to the def
   await expect(
     conversation(page)
       .locator(".channel-file-list")
-      .getByText(file.name, { exact: true }),
+      .getByRole("button", {
+        name: `${file.name} dosyasını önizle`,
+        exact: true,
+      }),
   ).toBeVisible();
   await expectRoute(page, data, { channel: channel.id, tab: "files" });
   await tab(page, "Sabitlenenler").click();
