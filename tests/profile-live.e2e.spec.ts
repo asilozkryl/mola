@@ -1,4 +1,10 @@
-import { expect, test, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIResponse,
+  type Page,
+  type Request as BrowserRequest,
+} from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import type { Bootstrap, User } from "../shared/types";
@@ -51,37 +57,54 @@ test("profile text and photo changes from another tab update the open profile wi
   page,
 }) => {
   const data = await register(page, "İlk Profil Adı");
-  let release!: () => void;
+  let releaseGate!: () => void;
   let captured!: () => void;
+  let released = false;
+  let queued = 0;
+  let settled = 0;
+  let originalResponse: Promise<APIResponse> | undefined;
   const gate = new Promise<void>((resolve) => {
-    release = resolve;
+    releaseGate = resolve;
   });
+  const release = () => {
+    released = true;
+    releaseGate();
+  };
   const responseReady = new Promise<void>((resolve) => {
     captured = resolve;
   });
-  let delayed = false;
   await page.route(`**/api/members/${data.user.id}/profile`, async (route) => {
-    if (delayed) return route.continue();
-    delayed = true;
-    const response = await route.fetch();
+    if (released) return route.continue();
+    queued++;
+    // StrictMode can cancel and repeat the initial effect. Hold every initial
+    // request behind the same real, pre-edit server snapshot, so an uncancelled
+    // second request cannot bypass the delayed-response scenario.
+    originalResponse ||= route.fetch();
+    const response = await originalResponse;
     captured();
     await gate;
+    // One of the held requests may have been cancelled by effect cleanup.
     await route.fulfill({ response }).catch(() => {});
+    settled++;
   });
-  await page.goto(profilePath(data.workspace.id, data.user.id));
-  await responseReady;
-  const profile = page.getByRole("region", {
-    name: "Üye profili",
-    exact: true,
-  });
-  await expect(
-    profile.getByText("Profil yükleniyor", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Her şey güncel", { exact: true }),
-  ).toBeAttached();
-  const sibling = await page.context().newPage();
+  let sibling: Page | undefined;
   try {
+    await page.goto(profilePath(data.workspace.id, data.user.id));
+    await responseReady;
+    const profile = page.getByRole("region", {
+      name: "Üye profili",
+      exact: true,
+    });
+    await expect(
+      profile.getByText("Profil yükleniyor", { exact: true }),
+    ).toBeVisible();
+    expect((await (await originalResponse!).json()).user.name).toBe(
+      data.user.name,
+    );
+    await expect(
+      page.getByText("Her şey güncel", { exact: true }),
+    ).toBeAttached();
+    sibling = await page.context().newPage();
     await sibling.goto("/");
     await expect(
       sibling.getByRole("textbox", { name: /kanalına mesaj yaz/ }),
@@ -104,7 +127,11 @@ test("profile text and photo changes from another tab update the open profile wi
     await expect(
       page.locator(".topbar-avatar.profile-identity"),
     ).toHaveAttribute("aria-label", "Deniz Canlı profilini görüntüle");
+    await expect(
+      profile.getByText("Profil yükleniyor", { exact: true }),
+    ).toBeVisible();
     release();
+    await expect.poll(() => settled === queued && queued > 0).toBe(true);
     await expect(profile.getByRole("heading", { level: 1 })).toContainText(
       "Deniz Canlı",
     );
@@ -145,8 +172,172 @@ test("profile text and photo changes from another tab update the open profile wi
     expect(new URL(page.url()).searchParams.get("profile")).toBe(data.user.id);
   } finally {
     release();
-    await sibling.close();
+    await sibling?.close();
     await page.unrouteAll({ behavior: "wait" });
+  }
+});
+
+test("a delayed session refresh cannot overwrite a newer live profile update", async ({
+  page,
+}) => {
+  const data = await register(page, "Oturumun Eski Adı");
+  const nextName = "Canlı Güncel Ad";
+  const isBootstrap = (request: BrowserRequest) =>
+    new URL(request.url()).pathname === "/api/auth/me";
+  const pendingBootstraps = new Set<BrowserRequest>();
+  const started = (request: BrowserRequest) => {
+    if (isBootstrap(request)) pendingBootstraps.add(request);
+  };
+  const finished = (request: BrowserRequest) => {
+    pendingBootstraps.delete(request);
+  };
+  page.on("request", started);
+  page.on("requestfinished", finished);
+  page.on("requestfailed", finished);
+  await page.goto(profilePath(data.workspace.id, data.user.id));
+  const profile = page.getByRole("region", {
+    name: "Üye profili",
+    exact: true,
+  });
+  const identity = page.locator(".topbar-avatar.profile-identity");
+  await expect(profile.getByRole("heading", { level: 1 })).toContainText(
+    data.user.name,
+  );
+  await expect(
+    page.getByText("Her şey güncel", { exact: true }),
+  ).toBeAttached();
+  // Finish the initial and socket-connect bootstrap requests before arming the
+  // deliberate refresh, so StrictMode cannot select the wrong request to hold.
+  await expect.poll(() => pendingBootstraps.size).toBe(0);
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  page.off("request", started);
+  page.off("requestfinished", finished);
+  page.off("requestfailed", finished);
+
+  let release!: () => void;
+  let captured!: (response: APIResponse) => void;
+  let firstRequest: BrowserRequest | undefined;
+  let refreshRequests = 0;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const snapshotReady = new Promise<APIResponse>((resolve) => {
+    captured = resolve;
+  });
+  await page.route("**/api/auth/me", async (route) => {
+    refreshRequests++;
+    if (refreshRequests !== 1) return route.continue();
+    firstRequest = route.request();
+    const response = await route.fetch();
+    captured(response);
+    await gate;
+    await route.fulfill({ response });
+  });
+  const sibling = await page.context().newPage();
+  try {
+    await page.evaluate(() =>
+      window.dispatchEvent(new Event("mola:workspace-changed")),
+    );
+    const snapshotResponse = await snapshotReady;
+    expect(snapshotResponse.status()).toBe(200);
+    const snapshot = (await snapshotResponse.json()) as Bootstrap;
+    expect(snapshot.user.id).toBe(data.user.id);
+    expect(snapshot.workspace.id).toBe(data.workspace.id);
+    expect(snapshot.user.name).toBe(data.user.name);
+    expect(
+      snapshot.members.find((member) => member.id === data.user.id)?.name,
+    ).toBe(data.user.name);
+    expect(firstRequest!.headers()["x-workspace-id"]).toBe(data.workspace.id);
+    const changed = await sibling.request.patch("/api/profile", {
+      headers: {
+        ...headers,
+        "X-Workspace-Id": data.workspace.id,
+        "X-User-Id": data.user.id,
+      },
+      data: { name: nextName },
+    });
+    expect(changed.status()).toBe(200);
+    expect((await changed.json()).id).toBe(data.user.id);
+    await expect(identity).toHaveAttribute(
+      "aria-label",
+      `${nextName} profilini görüntüle`,
+    );
+    await expect(profile.getByRole("heading", { level: 1 })).toContainText(
+      nextName,
+    );
+    expect(refreshRequests).toBe(1);
+    // Record every identity transition, including a transient stale render that
+    // a final-state assertion alone could miss before the corrective refetch.
+    await identity.evaluate((element) => {
+      const state = window as typeof window & {
+        refreshIdentityLabels: string[];
+      };
+      state.refreshIdentityLabels = [];
+      new MutationObserver((records) => {
+        for (const record of records) {
+          state.refreshIdentityLabels.push(record.oldValue || "");
+          state.refreshIdentityLabels.push(
+            element.getAttribute("aria-label") || "",
+          );
+        }
+      }).observe(element, {
+        attributes: true,
+        attributeFilter: ["aria-label"],
+        attributeOldValue: true,
+      });
+    });
+    const oldResponse = page.waitForResponse(
+      (response) => response.request() === firstRequest,
+    );
+    const currentResponse = page.waitForResponse(
+      (response) =>
+        isBootstrap(response.request()) && response.request() !== firstRequest,
+    );
+    release();
+    const deliveredOld = await oldResponse;
+    expect(await deliveredOld.finished()).toBeNull();
+    expect((await deliveredOld.json()).user.name).toBe(data.user.name);
+    const deliveredCurrent = await currentResponse;
+    expect(deliveredCurrent.status()).toBe(200);
+    expect(await deliveredCurrent.finished()).toBeNull();
+    const current = (await deliveredCurrent.json()) as Bootstrap;
+    expect(current.user.id).toBe(data.user.id);
+    expect(current.workspace.id).toBe(data.workspace.id);
+    expect(current.user.name).toBe(nextName);
+    expect(deliveredCurrent.request().headers()["x-workspace-id"]).toBe(
+      data.workspace.id,
+    );
+    expect(refreshRequests).toBeGreaterThanOrEqual(2);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    await expect(identity).toHaveAttribute(
+      "aria-label",
+      `${nextName} profilini görüntüle`,
+    );
+    await expect(profile.getByRole("heading", { level: 1 })).toContainText(
+      nextName,
+    );
+    expect(
+      await page.evaluate(
+        () =>
+          (window as typeof window & { refreshIdentityLabels: string[] })
+            .refreshIdentityLabels,
+      ),
+    ).not.toContain(`${data.user.name} profilini görüntüle`);
+    expect(new URL(page.url()).searchParams.get("profile")).toBe(data.user.id);
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: "wait" });
+    await sibling.close();
   }
 });
 

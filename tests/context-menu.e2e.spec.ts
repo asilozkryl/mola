@@ -156,7 +156,7 @@ test("message context menu supports keyboard navigation, dismissal and focus res
   await expect(menu).toHaveCount(0);
 });
 
-test("message menus stay inside the viewport and close when their conversation scrolls", async ({
+test("message menus fit the viewport, survive unrelated scrolling and close when their anchor moves", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1000, height: 540 });
@@ -164,6 +164,17 @@ test("message menus stay inside the viewport and close when their conversation s
     page,
     "Menü ekrana sığar.\n".repeat(10),
   );
+  // Give the real navigation pane enough content to scroll independently of
+  // the conversation. No synthetic scroll event can prove either behavior.
+  for (let index = 0; index < 14; index++) {
+    const response = await page.request.post("/api/channels", {
+      headers,
+      data: { name: `kaydirma-kanali-${index}`, kind: "text" },
+    });
+    expect(response.status()).toBe(201);
+  }
+  await page.reload();
+  await expect(article).toBeVisible();
   const bounds = await article.boundingBox();
   expect(bounds).not.toBeNull();
   await article.click({
@@ -185,9 +196,61 @@ test("message menus stay inside the viewport and close when their conversation s
   await expect.poll(fits).toBe(true);
   await page.setViewportSize({ width: 900, height: 450 });
   await expect.poll(fits).toBe(true);
-  await article.evaluate((element) =>
-    element.parentElement!.dispatchEvent(new Event("scroll")),
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+
+  const navigation = page.locator("#workspace-navigation .sidebar-content");
+  const conversation = page.locator(".conversation-panel .message-scroll");
+  await expect
+    .poll(() =>
+      navigation.evaluate(
+        (element) => element.scrollHeight - element.clientHeight,
+      ),
+    )
+    .toBeGreaterThan(80);
+  await navigation.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await expect
+    .poll(() => navigation.evaluate((element) => element.scrollTop))
+    .toBe(0);
+  await openMessageMenu(page, article);
+  const anchorBefore = (await article.boundingBox())!;
+  await navigation.evaluate(
+    (element) =>
+      new Promise<void>((resolve) => {
+        element.addEventListener("scroll", () => resolve(), { once: true });
+        element.scrollTop = 80;
+      }),
   );
+  await expect
+    .poll(() => navigation.evaluate((element) => element.scrollTop))
+    .toBe(80);
+  const anchorAfter = (await article.boundingBox())!;
+  expect(anchorAfter.x).toBe(anchorBefore.x);
+  expect(anchorAfter.y).toBe(anchorBefore.y);
+  await expect(menu).toBeVisible();
+  await expect.poll(fits).toBe(true);
+
+  const scrollBefore = await conversation.evaluate(
+    (element) => element.scrollTop,
+  );
+  expect(scrollBefore).toBeGreaterThan(0);
+  await conversation.evaluate(
+    (element) =>
+      new Promise<void>((resolve) => {
+        element.addEventListener("scroll", () => resolve(), { once: true });
+        element.scrollTop = Math.max(0, element.scrollTop - 80);
+      }),
+  );
+  await expect
+    .poll(() => conversation.evaluate((element) => element.scrollTop))
+    .toBeLessThan(scrollBefore);
+  await expect
+    .poll(async () =>
+      Math.abs((await article.boundingBox())!.y - anchorAfter.y),
+    )
+    .toBeGreaterThan(1);
   await expect(menu).toHaveCount(0);
 });
 

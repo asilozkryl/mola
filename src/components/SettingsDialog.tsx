@@ -34,6 +34,18 @@ interface SettingsDialogProps {
   onManage?: () => void;
 }
 
+type LeaveAction = "close" | "logout" | "manage";
+
+function profileValues(user: User) {
+  return {
+    name: user.name,
+    status: user.status || "",
+    jobTitle: user.jobTitle || "",
+    location: user.location || "",
+    bio: user.bio || "",
+  };
+}
+
 export function SettingsDialog(props: SettingsDialogProps) {
   return (
     <SettingsDialogForm
@@ -64,6 +76,8 @@ function SettingsDialogForm({
   const [jobTitle, setJobTitle] = useState(user.jobTitle || "");
   const [location, setLocation] = useState(user.location || "");
   const [bio, setBio] = useState(user.bio || "");
+  const [savedProfile, setSavedProfile] = useState(() => profileValues(user));
+  const [leaveAction, setLeaveAction] = useState<LeaveAction | null>(null);
   const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null);
   const [photoBusy, setPhotoBusy] = useState<"upload" | "remove" | null>(null);
   const [photoError, setPhotoError] = useState("");
@@ -78,6 +92,12 @@ function SettingsDialogForm({
   const mounted = useRef(false);
   const operation = useRef(false);
   const processing = busy || passwordBusy || Boolean(photoBusy);
+  const profileChanged =
+    profileName !== savedProfile.name ||
+    profileStatus !== savedProfile.status ||
+    jobTitle !== savedProfile.jobTitle ||
+    location !== savedProfile.location ||
+    bio !== savedProfile.bio;
   const requestHeaders = {
     "X-Workspace-Id": workspaceId,
     "X-User-Id": user.id,
@@ -99,6 +119,19 @@ function SettingsDialogForm({
       if (photo) URL.revokeObjectURL(photo.url);
     };
   }, [photo]);
+
+  function leave(action: LeaveAction) {
+    setLeaveAction(null);
+    if (action === "logout") onLogout();
+    else if (action === "manage") onManage?.();
+    else onClose();
+  }
+
+  function requestLeave(action: LeaveAction) {
+    if (operation.current) return;
+    if (profileChanged || photo) setLeaveAction(action);
+    else leave(action);
+  }
 
   function choosePhoto(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0];
@@ -189,6 +222,7 @@ function SettingsDialogForm({
       setJobTitle(saved.jobTitle || "");
       setLocation(saved.location || "");
       setBio(saved.bio || "");
+      setSavedProfile(profileValues(saved));
       setSavedNotice("Profilin güncellendi.");
       onSave(saved);
     } catch (error) {
@@ -253,12 +287,7 @@ function SettingsDialogForm({
   }
 
   return (
-    <Modal
-      title="Kendine ait bir köşe"
-      onClose={() => {
-        if (!operation.current) onClose();
-      }}
-    >
+    <Modal title="Kendine ait bir köşe" onClose={() => requestLeave("close")}>
       <div className="profile-settings">
         <section
           className="profile-photo-section"
@@ -602,7 +631,7 @@ function SettingsDialogForm({
           <button
             type="button"
             className="secondary-button full-width"
-            onClick={onManage}
+            onClick={() => requestLeave("manage")}
             disabled={processing}
           >
             <ShieldCheck size={17} /> Yönetim panelini aç
@@ -611,13 +640,56 @@ function SettingsDialogForm({
         <button
           className="logout-button"
           type="button"
-          onClick={onLogout}
+          onClick={() => requestLeave("logout")}
           disabled={processing}
         >
           <LogOut size={17} />
           Çıkış yap
         </button>
       </div>
+      {leaveAction && (
+        <Modal
+          title="Kaydedilmemiş değişikliklerin var"
+          onClose={() => setLeaveAction(null)}
+        >
+          <div className="profile-discard-confirm">
+            <p>
+              {profileChanged && photo
+                ? "Profil bilgilerindeki düzenlemeler ve seçtiğin fotoğraf henüz kaydedilmedi."
+                : photo
+                  ? "Seçtiğin fotoğraf henüz kaydedilmedi."
+                  : "Profil bilgilerindeki düzenlemeler henüz kaydedilmedi."}{" "}
+              Ayrılırsan bu değişiklikler kaybolacak.
+            </p>
+            {leaveAction !== "close" && (
+              <p className="profile-discard-destination">
+                {leaveAction === "logout"
+                  ? "Devam edersen hesabından çıkış yapılacak."
+                  : "Devam edersen yönetim paneli açılacak."}
+              </p>
+            )}
+            <div className="profile-discard-actions">
+              <button
+                type="button"
+                className="primary-button"
+                data-autofocus
+                onClick={() => setLeaveAction(null)}
+              >
+                Düzenlemeye devam et
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  if (!operation.current) leave(leaveAction);
+                }}
+              >
+                Değişiklikleri bırak
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </Modal>
   );
 }

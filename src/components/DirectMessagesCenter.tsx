@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { mentionPreview } from "../../shared/mentions";
 import type { Socket } from "socket.io-client";
 import {
   ArrowUpRight,
@@ -389,7 +390,7 @@ export function DirectMessagesCenter({
                           {item.lastMessageBySelf && item.preview
                             ? "Sen: "
                             : ""}
-                          {item.preview ||
+                          {mentionPreview(item.preview, data.members) ||
                             (item.hasDraft
                               ? "Yazmaya başladığın mesaj seni bekliyor."
                               : "İlk mesajı gönder.")}

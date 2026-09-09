@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { X, LoaderCircle } from "lucide-react";
+import { MENTION_TOKEN_SOURCE, mentionPreview } from "../../shared/mentions";
 import type { User } from "../../shared/types";
 import "./avatar.css";
 
@@ -220,26 +221,43 @@ export function Spinner({ label = "Yükleniyor" }: { label?: string }) {
     </span>
   );
 }
-export function RichText({ content }: { content: string }) {
+export function RichText({
+  content,
+  members = [],
+}: {
+  content: string;
+  members?: Pick<User, "id" | "name">[];
+}) {
   return (
     <>
       {content
-        .split(/(\*\*[^*]+\*\*|`[^`]+`|https?:\/\/[^\s<>]+|@[\p{L}\w]+)/gu)
+        .split(
+          new RegExp(
+            `(\\*\\*[^*]+\\*\\*|\x60[^\x60]+\x60|https?:\\/\\/[^\\s<>]+|${MENTION_TOKEN_SOURCE}|@[\\p{L}\\w]+)`,
+            "giu",
+          ),
+        )
         .map((part, i) => {
           if (part.startsWith("**") && part.endsWith("**"))
-            return <strong key={i}>{part.slice(2, -2)}</strong>;
+            return (
+              <strong key={i}>
+                {mentionPreview(part.slice(2, -2), members)}
+              </strong>
+            );
           if (part.startsWith("`") && part.endsWith("`"))
-            return <code key={i}>{part.slice(1, -1)}</code>;
+            return (
+              <code key={i}>{mentionPreview(part.slice(1, -1), members)}</code>
+            );
           if (/^https?:\/\//.test(part))
             return (
               <a key={i} href={part} target="_blank" rel="noopener noreferrer">
-                {part}
+                {mentionPreview(part, members)}
               </a>
             );
           if (part.startsWith("@"))
             return (
               <span key={i} className="mention">
-                {part}
+                {mentionPreview(part, members)}
               </span>
             );
           return part;

@@ -211,6 +211,74 @@
   font-size: 12px;
 }
 
+.composer-ux .mention-picker {
+  width: 320px;
+  max-height: min(360px, 50dvh);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.composer-ux .mention-search {
+  width: 100%;
+  min-height: 36px;
+  flex-shrink: 0;
+  border: 1px solid #dce5e0;
+  border-radius: 5px;
+  padding: 7px 9px;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: #20292b;
+  background: #fff;
+}
+
+.composer-ux .mention-options {
+  overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.composer-ux .mention-options > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px;
+  text-align: left;
+  border-radius: 5px;
+}
+
+.composer-ux .mention-options > button:hover,
+.composer-ux .mention-options > button:focus-visible {
+  background: #eaf4ef;
+}
+
+.composer-ux .mention-options > button:focus-visible {
+  outline: 2px solid #237459;
+  outline-offset: -2px;
+}
+
+.composer-ux .mention-options > button > span:last-child {
+  min-width: 0;
+}
+
+.composer-ux .mention-options strong,
+.composer-ux .mention-options small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.composer-ux .mention-options strong {
+  font-size: 12px;
+  color: #20292b;
+}
+
+.composer-ux .mention-options small {
+  font-size: 11px;
+  color: #586568;
+}
+
 .composer-ux .composer-picker-empty {
   margin: 8px 4px;
   color: #687176;
@@ -299,6 +367,10 @@
 }
 
 @media (max-width: 600px) {
+  .composer-ux .mention-search {
+    font-size: 16px;
+  }
+
   .composer-ux .composer > textarea,
   .composer-ux.composer-direct .composer > textarea {
     font-size: 16px;

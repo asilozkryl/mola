@@ -45,6 +45,10 @@ Gelen kutusunda şu bildirimler toplanır:
 
 Bildirim yalnızca o kanala erişebilen kişilere oluşturulur. Kendi mesajınız size bildirim göndermez. Kanal erişimi kaldırılmışsa eski bildirim üzerinden içerik açılamaz. Gelen kutusundan tek bildirimi veya eriştiğiniz bildirimleri topluca okundu olarak işaretleyebilirsiniz.
 
+`@` düğmesindeki kişi seçicisinde ad, unvan veya e-posta ile arama yapabilirsiniz. Aynı adlı kişiler avatar, unvan ve e-posta ile ayrılır. Aşağı/Yukarı oklarıyla kişiye geçip Enter ile seçin; Escape seçiciyi kapatır. Seçilen kişi mesajda okunabilir adıyla görünür, taslak ve mesajda kimliği korunur. Kişi adını değiştirdiğinde bahsetmenin hedefi değişmez. Bahsetme adının içini elle değiştirmek onu normal metne dönüştürür; yeni bir hedef için seçiciyi kullanın. Önceden yazılmış metin bahsetmeleri okunabilir kalır.
+
+Üst çubuktaki **Uygulama içi uyarıları sustur** yalnız bu tarayıcıdaki uygulama içi yeni mesaj uyarılarını susturur. Okunmamış işaretlerini veya hesabın tarayıcı bildirimi tercihini kapatmaz.
+
 Tarayıcı bildirimlerini açmak için sol menüden **Bildirimler ve uygulama → Bu cihazda bildirimleri aç** seçeneğini kullanın ve tarayıcı iznini verin. Her cihaz ayrıca izin ve abonelik ister. **Tüm cihazlarda kapat**, hesabın push tercihini kapatır; uygulama içindeki okunmamış işaretleri devam eder. Oturum kapatıldığında o oturuma bağlı bildirim aboneliği de sunucuda silinir.
 
 Aynı cihazda yeniden giriş yaptığınızda hesabın bildirim tercihi açık, tarayıcı izni verilmiş ve mevcut cihaz aboneliği duruyorsa abonelik yeni oturuma otomatik bağlanır. Ayar ekranını tekrar açmanız gerekmez. Bu işlem yeni bir tarayıcı izni istemez veya cihaz aboneliği oluşturmaz; bunlar yine **Bu cihazda bildirimleri aç** düğmesiyle yapılır. Hesap/oturum değişimi veya bildirimleri kapatma sırasında geciken bir bağlama isteği geçersiz sayılır.
@@ -64,6 +68,12 @@ Tarayıcı verilerini temizlemek yerel, henüz eşitlenmemiş taslağı silebili
 Arama penceresinde en az iki karakter yazabilir veya doğrudan filtre seçebilirsiniz. Kanal, gönderen, başlangıç/bitiş tarihi ve yalnız dosya içeren mesajlar birlikte kullanılabilir. Tarih alanları UTC günlerini temsil eder; bitiş tarihi seçilen günün tamamını kapsar. Sonuçlar yalnız eriştiğiniz kanallardan ve özel sohbetlerden gelir.
 
 Mesaj işlemlerindeki bağlantı kopyalama seçeneği çalışma alanını ve mesajı belirleyen bir adres üretir. Alıcı üyeyse ilgili alana geçip mesaja ulaşabilir; bağlantı erişim yetkisi vermez.
+
+Arama filtresi, sonuçlar ve Kaydedilenler'deki özel konuşma kaynağı karşı tarafın güncel adıyla gösterilir. Dosyalar veya Sabitlenenler yüklenemediğinde liste hata açıklaması ve **Yeniden dene** sunar; bağlantı hatası boş liste olarak gösterilmez.
+
+## Profil düzenlemelerini koruma
+
+Profilde kaydedilmemiş metin veya uygulanmamış fotoğraf varsa pencereyi kapatmak, çıkış yapmak ya da yönetim paneline geçmek önce bir seçim açar. **Düzenlemeye devam et** taslağı korur; **Değişiklikleri bırak** bekleyen geçişi tamamlar. Değişiklik yoksa ek soru çıkmaz. Metni kaydetmek, ayrıca seçilmiş fotoğrafı uygulamaz; fotoğraf işlemi kendi düğmesiyle tamamlanır.
 
 ## Mobil kullanım ve görüşme
 

@@ -252,7 +252,44 @@
   line-height: 1.6;
 }
 
+.modal:has(> .profile-discard-confirm) {
+  width: 440px;
+}
+
+.profile-discard-confirm p {
+  color: #53615b;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.profile-discard-confirm .profile-discard-destination {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.profile-discard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.profile-discard-actions button {
+  flex: 1 1 auto;
+  min-height: 42px;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
 @media (max-width: 480px) {
+  .profile-discard-actions {
+    flex-direction: column;
+  }
+
+  .profile-discard-actions button {
+    min-height: 44px;
+  }
+
   .profile-photo-section {
     grid-template-columns: 60px minmax(0, 1fr);
     gap: 12px;

@@ -15,7 +15,7 @@ npm run dev
 
 Üretim derlemesi ve kontroller:
 
-Son kontrollerin kapsamı ve sonuçları: [doğrulama raporu](docs/VERIFICATION.md).
+Son UI iyileştirmeleri ve kontrolleri: [ilk iyileştirme paketi](docs/FIRST_IMPROVEMENT_PACKAGE.md). Önceki kontroller: [doğrulama raporu](docs/VERIFICATION.md).
 
 ```sh
 npm run build
@@ -38,7 +38,7 @@ npm run test:load
 - **Yönetim paneli:** üye erişimi, kanal düzenleme/arşivleme/silme, davet iptali, ekip adı, parolayla sahiplik devri ve işlem geçmişi. Ayrı yetkilendirilen uygulama yöneticileri tüm çalışma alanlarının ve hesapların erişimini yönetir. [İlk yönetici ataması ve kullanım](docs/ADMIN.md).
 - **Hesap güvenliği:** e-posta doğrulama, tek kullanımlık parola kurtarma bağlantıları, süreli ve şifreli e-posta kuyruğu. Parola kurtarma tüm açık oturumları kapatır.
 - **Klavye:** `Ctrl/⌘ K` arama; `Enter` gönder; `Shift Enter` yeni satır; `Ctrl/⌘ B` kalın yazı; kanal veya mesaj odaktayken `Shift F10` işlem menüsü; menü içinde yön tuşları ve `Home/End`; `Esc` menü/pencereyi kapat.
-- **Yerel tercihler:** taslaklar oturum depolamasında; kaydedilen mesajlar ve odak modu bu tarayıcıda tutulur. Kaydedilenler cihazlar arası eşitlenmez.
+- **Taslaklar ve tercihler:** metin taslakları sunucuya eşitlenir; eşzamanlı değişikliklerde hangi taslağın korunacağı seçilir. Dosya ekleri taslak eşitlemesine dahil değildir. Kaydedilen mesajlar ve odak modu bu tarayıcıda tutulur; Kaydedilenler cihazlar arası eşitlenmez.
 - **Canlı geri bildirim:** gönderim onayı, yeni mesaj sayacı, çevrimiçi üyeler ve yazıyor bilgisi gerçek olaylardan güncellenir. Geçmişi okurken yeni mesajlar konumunuzu değiştirmez. Sisteminizin hareket azaltma tercihi desteklenir. [Arayüz kararları ve doğrulama](docs/DYNAMIC_UI.md).
 
 ## Docker ile dağıtım

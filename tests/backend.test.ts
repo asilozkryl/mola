@@ -245,3 +245,55 @@ test('API limit override is bounded to test fixtures and production still reject
     }
   }
 });
+
+test('upload limit override is test-only and production still rejects upload 13', async () => {
+  const envKeys = ['NODE_ENV', 'MOLA_TEST_UPLOAD_LIMIT', 'TURN_URLS', 'TURN_SECRET'] as const;
+  const original = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
+  try {
+    process.env.TURN_URLS = 'turn:relay.example.com:3478';
+    process.env.TURN_SECRET = 'test-only-upload-limit-secret-never-use-in-production';
+    for (const scenario of [
+      { env: 'test', override: '100', production: false, expected: 100, probe: true },
+      { env: 'test', override: '500', production: false, expected: 500 },
+      { env: 'test', override: '12', production: false, expected: 12 },
+      { env: 'test', override: undefined, production: false, expected: 12 },
+      { env: 'test', override: 'invalid', production: false, expected: 12 },
+      { env: 'test', override: '11', production: false, expected: 12 },
+      { env: 'test', override: '501', production: false, expected: 12 },
+      { env: 'test', override: '12.5', production: false, expected: 12 },
+      { env: 'test', override: 'Infinity', production: false, expected: 12 },
+      { env: 'development', override: '100', production: false, expected: 12, probe: true },
+      { env: 'production', override: '100', production: true, expected: 12, probe: true },
+      { env: 'test', override: '100', production: true, expected: 12, probe: true },
+    ]) {
+      process.env.NODE_ENV = scenario.env;
+      if (scenario.override === undefined) delete process.env.MOLA_TEST_UPLOAD_LIMIT;
+      else process.env.MOLA_TEST_UPLOAD_LIMIT = scenario.override;
+      await fixture(async ({ request, runtime }) => {
+        const registered = await request('/api/auth/register', { method: 'POST', json: { name: 'Upload limit test', email: 'upload-limit@example.invalid', password: 'upload-limit-test-password', workspaceName: 'Upload limit team' } });
+        assert.equal(registered.status, 200);
+        const account = await registered.json();
+        runtime.repo.run('UPDATE users SET email_verified=1 WHERE id=?', account.user.id);
+        const response = await request('/api/uploads', { method: 'POST' });
+        assert.equal(response.status, 400);
+        assert.match(response.headers.get('ratelimit-policy') || '', new RegExp(`q=${scenario.expected}(?:;|,)`), JSON.stringify(scenario));
+        await response.arrayBuffer();
+        if (scenario.probe) {
+          for (let count = 2; count <= 13; count++) {
+            const next = await request('/api/uploads', { method: 'POST' });
+            assert.equal(next.status, count > scenario.expected ? 429 : 400, `${JSON.stringify(scenario)} upload ${count}`);
+            if (next.status === 429) {
+              assert.ok(Number(next.headers.get('retry-after')) > 0);
+              assert.match((await next.json()).error, /Dosya yükleme sınırına ulaştınız/);
+            } else await next.arrayBuffer();
+          }
+        }
+      }, { production: scenario.production, ...(scenario.production ? { appOrigin: 'https://app.example.com' } : {}) });
+    }
+  } finally {
+    for (const key of envKeys) {
+      if (original[key] === undefined) delete process.env[key];
+      else process.env[key] = original[key];
+    }
+  }
+});

@@ -90,6 +90,9 @@ export function createApp(options: AppOptions = {}) {
   const testApiLimit = process.env.MOLA_TEST_API_LIMIT?.trim() || '';
   const requestedTestApiLimit = /^\d+$/.test(testApiLimit) ? Number(testApiLimit) : Number.NaN;
   const apiLimit = !production && process.env.NODE_ENV === 'test' && Number.isInteger(requestedTestApiLimit) && requestedTestApiLimit >= 300 && requestedTestApiLimit <= 5000 ? requestedTestApiLimit : 300;
+  const testUploadLimit = process.env.MOLA_TEST_UPLOAD_LIMIT?.trim() || '';
+  const requestedTestUploadLimit = /^\d+$/.test(testUploadLimit) ? Number(testUploadLimit) : Number.NaN;
+  const uploadLimit = !production && process.env.NODE_ENV === 'test' && Number.isInteger(requestedTestUploadLimit) && requestedTestUploadLimit >= 12 && requestedTestUploadLimit <= 500 ? requestedTestUploadLimit : 12;
   const verificationRequired = production || (options.requireEmailVerification ?? process.env.REQUIRE_EMAIL_VERIFICATION === 'true');
   const dataDir = resolve(options.dataDir || process.env.DATA_DIR || (options.uploadDir ? join(options.uploadDir, '.state') : 'data'));
   const uploadDir = resolve(options.uploadDir || join(dataDir, 'uploads'));
@@ -556,7 +559,7 @@ export function createApp(options: AppOptions = {}) {
   });
 
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 0, parts: 2 } });
-  const uploadLimiter = rateLimit({ windowMs: 60_000, limit: 12, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Dosya yükleme sınırına ulaştınız. Bir dakika sonra tekrar deneyin.' } });
+  const uploadLimiter = rateLimit({ windowMs: 60_000, limit: uploadLimit, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Dosya yükleme sınırına ulaştınız. Bir dakika sonra tekrar deneyin.' } });
   app.post('/api/uploads', uploadLimiter, upload.single('file'), (req, res) => {
     // Multipart bodies can finish after an administrator revoked the account.
     requireActiveWorkspace(req);

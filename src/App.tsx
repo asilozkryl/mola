@@ -67,6 +67,13 @@ import type {
   User,
 } from "../shared/types";
 import { api, bootstrap, post, ApiError, setApiWorkspace } from "./lib/api";
+import {
+  conversationIdentity,
+  getConversationMembers,
+} from "./lib/conversationIdentity";
+import { mentionPreview } from "../shared/mentions";
+import { CollectionError } from "./components/CollectionError";
+import { ConversationLabel } from "./components/ConversationLabel";
 import { WorkspaceNavigation } from "./components/WorkspaceNavigation";
 import { useSidebarPreferences } from "./lib/useSidebarPreferences";
 import type { SidebarOrder, SidebarChannelGroup } from "../shared/sidebar";
@@ -196,6 +203,11 @@ export default function App() {
   const [pins, setPins] = useState<Message[]>([]);
   const [channelFiles, setChannelFiles] = useState<Attachment[]>([]);
   const [collectionLoading, setCollectionLoading] = useState(false);
+  const [collectionError, setCollectionError] = useState<{
+    scope: string;
+    message: string;
+  } | null>(null);
+  const collectionRetryFocus = useRef<string | null>(null);
   const [repliesHasMore, setRepliesHasMore] = useState(false);
   const [collectionVersion, setCollectionVersion] = useState(0);
   const [savedOwner, setSavedOwner] = useState("");
@@ -295,6 +307,10 @@ export default function App() {
   const dataRef = useRef(data);
   dataRef.current = data;
   const accessVersion = useRef(0);
+  const liveMemberRevision = useRef(0);
+  const liveMemberUpdates = useRef(
+    new Map<string, { revision: number; user: User }>(),
+  );
   const workspaceChanging = useRef(false);
   const call = useCall({
     socket,
@@ -317,6 +333,7 @@ export default function App() {
   const acceptData = useCallback(
     (next: SessionBootstrap, preserveProfileRoute = false) => {
       if (next.accountOnly) {
+        liveMemberUpdates.current.clear();
         accessVersion.current += 1;
         callRef.current.leave();
         socketRef.current?.removeAllListeners();
@@ -367,6 +384,7 @@ export default function App() {
       const contextChanged =
         dataRef.current?.workspace.id !== next.workspace.id ||
         dataRef.current?.user.id !== next.user.id;
+      if (contextChanged) liveMemberUpdates.current.clear();
       const changed =
         dataRef.current?.workspace.id !== next.workspace.id ||
         dataRef.current?.user.id !== next.user.id ||
@@ -485,30 +503,67 @@ export default function App() {
     },
     [],
   );
-  const refreshAccess = useCallback(async () => {
-    const version = ++accessVersion.current;
-    try {
-      const next = await api<SessionBootstrap>("/auth/me");
-      if (version === accessVersion.current && !workspaceChanging.current)
+  const refreshAccess = useCallback(
+    async function refresh(): Promise<void> {
+      const version = ++accessVersion.current;
+      const memberRevision = liveMemberRevision.current;
+      try {
+        const next = await api<SessionBootstrap>("/auth/me");
+        if (version !== accessVersion.current || workspaceChanging.current)
+          return;
+        // Apply access changes immediately, even if the follow-up request fails.
+        // Only newer display fields may override this snapshot; roles, membership,
+        // suspension and account verification always come from the access response.
+        if (
+          memberRevision !== liveMemberRevision.current &&
+          !next.accountOnly &&
+          dataRef.current?.workspace.id === next.workspace.id &&
+          dataRef.current.user.id === next.user.id
+        ) {
+          const currentProfile = (user: User): User => {
+            const update = liveMemberUpdates.current.get(user.id);
+            if (!update || update.revision <= memberRevision) return user;
+            const { name, color, status, avatarUrl, jobTitle, bio, location } =
+              update.user;
+            return {
+              ...user,
+              name,
+              color,
+              status,
+              avatarUrl,
+              jobTitle,
+              bio,
+              location,
+            };
+          };
+          acceptData({
+            ...next,
+            user: currentProfile(next.user),
+            members: next.members.map(currentProfile),
+          });
+          return refresh();
+        }
         acceptData(next);
-    } catch (error) {
-      if (version !== accessVersion.current || workspaceChanging.current)
-        return;
-      if (
-        error instanceof ApiError &&
-        (error.status === 401 || error.status === 403)
-      ) {
-        sessionStorage.setItem("mola:logged-out", "true");
-        initialBootstrap = undefined;
-        setAdminOpen(false);
-        setAccountData(null);
-        accountRef.current = null;
-        setData(null);
-        setMessages([]);
-        setDialog(null);
+      } catch (error) {
+        if (version !== accessVersion.current || workspaceChanging.current)
+          return;
+        if (
+          error instanceof ApiError &&
+          (error.status === 401 || error.status === 403)
+        ) {
+          sessionStorage.setItem("mola:logged-out", "true");
+          initialBootstrap = undefined;
+          setAdminOpen(false);
+          setAccountData(null);
+          accountRef.current = null;
+          setData(null);
+          setMessages([]);
+          setDialog(null);
+        }
       }
-    }
-  }, [acceptData]);
+    },
+    [acceptData],
+  );
   useEffect(() => {
     const update = () => {
       void refreshAccess();
@@ -840,7 +895,13 @@ export default function App() {
       setLinkedReply((old) => (old?.id === id ? null : old));
       setCollectionVersion((v) => v + 1);
     });
-    client.on("member:updated", (user: User) =>
+    client.on("member:updated", (user: User) => {
+      if (disposed || dataRef.current?.workspace.id !== workspaceId) return;
+      liveMemberRevision.current += 1;
+      liveMemberUpdates.current.set(user.id, {
+        revision: liveMemberRevision.current,
+        user,
+      });
       setData((old) =>
         old
           ? {
@@ -852,8 +913,8 @@ export default function App() {
               ],
             }
           : old,
-      ),
-    );
+      );
+    });
     client.on("channel:created", (channel: Channel) =>
       setData((old) =>
         old
@@ -1002,36 +1063,76 @@ export default function App() {
     }
   }, [saved, data?.user.id, data?.workspace.id, savedOwner, fail]);
   useEffect(() => {
-    if (!channelId || tab === "chat" || view !== "channel") {
+    if (!data || !channelId || tab === "chat" || view !== "channel") {
+      collectionRetryFocus.current = null;
       setCollectionLoading(false);
+      setCollectionError(null);
       return;
     }
+    const workspaceId = data.workspace.id;
+    const userId = data.user.id;
+    const scope = `${userId}:${workspaceId}:${channelId}:${tab}`;
+    const restoreRetryFocus = collectionRetryFocus.current === scope;
+    collectionRetryFocus.current = null;
+    const controller = new AbortController();
     let cancelled = false;
+    const current = () =>
+      !cancelled &&
+      dataRef.current?.user.id === userId &&
+      dataRef.current?.workspace.id === workspaceId &&
+      channelRef.current === channelId &&
+      dataRef.current.channels.some((c) => c.id === channelId);
     setCollectionLoading(true);
+    setCollectionError(null);
     setPins([]);
     setChannelFiles([]);
     const path = `/channels/${channelId}/${tab}`;
-    api<{ messages?: Message[]; files?: Attachment[] }>(path)
+    api<{ messages?: Message[]; files?: Attachment[] }>(path, {
+      signal: controller.signal,
+      headers: { "X-Workspace-Id": workspaceId, "X-User-Id": userId },
+    })
       .then((result) => {
-        if (
-          cancelled ||
-          channelRef.current !== channelId ||
-          !dataRef.current?.channels.some((c) => c.id === channelId)
-        )
-          return;
+        if (!current()) return;
         if (tab === "pins") setPins(result.messages || []);
         else setChannelFiles(result.files || []);
       })
       .catch((error) => {
-        if (!cancelled) fail(error.message);
+        if (current())
+          setCollectionError({
+            scope,
+            message:
+              error instanceof ApiError
+                ? error.message
+                : "Bağlantını kontrol edip yeniden dene.",
+          });
       })
       .finally(() => {
-        if (!cancelled) setCollectionLoading(false);
+        if (!cancelled) {
+          setCollectionLoading(false);
+          if (restoreRetryFocus) {
+            requestAnimationFrame(() => {
+              if (
+                current() &&
+                (document.activeElement === document.body ||
+                  document.activeElement === scrollRef.current)
+              )
+                scrollRef.current?.focus({ preventScroll: true });
+            });
+          }
+        }
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [channelId, tab, view, collectionVersion, fail]);
+  }, [
+    channelId,
+    tab,
+    view,
+    collectionVersion,
+    data?.user.id,
+    data?.workspace.id,
+  ]);
 
   useEffect(() => {
     if (
@@ -1339,28 +1440,18 @@ export default function App() {
     () => new Map(data?.members.map((u) => [u.id, u]) || []),
     [data?.members],
   );
-  const directPeer =
-    channel?.kind === "dm"
-      ? data?.members.find(
-          (user) =>
-            channel.memberIds?.includes(user.id) && user.id !== data.user.id,
-        )
-      : undefined;
+  const identity = conversationIdentity(
+    channel,
+    data?.user.id || "",
+    data?.members || [],
+  );
+  const directPeer = identity.peer;
   const isDirectConversation = view === "channel" && channel?.kind === "dm";
-  const channelName =
-    channel?.kind === "dm"
-      ? directPeer?.name || channel.name
-      : channel?.name || "genel";
-  const conversationMembers =
-    channel?.kind === "dm" || channel?.visibility === "private"
-      ? data?.members.filter(
-          (m) => !m.suspended && channel.memberIds?.includes(m.id),
-        ) || []
-      : data?.members.filter(
-          (m) =>
-            !m.suspended &&
-            (m.role !== "guest" || channel?.memberIds?.includes(m.id)),
-        ) || [];
+  const channelName = channel ? identity.name : "genel";
+  const conversationMembers = getConversationMembers(
+    channel,
+    data?.members || [],
+  );
   const onlineMembers = connected
     ? conversationMembers.filter(
         (member) => !member.suspended && data?.onlineIds.includes(member.id),
@@ -1867,6 +1958,7 @@ export default function App() {
       <MessageItem
         key={message.id}
         message={message}
+        members={data?.members || []}
         fresh={freshIds.has(message.id)}
         author={userMap.get(message.userId)}
         selfId={data!.user.id}
@@ -2391,12 +2483,19 @@ export default function App() {
           </button>
           <div className="topbar-actions">
             <IconButton
-              label={quiet ? "Bildirimleri aç" : "Bildirimleri sessize al"}
+              label={
+                quiet
+                  ? "Uygulama içi uyarıları aç"
+                  : "Uygulama içi uyarıları sustur"
+              }
+              pressed={quiet}
               onClick={() => {
                 localStorage.setItem("mola:quiet", String(!quiet));
                 setQuiet(!quiet);
                 notify(
-                  quiet ? "Bildirimler açıldı." : "Bildirimler sessize alındı.",
+                  quiet
+                    ? "Uygulama içi uyarılar açıldı."
+                    : "Uygulama içi uyarılar susturuldu. Tarayıcı bildirimleri kendi ayarını kullanır.",
                 );
               }}
             >
@@ -2717,10 +2816,13 @@ export default function App() {
                                   selectChannel(message.channelId);
                                 }}
                               >
-                                <Hash size={13} />
-                                {data.channels.find(
-                                  (c) => c.id === message.channelId,
-                                )?.name || "Kanal"}
+                                <ConversationLabel
+                                  channel={data.channels.find(
+                                    (c) => c.id === message.channelId,
+                                  )}
+                                  selfId={data.user.id}
+                                  members={data.members}
+                                />
                                 <ArrowRight size={13} />
                               </button>
                               {renderMessage(message)}
@@ -2800,6 +2902,17 @@ export default function App() {
                         </div>
                       ))}
                     </div>
+                  ) : tab !== "chat" &&
+                    collectionError?.scope ===
+                      `${data.user.id}:${data.workspace.id}:${channelId}:${tab}` ? (
+                    <CollectionError
+                      kind={tab}
+                      message={collectionError.message}
+                      onRetry={() => {
+                        collectionRetryFocus.current = collectionError.scope;
+                        setCollectionVersion((value) => value + 1);
+                      }}
+                    />
                   ) : tab === "files" ? (
                     <>
                       <div className="list-intro">
@@ -3027,7 +3140,7 @@ export default function App() {
                         channelId={channelId}
                         channelName={channelName}
                         isDirectMessage={channel?.kind === "dm"}
-                        members={conversationMembers.map((m) => m.name)}
+                        members={conversationMembers}
                         onSent={onSent}
                         onError={fail}
                         onTyping={(active) => {
@@ -3102,7 +3215,10 @@ export default function App() {
                       channelName={channelName}
                       isDirectMessage={threadChannel.kind === "dm"}
                       parentId={thread.id}
-                      members={conversationMembers.map((m) => m.name)}
+                      members={getConversationMembers(
+                        threadChannel,
+                        data.members,
+                      )}
                       onSent={onSent}
                       onError={fail}
                     />
@@ -4148,8 +4264,12 @@ function SearchDialog({
             <option value="">Tüm kanallar</option>
             {data.channels.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.visibility === "private" ? "🔒 " : ""}
-                {c.name}
+                {c.kind === "dm"
+                  ? "Özel mesaj · "
+                  : c.visibility === "private"
+                    ? "🔒 "
+                    : ""}
+                {conversationIdentity(c, data.user.id, data.members).name}
               </option>
             ))}
           </select>
@@ -4253,14 +4373,19 @@ function SearchDialog({
                 onClick={() => onSelect(message)}
               >
                 <span className="search-result-channel">
-                  <Hash size={13} />
-                  {data.channels.find((c) => c.id === message.channelId)?.name}
+                  <ConversationLabel
+                    channel={data.channels.find(
+                      (c) => c.id === message.channelId,
+                    )}
+                    selfId={data.user.id}
+                    members={data.members}
+                  />
                   <time>{dateLabel(message.createdAt)}</time>
                 </span>
                 <strong>
                   {data.members.find((m) => m.id === message.userId)?.name}
                 </strong>
-                <p>{message.content}</p>
+                <p>{mentionPreview(message.content, data.members)}</p>
               </button>
             ))}
           </>

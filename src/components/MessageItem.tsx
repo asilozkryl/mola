@@ -22,12 +22,19 @@ import {
 } from "lucide-react";
 import type { Message, User } from "../../shared/types";
 import {
+  decodeMentions,
+  encodeMentions,
+  mentionPreview,
+  updateMentionText,
+} from "../../shared/mentions";
+import {
   ContextMenu,
   type ContextMenuItem,
   type ContextMenuPosition,
 } from "./ContextMenu";
 import { Avatar, fileSize, IconButton, Modal, RichText, timeLabel } from "./ui";
 import { ProfileIdentity } from "./ProfileIdentity";
+import { useMentionHistory } from "../lib/useMentionHistory";
 import "./message-ux.css";
 import "./direct-message-item.css";
 
@@ -35,6 +42,7 @@ export function MessageItem({
   message,
   author,
   selfId,
+  members,
   saved,
   onReply,
   onReact,
@@ -55,6 +63,7 @@ export function MessageItem({
   message: Message;
   author?: User;
   selfId: string;
+  members: User[];
   saved: boolean;
   onReply: () => void;
   onReact: (emoji: string) => void;
@@ -79,8 +88,18 @@ export function MessageItem({
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [draft, setDraft] = useState(message.content);
+  const editDocument = decodeMentions(draft, members);
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState("");
+  const editHistory = useMentionHistory(
+    draft,
+    (content) => {
+      setDraft(content);
+      setEditError("");
+    },
+    `${message.id}:${editing}`,
+    saving,
+  );
   const articleRef = useRef<HTMLElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -370,7 +389,7 @@ export function MessageItem({
       data-self={authorIsSelf}
       data-grouped={isGrouped}
       tabIndex={0}
-      aria-label={`${author?.name || "Üye"}: ${message.content.slice(0, 80)}${isGrouped ? `, ${createdAtLabel}` : ""}`}
+      aria-label={`${author?.name || "Üye"}: ${mentionPreview(message.content, members).slice(0, 80)}${isGrouped ? `, ${createdAtLabel}` : ""}`}
       aria-haspopup="menu"
       onContextMenu={(event) => {
         const target = event.target;
@@ -460,14 +479,36 @@ export function MessageItem({
             <textarea
               aria-label="Mesajı düzenle"
               aria-describedby={editHintId}
-              value={draft}
+              value={editDocument.text}
               disabled={saving}
-              maxLength={10000}
               onChange={(e) => {
-                setDraft(e.target.value);
+                if (editHistory.onChange(e)) return;
+                const next = encodeMentions(
+                  updateMentionText(
+                    editDocument,
+                    e.target.value,
+                    e.target.selectionStart,
+                  ),
+                );
+                if (next.length > 10000) {
+                  setEditError(
+                    "Mesaj en fazla 10.000 karakter olabilir. Göndermeden önce biraz kısalt.",
+                  );
+                  return;
+                }
+                editHistory.record(next, {
+                  start: e.target.selectionStart,
+                  end: e.target.selectionEnd,
+                });
+                setDraft(next);
                 setEditError("");
               }}
+              onBeforeInput={(event) =>
+                editHistory.capture(event.currentTarget)
+              }
+              onSelect={(event) => editHistory.capture(event.currentTarget)}
               onKeyDown={(event) => {
+                if (editHistory.onKeyDown(event)) return;
                 if (event.nativeEvent.isComposing) return;
                 if (event.key === "Escape") {
                   event.preventDefault();
@@ -512,7 +553,7 @@ export function MessageItem({
           </div>
         ) : (
           <p className="message-text">
-            <RichText content={message.content} />
+            <RichText content={message.content} members={members} />
           </p>
         )}
         {!!message.attachments?.length && (
@@ -772,7 +813,9 @@ export function MessageItem({
           <p className="modal-description">
             Bu mesaj ve yanıtları kalıcı olarak silinecek.
           </p>
-          <blockquote className="delete-preview">{message.content}</blockquote>
+          <blockquote className="delete-preview">
+            {mentionPreview(message.content, members)}
+          </blockquote>
           <div className="modal-actions">
             <button
               className="secondary-button"

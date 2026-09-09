@@ -1,0 +1,47 @@
+.collection-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 24px;
+  padding: 18px;
+  max-width: 620px;
+  border: 1px solid #e3d7ce;
+  border-radius: 9px;
+  background: #fcf9f5;
+  color: #79513a;
+}
+.collection-error > svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.collection-error > div {
+  min-width: 0;
+}
+.collection-error h2 {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #293730;
+}
+.collection-error p {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.collection-error .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 14px;
+  min-height: 40px;
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .collection-error {
+    margin: 16px 12px;
+    padding: 15px;
+  }
+  .collection-error .secondary-button {
+    min-height: 44px;
+  }
+}

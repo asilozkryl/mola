@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import type { Channel, User } from "../../shared/types";
+import { mentionPreview } from "../../shared/mentions";
 import type {
   NotificationItem,
   NotificationState,
@@ -682,8 +683,9 @@ export function ActivityCenter({
                       : channel?.name || item.channelName;
                   const Icon = kindIcons[item.kind];
                   const preview =
-                    item.preview.trim().replace(/\s+/g, " ") ||
-                    "Bir dosya paylaşıldı.";
+                    mentionPreview(item.preview, members)
+                      .trim()
+                      .replace(/\s+/g, " ") || "Bir dosya paylaşıldı.";
                   const absolute = new Date(item.createdAt);
                   return (
                     <article
