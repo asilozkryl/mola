@@ -1,3 +1,4 @@
+import { restoreLegacyNotificationSchema } from "./notification-migration-fixture.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -32,6 +33,7 @@ function legacy(path: string) {
     Date.now() + 600_000,
     created.workspaceId,
   );
+  restoreLegacyNotificationSchema(repo.db);
   repo.db.exec(
     "DROP TRIGGER saved_messages_workspace; DROP TABLE message_requests; DROP TABLE draft_attachments; DROP TRIGGER deleted_thread_drafts; DROP TABLE saved_messages; PRAGMA user_version=7;",
   );
@@ -49,7 +51,7 @@ test("v7 to v8 preserves accounts, sessions and history, then persists personal 
   try {
     const previous = legacy(path);
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get("PRAGMA user_version")!.user_version, 9);
+    assert.equal(repo.get("PRAGMA user_version")!.user_version, 10);
     assert.deepEqual(repo.all("SELECT * FROM messages"), previous.history);
     assert.deepEqual(repo.all("SELECT * FROM sessions"), previous.sessions);
     assert.deepEqual(

@@ -53,3 +53,48 @@ test('push deep links keep only validated workspace and message identifiers', as
   await work;
   assert.equal(shown[0].options.data.url, `https://mola.example/?workspace=${workspace}&message=${message}`);
 });
+
+test("server diagnostic push keeps generic content and focuses without a conversation target", async () => {
+  const { handlers, shown } = worker();
+  let work: Promise<unknown> | undefined;
+  handlers.get("push")!({
+    data: {
+      json: () => ({
+        test: true,
+        title: "Private title",
+        body: "Private message",
+        url: "/?message=bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+        tag: "diagnostic-1",
+      }),
+    },
+    waitUntil: (value: Promise<unknown>) => {
+      work = value;
+    },
+  });
+  await work;
+  assert.equal(shown[0].title, "Mola");
+  assert.equal(shown[0].options.body, "Test bildirimin bu cihaza ulaştı.");
+  assert.equal(shown[0].options.data.url, "https://mola.example/");
+  assert.equal(shown[0].options.data.test, true);
+  assert.equal(shown[0].options.tag, "diagnostic-1");
+});
+
+test("malformed and primitive push payloads remain safe generic notifications", async () => {
+  const { handlers, shown } = worker();
+  for (const value of [null, false, 12, "text", { test: "true" }]) {
+    let work: Promise<unknown> | undefined;
+    handlers.get("push")!({
+      data: { json: () => value },
+      waitUntil: (pending: Promise<unknown>) => {
+        work = pending;
+      },
+    });
+    await work;
+  }
+  assert.equal(shown.length, 5);
+  for (const item of shown) {
+    assert.equal(item.options.body, "Yeni bir bildirimin var.");
+    assert.equal(item.options.data.test, false);
+    assert.equal(item.options.data.url, "https://mola.example/");
+  }
+});

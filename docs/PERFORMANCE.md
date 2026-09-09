@@ -1,10 +1,42 @@
 # Performans ve görüşme dayanıklılığı
 
-Son ölçümden sonra yanıt sayımı için `messages(parent_id)` indeksi eklendi. `EXPLAIN QUERY PLAN`, tam tablo taraması yerine bu indeksi kullandığını doğruladı; 31 sunucu testi tekrar geçti. Aşağıdaki zaman/bellek ölçümleri bu indeks eklenmeden önce alınmıştır; indeks için ayrıca hızlanma oranı iddia edilmez.
+7 Eylül ölçümlerinden sonra yanıt sayımı için `messages(parent_id)` indeksi eklendi. `EXPLAIN QUERY PLAN`, tam tablo taraması yerine bu indeksi kullandığını doğruladı; o aşamada 31 sunucu testi tekrar geçti. Aşağıdaki eski zaman/bellek ölçümleri bu indeks eklenmeden önce, 9 Eylül ortak IP ölçümü ise güncel uygulamada alındı. Bu farklı koşulardan indeks için ayrı bir hızlanma oranı çıkarılmaz.
 
 Bu belge yerel olarak çalıştırılmış ölçümleri, tekrar üretme komutlarını ve henüz aynı koşullarda doğrulanmamış sınırları ayırır. Sonuçlar bir kapasite veya hizmet seviyesi garantisi değildir.
 
 ## HTTP ve Socket.IO yük ölçümü
+
+### Aynı ofis IP'si için istek sınırları
+
+Genel API kotası artık geçerli sunucu oturumundan çözülen kullanıcı hesabı başına **300 istek/dakika**. Aynı hesabın sekmeleri, cihazları ve çalışma alanları bu hakkı paylaşır; `X-User-Id` ve `X-Workspace-Id` kota kimliği belirlemez. Geçersiz veya süresi dolmuş oturumlar anonim IP kotasını kullanır (**300/dakika**). Oturumlu ve anonim tüm API trafiği için ayrıca **6.000/dakika/IP** üst sınırı, gövde ayrıştırma ve oturum sorgusundan önce çalışır. Giriş denemelerinin mevcut **20/15 dakika/IP** sınırı ve dosya yükleme gibi işlem sınırları korunur.
+
+Aşağıdaki geçmiş ölçümdeki 3.300 istek/120 saniye, kullanıcı başına **55/dakika**, 30 kişilik ofiste toplam **1.650/dakika** eder. Kişi başına 300 sınırı bu ölçülen temponun yaklaşık 5,5 katı; ağ üst sınırı ofis toplamının yaklaşık 3,6 katıdır. Bunlar mevcut ölçüme dayalı başlangıç paylarıdır, her kullanıcı davranışının kapasite garantisi değildir. Sayaçlar uygulama sürecinin belleğindedir; birden fazla API sürecine geçildiğinde ortak sayaç deposu gerekir.
+
+`TRUST_PROXY`, gerçek ters proxy adımı sayısıyla eşleşmelidir. Sıfır olduğunda kullanıcıların gönderdiği yönlendirme başlıkları yok sayılır; bir adımda en yakın proxy'nin eklediği istemci adresi esas alınır. IPv6 adresleri `/56` ağına gruplanır. Test için `MOLA_TEST_API_LIMIT` yalnız `NODE_ENV=test` ve üretim kapalıyken 300–5.000 arasında kabul edilir; toplam IP sınırını değiştirmez. Yük betiği bu test kota değişkenlerini temizleyerek üretim değerlerini kullanır.
+
+Tek ofis IP'si senaryosunu tekrar üretmek için:
+
+```powershell
+node --import tsx scripts/load-test.mjs --duration 120 --users 30 --messages 1500 --shared-ip --output artifacts/load-office-30.json
+```
+
+`--shared-ip` bütün oturumları aynı `198.18.0.1` adresinden geçirir. Bu, tek IP'de uygulama kotası ve kalıcı HTTP/Socket.IO teslimini sınar; gerçek ofis ağı, NAT aygıtı, TLS veya fiziksel cihaz ölçümü değildir. Aşağıdaki 7 Eylül tarihli sonuçlar ayrı IP senaryosuna aittir; aynı ofis sonucu olarak yorumlanmamalıdır.
+
+**9 Eylül 2026 yerel ortak IP sonucu:** 120 saniye, 30 eşzamanlı oturum, 1.500 mesaj. Ham sonuç [`artifacts/load-office-30.json`](../artifacts/load-office-30.json), terminal günlüğü [`artifacts/load-office-30.log`](../artifacts/load-office-30.log).
+
+| Ölçüm | Sonuç |
+|---|---:|
+| HTTP isteği / başarısız istek / 429 | 3.300 / 0 / 0 |
+| Mesaj / yeniden açılışta bulunan mesaj | 1.500 / 1.500 |
+| Beklenen / alınan Socket.IO teslimi | 45.000 / 45.000 |
+| Eksik / yinelenen teslim | 0 / 0 |
+| Yazma / listeleme / arama p95 | 67,12 / 74,29 / 114,45 ms |
+| POST başlangıcından bildirime p95 | 66,53 ms |
+| Sunucu olay döngüsü gecikmesi p95 | 32,42 ms |
+| Gözlenen en yüksek sunucu RSS | 143,88 MiB |
+| Kontrollü kapanış sonrası `integrity_check` | `ok` |
+
+Ek olarak sekiz yeni kota regresyonu ile dokuz mevcut backend testi **17/17 geçti**: bir hesap için çoklu cihaz/çalışma alanı kotası, sahte kimlik başlıkları, anonim ve süresi dolmuş oturumlar, 6.001'inci istekte ağ koruması, IPv6/proxy davranışı ve mevcut auth/upload üretim sınırları. Bu koşu ani süreç sonlandırması veya giriş/parola türetme yükünü içermez; iki dakika uzun süreli bellek kararlılığına kanıt değildir.
 
 ### Güncel on dakikalık sonuç
 
@@ -70,7 +102,7 @@ node --import tsx scripts/load-test.mjs --duration 120 --users 30 --messages 150
 - Kurulumda kullanıcılar ve özetlenmiş oturum anahtarları eklenir. Ölçüm sırasında tüm yazma/listeleme/arama istekleri gerçek kimlik doğrulama, çalışma alanı erişimi ve Origin denetimlerinden geçer.
 - Her kullanıcı bir Socket.IO bağlantısı açar. Mesajlar 30 kullanıcıya dağıtılır; her bildirim alıcı bazında sayılır, kayıp ve yineleme denetlenir.
 - Her mesajın ardından listeleme, her beş mesajda bir arama yapılır. Kullanıcı başına tek HTTP işlem zinciri vardır; trafik süre boyunca dağıtılır.
-- Üretimdeki hız sınırları değiştirilmez. Yalnızca izole sunucuda tek yerel proxy adımı yapılandırılır; her oturum `198.18.0.0/15` ölçüm aralığından ayrı bir kaynak IP başlığı kullanır. Böylece 30 kişi tek bilgisayarın IP kotası olarak sayılmaz. Bu, 30 gerçek dış ağı temsil eden bir ağ testi değildir.
+- Üretimdeki hız sınırları değiştirilmez. Yalnızca izole sunucuda tek yerel proxy adımı yapılandırılır; varsayılan olarak her oturum `198.18.0.0/15` ölçüm aralığından ayrı bir kaynak IP başlığı kullanır. `--shared-ip` aynı ofis için bütün oturumlarda tek adres kullanır. Bu iki model de gerçek dış ağları temsil eden bir ağ testi değildir.
 - Sonunda bağlantılar kapatılır, SQLite kapatılıp tekrar açılır ve mesaj sayısı ile bütünlüğü doğrulanır. Geçici veriler temizlenir; rapor saklanır.
 
 Sınırlar: 2–200 kullanıcı, 10–1.800 saniye, kullanıcı sayısı kadar en az ve toplam 20.000'e kadar mesaj. Yetkisiz veya başarısız istek, eksik/yinelenen bildirim, mesaj sayısı uyuşmazlığı, bütünlük hatası veya kesinti koşuyu başarısız yapar. Gecikme değerleri ayrıca raporlanır; `passed` tek başına bir gecikme SLO'su anlamına gelmez.

@@ -11,6 +11,8 @@ import {
   Smartphone,
 } from "lucide-react";
 import { api } from "../lib/api";
+import type { Channel, User } from "../../shared/types";
+import type { PushDiagnostic } from "../../shared/notification-types";
 import {
   loadPushPreferences,
   pushConfigured,
@@ -27,6 +29,7 @@ import {
   supportsPush,
 } from "../lib/pwa";
 import { Modal } from "./ui";
+import { NotificationPreferencesPanel } from "./NotificationPreferencesPanel";
 import "./notification-settings.css";
 
 const permission = () =>
@@ -35,9 +38,19 @@ type Operation = "enable" | "disable" | "test" | "install";
 
 export function NotificationSettings({
   userId,
+  workspaceId,
+  workspaceName,
+  channels,
+  members,
+  revision: settingsRevision = 0,
   onClose,
 }: {
   userId: string;
+  workspaceId: string;
+  workspaceName: string;
+  channels: readonly Channel[];
+  members: readonly User[];
+  revision?: number;
   onClose: () => void;
 }) {
   const [preferences, setPreferences] = useState<PushPreferences | null>(null);
@@ -49,6 +62,12 @@ export function NotificationSettings({
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [diagnostic, setDiagnostic] = useState<
+    (PushDiagnostic & { userId: string }) | null
+  >(null);
+  const [diagnosticClock, setDiagnosticClock] = useState(Date.now);
+  const [diagnosticError, setDiagnosticError] = useState("");
+  const [diagnosticRetry, setDiagnosticRetry] = useState(0);
   const [installAvailable, setInstallAvailable] = useState(canInstallPwa);
   const [installed, setInstalled] = useState(installedPwa);
   const [installationAccepted, setInstallationAccepted] = useState(false);
@@ -60,6 +79,69 @@ export function NotificationSettings({
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const currentPreferences =
     preferences?.userId === userId ? preferences : null;
+  const currentDiagnostic =
+    diagnostic?.workspaceId === workspaceId && diagnostic.userId === userId
+      ? diagnostic
+      : null;
+
+  useEffect(() => {
+    if (currentDiagnostic?.status !== "queued") return;
+    setDiagnosticClock(Date.now());
+    const timer = window.setInterval(
+      () => setDiagnosticClock(Date.now()),
+      15_000,
+    );
+    return () => window.clearInterval(timer);
+  }, [currentDiagnostic?.id, currentDiagnostic?.status]);
+
+  useEffect(() => {
+    if (currentDiagnostic?.status !== "queued" || !currentPreferences) return;
+    const controller = new AbortController();
+    let timer: number | undefined;
+    const diagnosticId = currentDiagnostic.id;
+    setDiagnosticError("");
+    const check = async () => {
+      try {
+        const next = await api<PushDiagnostic>(
+          `/notifications/push-tests/${encodeURIComponent(diagnosticId)}`,
+          {
+            signal: controller.signal,
+            headers: {
+              ...pushContextHeaders(currentPreferences),
+              "X-Workspace-Id": workspaceId,
+            },
+          },
+        );
+        if (controller.signal.aborted) return;
+        if (next.workspaceId !== workspaceId || next.id !== diagnosticId)
+          throw new Error(
+            "Test sonucu bu çalışma alanına ait değil. Ayarları yeniden açabilirsin.",
+          );
+        setDiagnostic({ ...next, userId });
+        if (next.status === "queued")
+          timer = window.setTimeout(() => void check(), 1500);
+      } catch (reason) {
+        if (!controller.signal.aborted)
+          setDiagnosticError(
+            reason instanceof Error
+              ? reason.message
+              : "Test sonucu alınamadı. Sonucu yeniden kontrol edebilirsin.",
+          );
+      }
+    };
+    timer = window.setTimeout(() => void check(), 1500);
+    return () => {
+      controller.abort();
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [
+    currentDiagnostic?.id,
+    currentDiagnostic?.status,
+    currentPreferences?.sessionBinding,
+    userId,
+    workspaceId,
+    diagnosticRetry,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -67,7 +149,7 @@ export function NotificationSettings({
       operation.current?.abort();
       operation.current = null;
     };
-  }, [userId]);
+  }, [userId, workspaceId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -341,7 +423,7 @@ export function NotificationSettings({
     denied:
       "Adres çubuğundaki site ayarlarını aç, Bildirimler için İzin ver'i seç ve durumu yenile.",
     enabled:
-      "Bahsetmeler, direkt mesajlar ve takip ettiğin konuşmalara gelen yanıtlar bu cihaza ulaşır.",
+      "Çalışma alanı ve kanal tercihlerine uyan bildirimler bu cihaza gönderilir.",
     permission:
       "Bildirimleri aç düğmesine bastığında tarayıcın senden izin isteyecek.",
     disconnected:
@@ -361,6 +443,14 @@ export function NotificationSettings({
         className="notification-settings"
         aria-busy={checking || Boolean(busy)}
       >
+        <NotificationPreferencesPanel
+          userId={userId}
+          workspaceId={workspaceId}
+          workspaceName={workspaceName}
+          channels={channels}
+          members={members}
+          revision={settingsRevision}
+        />
         <section aria-labelledby="push-heading">
           <div className="notification-section-heading">
             <span>
@@ -443,31 +533,54 @@ export function NotificationSettings({
               <button
                 type="button"
                 className="notification-primary"
-                disabled={Boolean(busy) || checking}
+                disabled={
+                  Boolean(busy) ||
+                  checking ||
+                  currentDiagnostic?.status === "queued"
+                }
                 onClick={() => {
                   void run("test", async (signal) => {
+                    if (!currentPreferences) return;
+                    setDiagnostic(null);
+                    setDiagnosticError("");
                     if (permission() !== "granted")
                       throw new Error(
                         "Tarayıcı izni değişmiş. Durumu yenileyip tekrar deneyebilirsin.",
                       );
                     const service = await pwaRegistration();
                     if (signal.aborted) return;
-                    await service.showNotification("Mola · Test bildirimi", {
-                      body: "Bu cihazda bildirim görünümünü test ediyorsun.",
-                      icon: "/icons/mola-192.png",
-                      badge: "/icons/mola-192.png",
-                      tag: "mola-notification-test",
-                      data: { url: `${location.origin}/`, test: true },
-                    });
-                    if (!signal.aborted)
-                      setNotice(
-                        "Test bildirimi tarayıcıya gönderildi. Görünmüyorsa cihazının bildirim ve odak ayarlarını kontrol edebilirsin.",
+                    const subscription =
+                      await service.pushManager.getSubscription();
+                    if (signal.aborted) return;
+                    if (!subscription)
+                      throw new Error(
+                        "Bu cihazın bildirim bağlantısı bulunamadı. Durumu yenileyip yeniden bağlanabilirsin.",
                       );
+                    const next = await api<PushDiagnostic>(
+                      "/notifications/push-tests",
+                      {
+                        method: "POST",
+                        signal,
+                        headers: {
+                          ...pushContextHeaders(currentPreferences),
+                          "X-Workspace-Id": workspaceId,
+                        },
+                        body: JSON.stringify({
+                          endpoint: subscription.endpoint,
+                        }),
+                      },
+                    );
+                    if (signal.aborted) return;
+                    if (next.workspaceId !== workspaceId)
+                      throw new Error(
+                        "Çalışma alanı değişti. Testi bu çalışma alanından yeniden başlatabilirsin.",
+                      );
+                    setDiagnostic({ ...next, userId });
                   });
                 }}
               >
                 <Send size={15} />
-                {busy === "test" ? "Gönderiliyor…" : "Test bildirimi göster"}
+                {busy === "test" ? "Gönderiliyor…" : "Test bildirimi gönder"}
               </button>
             )}
             <button
@@ -493,9 +606,79 @@ export function NotificationSettings({
               {notice}
             </p>
           )}
+          {currentDiagnostic && (
+            <div
+              className="notification-diagnostic"
+              data-state={currentDiagnostic.status}
+            >
+              <div
+                role={
+                  currentDiagnostic.status === "failed" ? "alert" : "status"
+                }
+              >
+                <strong>
+                  {currentDiagnostic.status === "queued"
+                    ? "Test bildirimi kuyruğa alındı"
+                    : currentDiagnostic.status === "providerAccepted"
+                      ? "Bildirim sağlayıcısı testi kabul etti"
+                      : "Test bildirimi gönderilemedi"}
+                </strong>
+                <p>
+                  {currentDiagnostic.status === "queued"
+                    ? "Sunucu bu cihazın bildirim sağlayıcısına ulaşmayı deniyor. Sonuç burada güncellenecek."
+                    : currentDiagnostic.status === "providerAccepted"
+                      ? "Sağlayıcı kabulü, bildirimin ekranda göründüğü anlamına gelmez. Görünmüyorsa cihazının bildirim ve odak ayarlarını kontrol edebilirsin."
+                      : diagnosticFailure(currentDiagnostic.reasonCode)}
+                </p>
+                {currentDiagnostic.attempts > 0 && (
+                  <small>{currentDiagnostic.attempts} gönderim denemesi</small>
+                )}
+                {currentDiagnostic.status === "queued" && (
+                  <small>
+                    Kuyrukta geçen süre:{" "}
+                    {Math.max(
+                      0,
+                      Math.floor(
+                        (diagnosticClock -
+                          Date.parse(currentDiagnostic.createdAt)) /
+                          1000,
+                      ),
+                    )}{" "}
+                    saniye
+                    {currentDiagnostic.nextAttemptAt
+                      ? ` · Sonraki deneme ${new Date(currentDiagnostic.nextAttemptAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`
+                      : ""}
+                  </small>
+                )}
+                {currentDiagnostic.lastFailureCode && (
+                  <small>
+                    Son deneme:{" "}
+                    {diagnosticFailureDetail(currentDiagnostic.lastFailureCode)}
+                    {currentDiagnostic.lastFailureAt
+                      ? ` (${new Date(currentDiagnostic.lastFailureAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })})`
+                      : ""}
+                  </small>
+                )}
+              </div>
+              {diagnosticError && (
+                <div className="notification-diagnostic-error" role="alert">
+                  <p>{diagnosticError}</p>
+                  <button
+                    type="button"
+                    className="notification-secondary"
+                    onClick={() => setDiagnosticRetry((value) => value + 1)}
+                  >
+                    <RefreshCw size={14} aria-hidden="true" /> Sonucu yeniden
+                    kontrol et
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <p className="notification-help">
             Bildirimlerde mesaj içeriği gösterilmez. İzin her cihazda ayrı
-            verilir. Test bildirimi bu cihazdaki görünümü kontrol eder.
+            verilir. Test yalnız bu cihaza gönderilir ve bu tek deneme için
+            susturma ile sessiz saatler uygulanmaz.
           </p>
           {currentPreferences?.pushEnabled && (
             <div className="notification-account-action">
@@ -556,4 +739,27 @@ export function NotificationSettings({
       </div>
     </Modal>
   );
+}
+
+function diagnosticFailure(reason: string | null) {
+  if (
+    reason === "SUBSCRIPTION_GONE" ||
+    reason === "SUBSCRIPTION_EXPIRED" ||
+    reason === "PROVIDER_GONE"
+  )
+    return "Bu cihazın bildirim kaydı artık geçerli değil. Durumu yenileyip cihazı yeniden bağlayabilirsin.";
+  if (reason === "PUSH_DISABLED")
+    return "Hesabının tarayıcı bildirimleri kapalı. Bildirimleri açıp yeniden deneyebilirsin.";
+  return "Sunucu testi bildirim sağlayıcısına ulaştıramadı. Bağlantıyı kontrol edip daha sonra yeniden test gönderebilirsin.";
+}
+
+function diagnosticFailureDetail(code: string) {
+  if (code === "PROVIDER_TIMEOUT") return "sağlayıcı zamanında yanıt vermedi";
+  if (code === "PROVIDER_UNAVAILABLE")
+    return "sağlayıcı geçici olarak kullanılamıyor";
+  if (code === "PROVIDER_THROTTLED") return "sağlayıcı yeniden denemeyi istedi";
+  if (code === "NETWORK_ERROR") return "bağlantı kurulamadı";
+  if (code === "SUBSCRIPTION_EXPIRED") return "bu cihazın kaydı geçersiz";
+  if (code === "PROVIDER_REJECTED") return "sağlayıcı isteği reddetti";
+  return "gönderim tamamlanamadı";
 }

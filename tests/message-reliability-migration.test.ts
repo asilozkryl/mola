@@ -1,3 +1,4 @@
+import { restoreLegacyNotificationSchema } from "./notification-migration-fixture.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -48,6 +49,7 @@ function legacy(path: string) {
     message,
     "2026-01-03T00:00:00.000Z",
   );
+  restoreLegacyNotificationSchema(repo.db);
   repo.db.exec(
     "DROP TABLE message_requests; DROP TABLE draft_attachments; DROP TRIGGER deleted_thread_drafts; PRAGMA user_version=8;",
   );
@@ -72,7 +74,7 @@ test("v8 migration preserves text drafts and saved history, persists request tom
   try {
     const old = legacy(path);
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get("PRAGMA user_version")!.user_version, 9);
+    assert.equal(repo.get("PRAGMA user_version")!.user_version, 10);
     for (const [table, rows] of Object.entries(old.snapshot))
       assert.deepEqual(repo.all(`SELECT * FROM ${table}`), rows, table);
     assert.equal(repo.get("SELECT COUNT(*) n FROM message_requests")!.n, 0);

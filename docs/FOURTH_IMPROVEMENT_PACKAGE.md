@@ -66,4 +66,4 @@ API kapsamı 150+ dosya, sabit mesaj, kök/yanıt geçmişi ve arama kaydını i
 Önceki paketin CI koşusunda gönderim sırasında hem mesajı hem yazı kutusunu bulan test seçicisi daraltıldı; ayrıca taslak temizlenmesinin tamamlanması beklenir. Bu düzeltme yalnız teste aittir.
 
 
-GitHub doğrulaması push sonrasında [Validate Mola](https://github.com/asilozkryl/mola/actions/workflows/ci.yml) üzerinden izlenir; yukarıdaki sayılar yerel doğrulama sonuçlarıdır. Sonraki plan kapsamı R09/R10 bildirim tercihleri ve gerçek push teşhisi ile R17 ekip kapasitesidir.
+`ede5e71538898a1dcef89b72ebc7dce5e2e386de` için [GitHub CI 34358410646](https://github.com/asilozkryl/mola/actions/runs/34358410646) **başarıyla tamamlandı**: build, birim/API, TURN, bağımlılık denetimi, altı kişilik medya, kalan tarayıcı akışları, auth/admin, izleme kuralları, alarm yönlendirmesi, Docker ve iki ayrı Coolify kabulü geçti. Üstteki ayrıntılı sayılar yerel koşulara aittir; CI özeti `artifacts/fourth-package-ci.json` içinde saklandı. Sonraki plan kapsamı R09/R10 bildirim tercihleri ve gerçek push teşhisi ile R17 ekip kapasitesidir.

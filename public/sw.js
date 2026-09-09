@@ -84,16 +84,24 @@ self.addEventListener("push", (event) => {
   } catch {
     /* A generic visible notification remains safe for malformed payloads. */
   }
+  const diagnostic = payload.test === true;
   event.waitUntil(
     self.registration.showNotification("Mola", {
-      body: "Yeni bir bildirimin var.",
+      body: diagnostic
+        ? "Test bildirimin bu cihaza ulaştı."
+        : "Yeni bir bildirimin var.",
       icon: "/icons/mola-192.png",
       badge: "/icons/mola-192.png",
       tag:
         typeof payload.tag === "string"
           ? payload.tag.slice(0, 128)
           : "mola-notification",
-      data: { url: notificationUrl(payload.url) },
+      data: {
+        url: diagnostic
+          ? self.location.origin + "/"
+          : notificationUrl(payload.url),
+        test: diagnostic,
+      },
     }),
   );
 });
@@ -121,7 +129,7 @@ self.addEventListener("notificationclick", (event) => {
           appClients[0];
         if (existing) {
           try {
-            // A local test only focuses the app; keep its current conversation/call.
+            // A diagnostic only focuses the app; keep its current conversation/call.
             if (event.notification.data?.test !== true)
               existing.postMessage({ type: "mola:notification-open", url });
             return await existing.focus();

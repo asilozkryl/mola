@@ -7,6 +7,12 @@ import { z } from "zod";
 import type { Repository, Row } from "./db.js";
 import { HttpError } from "./errors.js";
 import {
+  installNotificationControls,
+  notificationAllowed,
+  notificationQueueMetrics,
+  recordPushOutcome,
+} from "./notification-controls.js";
+import {
   AttachmentUnavailableError,
   attachmentAvailability,
   draftAttachmentIds,
@@ -77,6 +83,7 @@ export function installCollaborationData(
     uploadDir = "",
     sendPush = webpush.sendNotification,
     requiresVerification = () => false,
+    now = Date.now,
   }: {
     repo: Repository;
     io: Server;
@@ -85,6 +92,7 @@ export function installCollaborationData(
     uploadDir?: string;
     sendPush?: typeof webpush.sendNotification;
     requiresVerification?: (user: Row) => boolean;
+    now?: () => number;
   },
 ) {
   const curve = createECDH("prime256v1");
@@ -541,66 +549,221 @@ export function installCollaborationData(
   });
   let closing = false;
   let pendingPush: Promise<void> | undefined;
+  let notificationControls: ReturnType<typeof installNotificationControls>;
   const deliverPush = async () => {
+    notificationControls.cleanup();
     const jobs = repo.all(
-      `SELECT id FROM push_outbox WHERE next_attempt<=? ORDER BY next_attempt,id LIMIT 20`,
-      Date.now(),
+      "SELECT id FROM push_outbox WHERE next_attempt<=? ORDER BY next_attempt,id LIMIT 20",
+      now(),
     );
     for (const queued of jobs) {
       if (closing) break;
-      // Re-read after each awaited delivery. A logout, role change or endpoint
-      // reassignment while another request was in flight invalidates old work.
       const job = repo.get(
-        `SELECT p.*,n.user_id,n.workspace_id,n.channel_id,n.message_id,n.read_at,s.user_id AS subscriber_id,s.session_hash,s.endpoint,s.p256dh,s.auth FROM push_outbox p JOIN notifications n ON n.id=p.notification_id JOIN push_subscriptions s ON s.id=p.subscription_id WHERE p.id=?`,
+        `SELECT p.*,COALESCE(n.user_id,d.user_id,s.user_id) AS user_id,
+        COALESCE(n.workspace_id,c.workspace_id,d.workspace_id) AS workspace_id,
+        COALESCE(n.channel_id,m.channel_id) AS channel_id,COALESCE(n.message_id,p.message_id) AS source_message_id,
+        n.read_at,n.kind,s.user_id AS subscriber_id,s.session_hash,s.endpoint,s.p256dh,s.auth,
+        d.session_hash AS diagnostic_session,d.status AS diagnostic_status,d.created_at AS diagnostic_created
+        FROM push_outbox p JOIN push_subscriptions s ON s.id=p.subscription_id
+        LEFT JOIN notifications n ON n.id=p.notification_id LEFT JOIN messages m ON m.id=p.message_id
+        LEFT JOIN channels c ON c.id=m.channel_id LEFT JOIN push_diagnostics d ON d.id=p.diagnostic_id WHERE p.id=?`,
         queued.id,
       );
       if (!job) continue;
+      const diagnostic = Boolean(job.diagnostic_id);
+      const failDiagnostic = (reason: string) => {
+        if (diagnostic)
+          repo.run(
+            "UPDATE push_diagnostics SET status='failed',reason_code=?,updated_at=? WHERE id=? AND status='queued'",
+            reason,
+            now(),
+            job.diagnostic_id,
+          );
+      };
+      const drop = (reason: string) => {
+        failDiagnostic(reason);
+        repo.run("DELETE FROM push_outbox WHERE id=?", job.id);
+        recordPushOutcome(repo, "suppressed");
+      };
       const session = repo.session(job.session_hash);
+      const member =
+        job.workspace_id && repo.member(job.user_id, job.workspace_id);
       if (
         !session ||
         session.id !== job.user_id ||
         job.subscriber_id !== job.user_id ||
-        requiresVerification(session) ||
-        job.read_at ||
-        !repo.canAccessChannel(job.user_id, job.channel_id, job.workspace_id) ||
+        session.suspended_at ||
+        !member ||
+        member.membership_suspended_at ||
+        member.membership_removed_at ||
+        repo.workspace(job.workspace_id).suspended ||
+        requiresVerification({ ...session, workspace_id: job.workspace_id })
+      ) {
+        drop("ACCESS_REVOKED");
+        continue;
+      }
+      if (
         !repo.get(
           "SELECT 1 FROM notification_preferences WHERE user_id=? AND push_enabled=1",
           job.user_id,
         )
       ) {
-        repo.run("DELETE FROM push_outbox WHERE id=?", job.id);
+        drop("PUSH_DISABLED");
         continue;
       }
+      if (diagnostic) {
+        if (
+          job.diagnostic_status !== "queued" ||
+          job.diagnostic_session !== job.session_hash ||
+          session.workspace_id !== job.workspace_id
+        ) {
+          drop("DEVICE_CHANGED");
+          continue;
+        }
+        if (now() - job.diagnostic_created >= 300000) {
+          drop("TEST_EXPIRED");
+          continue;
+        }
+      } else {
+        if (
+          job.read_at ||
+          !repo.canAccessChannel(
+            job.user_id,
+            job.channel_id,
+            job.workspace_id,
+          ) ||
+          !notificationAllowed(
+            repo,
+            job.user_id,
+            job.workspace_id,
+            job.channel_id,
+            Boolean(job.notification_id),
+            now(),
+          )
+        ) {
+          drop("SUPPRESSED");
+          continue;
+        }
+        if (
+          !job.notification_id &&
+          repo.get(
+            "SELECT 1 FROM messages m JOIN message_order o ON o.message_id=m.id JOIN channel_reads r ON r.channel_id=m.channel_id AND r.user_id=? WHERE m.id=? AND o.sequence<=r.last_rowid",
+            job.user_id,
+            job.source_message_id,
+          )
+        ) {
+          drop("ALREADY_READ");
+          continue;
+        }
+      }
+      if (diagnostic)
+        repo.run(
+          "UPDATE push_diagnostics SET attempts=?,updated_at=? WHERE id=?",
+          job.attempts + 1,
+          now(),
+          job.diagnostic_id,
+        );
       try {
         await sendPush(
           {
             endpoint: job.endpoint,
             keys: { p256dh: job.p256dh, auth: job.auth },
           },
-          JSON.stringify({
-            title: "Mola",
-            body: "Yeni bir bildirimin var.",
-            url: `/?workspace=${job.workspace_id}&message=${job.message_id}`,
-            tag: job.notification_id,
-          }),
+          JSON.stringify(
+            diagnostic
+              ? {
+                  title: "Mola",
+                  body: "Bu cihaz için test bildirimi.",
+                  url: `/?workspace=${job.workspace_id}`,
+                  tag: `mola-push-test:${job.diagnostic_id}`,
+                  test: true,
+                }
+              : {
+                  title: "Mola",
+                  body: "Yeni bir bildirimin var.",
+                  url: `/?workspace=${job.workspace_id}&message=${job.source_message_id}`,
+                  tag: job.notification_id || job.source_message_id,
+                },
+          ),
           { vapidDetails, TTL: 300, timeout: 5000 },
         );
+        if (diagnostic)
+          repo.run(
+            "UPDATE push_diagnostics SET status='providerAccepted',reason_code=NULL,updated_at=? WHERE id=? AND status='queued'",
+            now(),
+            job.diagnostic_id,
+          );
         repo.run("DELETE FROM push_outbox WHERE id=?", job.id);
+        recordPushOutcome(repo, "provider_accepted");
       } catch (error) {
         const status = (error as { statusCode?: number } | null)?.statusCode;
-        if (status === 404 || status === 410)
+        const detail = error as {
+          code?: string;
+          name?: string;
+          message?: string;
+        } | null;
+        const category =
+          status === 404 || status === 410
+            ? "subscription_expired"
+            : status === 400 || status === 401 || status === 403
+              ? "provider_rejected"
+              : status === 429
+                ? "provider_throttled"
+                : status === 408 ||
+                    detail?.name === "AbortError" ||
+                    ["ETIMEDOUT", "ESOCKETTIMEDOUT"].includes(
+                      detail?.code || "",
+                    ) ||
+                    /timeout|timed out/i.test(detail?.message || "")
+                  ? "provider_timeout"
+                  : status && status >= 500
+                    ? "provider_5xx"
+                    : "network_error";
+        const code = {
+          subscription_expired: "SUBSCRIPTION_EXPIRED",
+          provider_rejected: "PROVIDER_REJECTED",
+          provider_throttled: "PROVIDER_THROTTLED",
+          provider_timeout: "PROVIDER_TIMEOUT",
+          provider_5xx: "PROVIDER_UNAVAILABLE",
+          network_error: "NETWORK_ERROR",
+        }[category];
+        recordPushOutcome(repo, category, now());
+        if (diagnostic)
+          repo.run(
+            "UPDATE push_diagnostics SET reason_code=?,last_failure_code=?,last_failure_at=?,updated_at=? WHERE id=? AND status='queued'",
+            code,
+            code,
+            now(),
+            now(),
+            job.diagnostic_id,
+          );
+        if (status === 404 || status === 410) {
+          failDiagnostic("SUBSCRIPTION_EXPIRED");
           repo.run(
             "DELETE FROM push_subscriptions WHERE id=?",
             job.subscription_id,
           );
-        else if (job.attempts >= 4)
+        } else if (
+          status === 400 ||
+          status === 401 ||
+          status === 403 ||
+          job.attempts >= 4
+        ) {
+          failDiagnostic(
+            job.attempts >= 4 ? "RETRY_EXHAUSTED" : "PROVIDER_REJECTED",
+          );
           repo.run("DELETE FROM push_outbox WHERE id=?", job.id);
-        else
-          repo.run(
+          if (job.attempts >= 4)
+            recordPushOutcome(repo, "retry_exhausted", now());
+        } else {
+          const retry = repo.run(
             "UPDATE push_outbox SET attempts=attempts+1,next_attempt=? WHERE id=?",
-            Date.now() + Math.min(300000, 10000 * 2 ** job.attempts),
+            now() + Math.min(300000, 10000 * 2 ** job.attempts),
             job.id,
           );
+          if (Number(retry.changes))
+            recordPushOutcome(repo, "retry_scheduled", now());
+        }
       }
     }
   };
@@ -616,6 +779,14 @@ export function installCollaborationData(
         });
     return pendingPush;
   };
+  notificationControls = installNotificationControls(app, {
+    repo,
+    io,
+    requirePushContext,
+    requiresVerification,
+    processPush,
+    now,
+  });
   const timer = setInterval(() => void processPush(), 5000);
   timer.unref();
   // The caller owns the transaction; effects are returned for after commit.
@@ -648,6 +819,7 @@ export function installCollaborationData(
         .toLocaleLowerCase("tr-TR");
       names.set(name, (names.get(name) || 0) + 1);
     }
+    const attentionRecipients: string[] = [];
     for (const member of members) {
       const name = member.name
         .normalize("NFKC")
@@ -678,39 +850,66 @@ export function installCollaborationData(
             : isReply
               ? "reply"
               : null;
-      if (!kind) continue;
-      const id = randomUUID();
-      const inserted = repo.run(
-        "INSERT OR IGNORE INTO notifications(id,user_id,workspace_id,channel_id,message_id,kind,created_at) VALUES(?,?,?,?,?,?,?)",
-        id,
-        member.id,
-        message.workspace_id,
-        message.channel_id,
-        message.id,
-        kind,
-        message.created_at,
-      );
+      let notificationId: string | null = null;
+      if (kind) {
+        const id = randomUUID();
+        const inserted = repo.run(
+          "INSERT OR IGNORE INTO notifications(id,user_id,workspace_id,channel_id,message_id,kind,created_at) VALUES(?,?,?,?,?,?,?)",
+          id,
+          member.id,
+          message.workspace_id,
+          message.channel_id,
+          message.id,
+          kind,
+          message.created_at,
+        );
+        if (Number(inserted.changes) !== 1) continue;
+        notificationId = id;
+      }
+      // Historical personal activity is retained even when attention is silenced.
       if (
-        Number(inserted.changes) === 1 &&
+        !notificationAllowed(
+          repo,
+          member.id,
+          message.workspace_id,
+          message.channel_id,
+          Boolean(kind),
+          now(),
+        )
+      )
+        continue;
+      attentionRecipients.push(member.id);
+      if (
         repo.get(
           "SELECT 1 FROM notification_preferences WHERE user_id=? AND push_enabled=1",
           member.id,
         )
-      )
+      ) {
         for (const sub of repo.all(
           "SELECT id FROM push_subscriptions WHERE user_id=?",
           member.id,
-        ))
+        )) {
           repo.run(
-            "INSERT OR IGNORE INTO push_outbox(id,notification_id,subscription_id,next_attempt) SELECT ?,id,?,? FROM notifications WHERE user_id=? AND message_id=?",
+            "INSERT OR IGNORE INTO push_outbox(id,notification_id,subscription_id,next_attempt,message_id) VALUES(?,?,?,?,?)",
             randomUUID(),
+            notificationId,
             sub.id,
-            Date.now(),
-            member.id,
-            message.id,
+            now(),
+            notificationId ? null : message.id,
           );
+        }
+      }
     }
     return () => {
+      for (const userId of attentionRecipients)
+        io.to(`workspace-user:${message.workspace_id}:${userId}`).emit(
+          "notifications:attention",
+          {
+            workspaceId: message.workspace_id,
+            channelId: message.channel_id,
+            messageId: message.id,
+          },
+        );
       for (const member of members) emitState(member.id, message.workspace_id);
       emitState(message.user_id, message.workspace_id);
       void processPush();
@@ -755,14 +954,12 @@ export function installCollaborationData(
     );
     const saved = draft(userId, channelId, parent);
     return () =>
-      io
-        .to(`workspace-user:${workspaceId}:${userId}`)
-        .emit("draft:changed", {
-          workspaceId,
-          channelId,
-          parentId: parent,
-          ...saved,
-        });
+      io.to(`workspace-user:${workspaceId}:${userId}`).emit("draft:changed", {
+        workspaceId,
+        channelId,
+        parentId: parent,
+        ...saved,
+      });
   };
   return {
     state,
@@ -771,6 +968,7 @@ export function installCollaborationData(
     prepareDraftClear,
     emitState,
     flushPush: processPush,
+    getPushMetrics: () => notificationQueueMetrics(repo, now()),
     refreshChannel: (channelId: string) => {
       repo.run(
         "DELETE FROM message_drafts WHERE channel_id=? AND parent_key!='' AND NOT EXISTS(SELECT 1 FROM messages WHERE messages.id=message_drafts.parent_key AND messages.channel_id=message_drafts.channel_id)",
@@ -785,6 +983,7 @@ export function installCollaborationData(
           emitState(member.id, workspaceId);
     },
     cleanup: () => {
+      notificationControls.cleanup();
       repo.run(
         "DELETE FROM message_drafts WHERE parent_key!='' AND NOT EXISTS(SELECT 1 FROM messages WHERE messages.id=message_drafts.parent_key AND messages.channel_id=message_drafts.channel_id)",
       );

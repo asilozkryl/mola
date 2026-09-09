@@ -22,6 +22,10 @@ if (process.argv.includes('--worker')) {
       process.env.NODE_ENV = 'test';
       process.env.TRUST_PROXY = '1';
       process.env.REQUIRE_EMAIL_VERIFICATION = 'false';
+      // Benchmark production quotas, even when invoked from a browser-test shell.
+      delete process.env.MOLA_TEST_API_LIMIT;
+      delete process.env.MOLA_TEST_AUTH_LIMIT;
+      delete process.env.MOLA_TEST_UPLOAD_LIMIT;
       const { createApp } = await import('../server/app.ts');
       const { createWorkspace } = await import('../server/seed.ts');
       const { openDatabase } = await import('../server/db.ts');
@@ -33,8 +37,8 @@ if (process.argv.includes('--worker')) {
           const id = index === 0 ? workspace.userId : randomUUID();
           if (index) runtime.repo.run('INSERT INTO users (id,workspace_id,name,email,password_hash,color,role,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)', id, workspace.workspaceId, `Load user ${index + 1}`, `load-${index + 1}@example.invalid`, null, '#c0e1ad', 'member', '', new Date().toISOString());
           const token = randomBytes(32).toString('hex');
-          runtime.repo.run('INSERT INTO sessions (token_hash,user_id,expires_at) VALUES (?,?,?)', hash(token), id, Date.now() + (config.duration + 300) * 1000);
-          users.push({ id, cookie: `mola_session=${token}`, ip: `198.18.${Math.floor(index / 250)}.${index % 250 + 1}` });
+          runtime.repo.run('INSERT INTO sessions (token_hash,user_id,workspace_id,expires_at) VALUES (?,?,?,?)', hash(token), id, workspace.workspaceId, Date.now() + (config.duration + 300) * 1000);
+          users.push({ id, cookie: `mola_session=${token}`, ip: config.sharedIp ? '198.18.0.1' : `198.18.${Math.floor(index / 250)}.${index % 250 + 1}` });
         }
       });
       const channel = runtime.repo.get("SELECT id FROM channels WHERE workspace_id=? AND kind='text' ORDER BY rowid LIMIT 1", workspace.workspaceId).id;
@@ -83,6 +87,7 @@ if (process.argv.includes('--worker')) {
   const userCount = option('users', 30, 2, 200);
   const targetMessages = option('messages', 1500, userCount, 20000);
   const crash = process.argv.includes('--crash');
+  const sharedIp = process.argv.includes('--shared-ip');
   const outputIndex = process.argv.indexOf('--output');
   const output = resolve(outputIndex < 0 ? 'artifacts/load-latest.json' : process.argv[outputIndex + 1]);
   const directory = await mkdtemp(join(tmpdir(), 'mola-load-'));
@@ -102,7 +107,7 @@ if (process.argv.includes('--worker')) {
   let finished = false;
   try {
     const readyPromise = awaitWorker('ready');
-    child.send({ directory, users: userCount, duration });
+    child.send({ directory, users: userCount, duration, sharedIp });
     const ready = await readyPromise;
     const base = `http://127.0.0.1:${ready.port}`;
     const runId = randomUUID();
@@ -138,7 +143,7 @@ if (process.argv.includes('--worker')) {
       req.once('error', error => { completedRequests++; latencies[kind].push(performance.now() - start); statusCounts.networkError = (statusCounts.networkError || 0) + 1; if (errors.length < 30) errors.push({ kind, error: error.message }); done(); });
       req.end(payload);
     });
-    console.log(`Isolated soak: ${userCount} sessions, ${targetMessages} messages, ${duration}s; no existing data/server is used.`);
+    console.log(`Isolated soak: ${userCount} sessions, ${targetMessages} messages, ${duration}s, ${sharedIp ? 'one shared office IP' : 'one IP per session'}; no existing data/server is used.`);
     await Promise.all(ready.users.map(async (user, index) => {
       const socket = io(base, { transports: ['websocket'], forceNew: true, reconnection: false, timeout: 10000, extraHeaders: { Origin: origin, Cookie: user.cookie, 'X-Forwarded-For': user.ip } });
       sockets.push(socket);
@@ -204,7 +209,7 @@ if (process.argv.includes('--worker')) {
     finished = true;
     const failures = Object.entries(statusCounts).filter(([code]) => !/^2\d\d$/.test(code)).reduce((sum, [, count]) => sum + count, 0);
     const report = {
-      generatedAt: new Date().toISOString(), runId, scenario: { users: userCount, targetMessages, durationSeconds: duration, elapsedSeconds: +(elapsed / 1000).toFixed(2), clientConcurrency: userCount, sourceIPs: 'one synthetic benchmark address per authenticated session via one trusted loopback proxy hop', fixtureSetup: 'isolated temporary SQLite; seeded users and hashed sessions; real HTTP authorization, Origin checks, existing per-IP rate limits and Socket.IO handlers', excludes: ['password hashing throughput', 'TLS/proxy network latency', 'physical devices', 'WebRTC media capacity', 'external networks'] },
+      generatedAt: new Date().toISOString(), runId, scenario: { users: userCount, targetMessages, durationSeconds: duration, elapsedSeconds: +(elapsed / 1000).toFixed(2), clientConcurrency: userCount, sharedIp, sourceIPs: sharedIp ? 'one shared synthetic office address for every authenticated session via one trusted loopback proxy hop' : 'one synthetic benchmark address per authenticated session via one trusted loopback proxy hop', fixtureSetup: 'isolated temporary SQLite; seeded workspace memberships and explicit active-workspace sessions; real HTTP authorization, Origin checks, production user/anonymous/network quotas and Socket.IO handlers', excludes: ['password hashing throughput', 'TLS/proxy network latency', 'physical devices', 'WebRTC media capacity', 'external networks'] },
       host: { node: process.version, os: `${platform()} ${release()}`, logicalCPUs: cpus().length, cpuModel: cpus()[0]?.model },
       http: { requests: completedRequests, statuses: statusCounts, failedRequests: failures, errorRate: completedRequests ? +(failures / completedRequests).toFixed(6) : 1, requestsPerSecond: +(completedRequests / elapsed * 1000).toFixed(2), latencyMs: Object.fromEntries(Object.entries(latencies).map(([kind, values]) => [kind, summarize(values)])), firstErrors: errors },
       broadcasts: { expected: accepted.size * userCount, receivedUnique: notificationSamples, missing, duplicates: duplicateDeliveries, latencyFromPostStartMs: summarize(notificationLatencies), latencySampled: notificationSamples > notificationLatencies.length },

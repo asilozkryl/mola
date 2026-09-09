@@ -1,3 +1,4 @@
+import { restoreLegacyNotificationSchema } from "./notification-migration-fixture.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
@@ -204,12 +205,13 @@ test("v5 profile migration preserves identities, memberships and history and sur
       "Existing history",
       new Date().toISOString(),
     );
+    restoreLegacyNotificationSchema(repo.db);
     repo.db.exec(
       "DROP TABLE message_requests; DROP TABLE draft_attachments; DROP TRIGGER deleted_thread_drafts; DROP TABLE saved_messages; ALTER TABLE users DROP COLUMN job_title; ALTER TABLE users DROP COLUMN bio; ALTER TABLE users DROP COLUMN location; ALTER TABLE users DROP COLUMN avatar_version; PRAGMA user_version=5;",
     );
     repo.close();
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get("PRAGMA user_version")!.user_version, 9);
+    assert.equal(repo.get("PRAGMA user_version")!.user_version, 10);
     assert.equal(repo.member(seed.userId, seed.workspaceId)!.role, "owner");
     assert.equal(
       repo.get("SELECT password_hash FROM users WHERE id=?", seed.userId)!

@@ -4,6 +4,7 @@ import type { Server } from 'socket.io';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { chmodSync, copyFileSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
+import type { notificationQueueMetrics } from './notification-controls.js';
 
 const buckets = [0.005, 0.025, 0.1, 0.5, 1, 5];
 const requests = new Map<string, { count: number; sum: number; buckets: number[] }>();
@@ -21,7 +22,7 @@ export function requestMetrics(req: Request, res: Response, next: NextFunction) 
   next();
 }
 
-export function installOperations(app: Express, options: { db: DatabaseSync; io: Server; dataDir: string; uploadDir: string; production: boolean }) {
+export function installOperations(app: Express, options: { db: DatabaseSync; io: Server; dataDir: string; uploadDir: string; production: boolean; pushMetrics?: () => ReturnType<typeof notificationQueueMetrics> }) {
   const dataDir = resolve(options.dataDir);
   const root = join(dataDir, 'snapshots');
   const tokenFile = resolve(process.env.OPS_TOKEN_FILE || join(dataDir, '.ops-token'));
@@ -112,6 +113,26 @@ export function installOperations(app: Express, options: { db: DatabaseSync; io:
       lines.push(`mola_http_request_duration_seconds_bucket{${labels},le="+Inf"} ${value.count}`);
     }
     const memory = process.memoryUsage();
+    if (options.pushMetrics) {
+      const push = options.pushMetrics();
+      lines.push(
+        "# TYPE mola_push_queued gauge",
+        `mola_push_queued ${push.queued}`,
+        "# TYPE mola_push_oldest_queue_age_seconds gauge",
+        `mola_push_oldest_queue_age_seconds ${push.oldestQueueAgeSeconds}`,
+        "# TYPE mola_push_delivery_total counter",
+      );
+      for (const [outcome, count] of Object.entries(push.outcomes))
+        lines.push(`mola_push_delivery_total{outcome="${outcome}"} ${count}`);
+      lines.push(
+        "# TYPE mola_push_last_failure_timestamp_seconds gauge",
+        `mola_push_last_failure_timestamp_seconds ${push.lastFailureAt || 0}`,
+      );
+      if (push.lastFailureCategory)
+        lines.push(
+          `mola_push_last_failure{category="${push.lastFailureCategory}"} 1`,
+        );
+    }
     try { const disk = statfsSync(dataDir); lines.push(`mola_data_disk_available_bytes ${disk.bavail * disk.bsize}`, `mola_data_disk_total_bytes ${disk.blocks * disk.bsize}`); } catch {}
     let databaseReady = 0;
     try {

@@ -1,3 +1,4 @@
+import { restoreLegacyNotificationSchema } from "./notification-migration-fixture.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
@@ -307,6 +308,7 @@ test("pre-v6 backups without avatar schema remain verifiable and restorable", as
     });
     const path = join(directory, "backups", backup.name);
     const db = new DatabaseSync(join(path, "mola.sqlite"));
+    restoreLegacyNotificationSchema(db);
     db.exec(
       "DROP TABLE message_requests; DROP TABLE draft_attachments; DROP TRIGGER deleted_thread_drafts; DROP TABLE saved_messages; ALTER TABLE users DROP COLUMN job_title; ALTER TABLE users DROP COLUMN bio; ALTER TABLE users DROP COLUMN location; ALTER TABLE users DROP COLUMN avatar_version; PRAGMA user_version=5;",
     );

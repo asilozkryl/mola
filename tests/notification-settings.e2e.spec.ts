@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createECDH, randomBytes } from "node:crypto";
+import AxeBuilder from "@axe-core/playwright";
 
 declare global {
   interface Window {
@@ -217,55 +218,157 @@ for (const capability of ["insecure", "unsupported", "install"] as const) {
   });
 }
 
-test("test notification is explicit, contains generic content and can be retried", async ({
+test("push diagnostic is explicit, retries a request failure and distinguishes provider acceptance from display", async ({
   page,
 }) => {
   await mockNotifications(page);
+  let failing = true,
+    posted = 0,
+    polled = 0;
+  let workspaceId = "";
+  const id = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
+  const result = (state: "queued" | "providerAccepted") => ({
+    id,
+    workspaceId,
+    status: state,
+    attempts: state === "queued" ? 0 : 1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    nextAttemptAt: state === "queued" ? new Date().toISOString() : null,
+    reasonCode: null,
+  });
+  // Browser coverage exercises the API contract; backend coverage injects a fake
+  // provider into the real queue. Never send a diagnostic to an external service.
+  await page.route("**/api/notifications/push-tests{,/**}", async (route) => {
+    if (route.request().method() === "POST") {
+      posted++;
+      expect(route.request().postDataJSON().endpoint).toContain(
+        "mola-settings-",
+      );
+      const headers = route.request().headers();
+      expect(headers["x-user-id"]).toBeTruthy();
+      expect(headers["x-push-session"]).toBeTruthy();
+      workspaceId = headers["x-workspace-id"];
+      expect(workspaceId).toBeTruthy();
+      return route.fulfill(
+        failing
+          ? { status: 503, json: { error: "Test kuyruğuna ulaşılamadı." } }
+          : { status: 202, json: result("queued") },
+      );
+    }
+    polled++;
+    return route.fulfill({
+      json: result(polled > 1 ? "providerAccepted" : "queued"),
+    });
+  });
   await openSettings(page);
   await enableButton(page).click();
   await expect(status(page)).toHaveAttribute("data-state", "enabled");
   expect(await page.evaluate(() => window.__notificationQa.shown)).toEqual([]);
-  await page.evaluate(() => {
-    window.__notificationQa.failTest = true;
-  });
+  expect(posted).toBe(0);
   await page
-    .getByRole("button", { name: "Test bildirimi göster", exact: true })
+    .getByRole("button", { name: "Test bildirimi gönder", exact: true })
     .click();
   await expect(page.getByRole("alert")).toContainText(
-    "Test bildirimi gösterilemedi",
+    "Test kuyruğuna ulaşılamadı",
   );
   await expect(status(page)).toHaveAttribute("data-state", "enabled");
-  await page.evaluate(() => {
-    window.__notificationQa.failTest = false;
-  });
+  failing = false;
   await page
-    .getByRole("button", { name: "Test bildirimi göster", exact: true })
+    .getByRole("button", { name: "Test bildirimi gönder", exact: true })
     .click();
-  await expect(page.locator(".notification-success")).toContainText(
-    "Test bildirimi tarayıcıya gönderildi",
+  await expect(page.locator(".notification-diagnostic")).toHaveAttribute(
+    "data-state",
+    "queued",
   );
-  const shown = await page.evaluate(() => window.__notificationQa.shown);
-  expect(shown).toHaveLength(1);
-  expect(shown[0]).toMatchObject({
-    title: "Mola · Test bildirimi",
-    options: {
-      body: "Bu cihazda bildirim görünümünü test ediyorsun.",
-      data: { test: true },
-    },
-  });
-  expect(new URL(shown[0].options!.data.url).search).toBe("");
+  await expect(page.locator(".notification-diagnostic")).toHaveAttribute(
+    "data-state",
+    "providerAccepted",
+  );
+  await expect(page.locator(".notification-diagnostic")).toContainText(
+    "anlamına gelmez",
+  );
+  expect(posted).toBe(2);
+  expect(await page.evaluate(() => window.__notificationQa.shown)).toEqual([]);
   await page.screenshot({
     path: test.info().outputPath("notification-status-desktop.png"),
   });
-  await page.setViewportSize({ width: 390, height: 844 });
+  const accessibility = await new AxeBuilder({ page })
+    .include("dialog[open]")
+    .analyze();
+  expect(
+    accessibility.violations.filter((item) =>
+      ["serious", "critical"].includes(item.impact || ""),
+    ),
+  ).toEqual([]);
+  await page.setViewportSize({ width: 320, height: 740 });
   await page.screenshot({
     path: test.info().outputPath("notification-status-mobile.png"),
   });
+  await page.locator(".notification-diagnostic").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: test.info().outputPath("notification-diagnostic-mobile.png"),
+  });
+  expect(
+    await page
+      .getByRole("dialog", { name: "Bildirimler ve uygulama" })
+      .evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true);
+  const mobileAccessibility = await new AxeBuilder({ page })
+    .include("dialog[open]")
+    .analyze();
+  expect(
+    mobileAccessibility.violations.filter((item) =>
+      ["serious", "critical"].includes(item.impact || ""),
+    ),
+  ).toEqual([]);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Bildirimler ve uygulama" }),
+  ).toHaveCount(0);
+});
+
+test("closing a queued diagnostic stops status polling", async ({ page }) => {
+  await mockNotifications(page);
+  let gets = 0;
+  await page.route("**/api/notifications/push-tests{,/**}", (route) => {
+    if (route.request().method() === "GET") gets++;
+    return route.fulfill({
+      status: route.request().method() === "POST" ? 202 : 200,
+      json: {
+        id: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+        workspaceId: route.request().headers()["x-workspace-id"],
+        status: "queued",
+        attempts: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        nextAttemptAt: new Date().toISOString(),
+        reasonCode: null,
+      },
+    });
+  });
+  await openSettings(page);
+  await enableButton(page).click();
+  await expect(status(page)).toHaveAttribute("data-state", "enabled");
+  await page
+    .getByRole("button", { name: "Test bildirimi gönder", exact: true })
+    .click();
+  await expect(page.locator(".notification-diagnostic")).toHaveAttribute(
+    "data-state",
+    "queued",
+  );
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Bildirimler ve uygulama" }),
+  ).toHaveCount(0);
+  const closedGets = gets;
+  await page.waitForTimeout(2200);
+  expect(gets).toBe(closedGets);
 });
 
 test("revoked and restored browser consent refreshes an existing endpoint without subscribing again", async ({

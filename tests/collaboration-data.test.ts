@@ -523,7 +523,7 @@ async function pushFixture(
       new Date().toISOString(),
     );
     repo.run(
-      "INSERT INTO push_outbox VALUES(?,?,?,0,?)",
+      "INSERT INTO push_outbox(id,notification_id,subscription_id,attempts,next_attempt) VALUES(?,?,?,0,?)",
       id,
       notificationId,
       subscriptionId,

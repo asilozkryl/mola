@@ -1,3 +1,4 @@
+import { restoreLegacyNotificationSchema } from "./notification-migration-fixture.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes, randomUUID, scryptSync } from "node:crypto";
@@ -871,6 +872,7 @@ test("v7 migration preserves device and push foreign keys, keeps explicit accoun
       "created",
     );
     // Reconstruct the actual v6 session relation and legacy NULL trigger.
+    restoreLegacyNotificationSchema(repo.db);
     repo.db.exec(`PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE;
       DROP TRIGGER initial_session_workspace;
       CREATE TABLE sessions_old(token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires_at INTEGER NOT NULL,workspace_id TEXT REFERENCES workspaces(id) ON DELETE CASCADE);
@@ -881,7 +883,7 @@ test("v7 migration preserves device and push foreign keys, keeps explicit accoun
       ALTER TABLE workspace_members DROP COLUMN left_at; DROP TABLE sidebar_preferences; DROP TABLE message_requests; DROP TABLE draft_attachments; DROP TRIGGER deleted_thread_drafts; DROP TABLE saved_messages; PRAGMA user_version=6; COMMIT; PRAGMA foreign_keys=ON;`);
     repo.close();
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get("PRAGMA user_version")!.user_version, 9);
+    assert.equal(repo.get("PRAGMA user_version")!.user_version, 10);
     assert.equal(repo.session(token)!.workspace_id, alpha.workspaceId);
     assert.equal(
       repo.get("SELECT device FROM session_devices WHERE token_hash=?", token)!

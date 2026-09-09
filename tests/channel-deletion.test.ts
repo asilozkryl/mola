@@ -105,7 +105,7 @@ test('deletion cascades channel history and queued work, removes attached files 
   const notificationId = randomUUID(); const subscriptionId = randomUUID();
   runtime.repo.run('INSERT INTO notifications VALUES (?,?,?,?,?,?,?,?)', notificationId, member.id, owner.workspaceId, id, reply.id, 'mention', now, null);
   runtime.repo.run('INSERT INTO push_subscriptions VALUES (?,?,?,?,?,?,?)', subscriptionId, member.id, member.hash, `https://updates.push.services.mozilla.com/wpush/v2/${randomUUID()}`, 'key', 'auth', now);
-  runtime.repo.run('INSERT INTO push_outbox VALUES (?,?,?,?,?)', randomUUID(), notificationId, subscriptionId, 0, Date.now() + 600_000);
+  runtime.repo.run('INSERT INTO push_outbox(id,notification_id,subscription_id,attempts,next_attempt) VALUES (?,?,?,?,?)', randomUUID(), notificationId, subscriptionId, 0, Date.now() + 600_000);
   const createdIntegration = await request(owner, '/integrations', 'POST', { channelId: id, name: 'Channel bot', kind: 'webhook' });
   assert.equal(createdIntegration.status, 201);
   const integration = await createdIntegration.json();

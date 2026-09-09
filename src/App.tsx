@@ -136,6 +136,7 @@ import {
 } from "./components/DirectConversation";
 import IntegrationsDialog from "./components/IntegrationsDialog";
 import { NotificationSettings } from "./components/NotificationSettings";
+import { ChannelNotificationPreferences } from "./components/NotificationPreferencesPanel";
 import type { NotificationState } from "../shared/collaboration-types";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ProfileIdentity } from "./components/ProfileIdentity";
@@ -287,6 +288,13 @@ export default function App() {
     "text",
   );
   const [channelAccess, setChannelAccess] = useState<Channel | null>(null);
+  const [notificationSettingsRevision, setNotificationSettingsRevision] =
+    useState(0);
+  const [channelNotifications, setChannelNotifications] = useState<{
+    channelId: string;
+    workspaceId: string;
+    userId: string;
+  } | null>(null);
   const [channelMenu, setChannelMenu] = useState<{
     channelId: string;
     position: ContextMenuPosition;
@@ -398,6 +406,7 @@ export default function App() {
         setCallSetupChannel(null);
         setCallSwitchTarget(null);
         setChannelAccess(null);
+        setChannelNotifications(null);
         setChannelMenu(null);
         setChannelAction(null);
         setVoicePreviewId(null);
@@ -454,6 +463,7 @@ export default function App() {
         setCallSetupChannel(null);
         setCallSwitchTarget(null);
         setChannelAccess(null);
+        setChannelNotifications(null);
         setChannelMenu(null);
         setChannelAction(null);
         setVoicePreviewId(null);
@@ -923,10 +933,52 @@ export default function App() {
               60,
             );
         }
-      } else if (message.userId !== data.user.id) {
-        if (!quietRef.current) notify("Diğer bir sohbette yeni bir mesaj var.");
       }
     });
+    client.on(
+      "notifications:attention",
+      (attention: {
+        workspaceId: string;
+        channelId: string;
+        messageId: string;
+      }) => {
+        const current = dataRef.current;
+        if (
+          disposed ||
+          !current ||
+          current.user.id !== data.user.id ||
+          current.workspace.id !== workspaceId ||
+          attention.workspaceId !== workspaceId ||
+          quietRef.current
+        )
+          return;
+        if (
+          !current.channels.some(
+            (candidate) => candidate.id === attention.channelId,
+          )
+        )
+          return;
+        if (
+          attention.channelId === channelRef.current &&
+          viewRef.current === "channel" &&
+          tabRef.current === "chat"
+        )
+          return;
+        notify("Diğer bir sohbette yeni bir mesaj var.");
+      },
+    );
+    client.on(
+      "notification-settings:changed",
+      ({ workspaceId: changedWorkspaceId }: { workspaceId: string }) => {
+        if (
+          !disposed &&
+          dataRef.current?.user.id === data.user.id &&
+          dataRef.current?.workspace.id === workspaceId &&
+          changedWorkspaceId === workspaceId
+        )
+          setNotificationSettingsRevision((value) => value + 1);
+      },
+    );
     client.on("message:updated", (message: Message) => {
       setMessages((old) => old.map((m) => (m.id === message.id ? message : m)));
       setReplies((old) => old.map((m) => (m.id === message.id ? message : m)));
@@ -1591,6 +1643,13 @@ export default function App() {
           (candidate) => candidate.id === channelAction?.channel.id,
         )
       : undefined;
+  const notificationChannel =
+    channelNotifications?.workspaceId === data?.workspace.id &&
+    channelNotifications?.userId === data?.user.id
+      ? data?.channels.find(
+          (candidate) => candidate.id === channelNotifications?.channelId,
+        )
+      : undefined;
   function openChannelMenu(
     target: Channel,
     anchor: HTMLElement,
@@ -1706,6 +1765,19 @@ export default function App() {
           icon: <Check size={16} />,
           disabled: menuChannel.archived,
           onSelect: () => void markChannelRead(menuChannel),
+        },
+        {
+          label: "Bildirim tercihleri",
+          icon: <Bell size={16} />,
+          onSelect: () => {
+            if (!data) return;
+            setDialog(null);
+            setChannelNotifications({
+              channelId: menuChannel.id,
+              workspaceId: data.workspace.id,
+              userId: data.user.id,
+            });
+          },
         },
         ...(menuChannel.kind !== "dm" && !menuChannel.archived
           ? [
@@ -3734,8 +3806,34 @@ export default function App() {
         <NotificationSettings
           key={`${data.user.id}:${data.workspace.id}`}
           userId={data.user.id}
+          workspaceId={data.workspace.id}
+          workspaceName={data.workspace.name}
+          channels={data.channels}
+          members={data.members}
+          revision={notificationSettingsRevision}
           onClose={() => setDialog(null)}
         />
+      )}
+      {notificationChannel && (
+        <Modal
+          title="Kanal bildirimleri"
+          onClose={() => setChannelNotifications(null)}
+        >
+          <ChannelNotificationPreferences
+            key={`${data.user.id}:${data.workspace.id}:${notificationChannel.id}`}
+            userId={data.user.id}
+            workspaceId={data.workspace.id}
+            channelId={notificationChannel.id}
+            channelName={
+              conversationIdentity(
+                notificationChannel,
+                data.user.id,
+                data.members,
+              ).name
+            }
+            revision={notificationSettingsRevision}
+          />
+        </Modal>
       )}
       {dialog === "channel" && (
         <CreateChannel

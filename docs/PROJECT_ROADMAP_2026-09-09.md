@@ -6,6 +6,8 @@
 
 Bu belge ilk incelemenin bulgularını ve uygulama sırasını korur. Aşağıdaki kanıtlar belirtilen başlangıç commit'ine aittir; ilk uygulama turunun güncel kapsamı ve doğrulaması [ilk paket kaydında](FIRST_IMPROVEMENT_PACKAGE.md) izlenir. R03 ve R06 uygulaması [ikinci paket kaydında](SECOND_IMPROVEMENT_PACKAGE.md), R07 ve R08 ise [üçüncü paket kaydında](THIRD_IMPROVEMENT_PACKAGE.md) yer alır. R04 listeler/arama/geçmiş ve ortak dosya önizlemesi [dördüncü paket kaydında](FOURTH_IMPROVEMENT_PACKAGE.md) izlenir. İnceleme kaynak kod, testler, CI sonuçları, mevcut tasarım/işletim belgeleri ve yerel arayüz üzerinden yapıldı. Canlı altyapı, gerçek kullanıcı verileri ve fiziksel cihazlar bu tur denetlenmedi. Bu çalışma tam bir güvenlik testi değildir.
 
+R09/R10 bildirim tercihleri ve gerçek push teşhisi ile R17 ortak ofis kapasitesi [beşinci paket kaydında](FIFTH_IMPROVEMENT_PACKAGE.md) izlenir.
+
 ## 1. Mevcut durum ve kanıt
 
 | Alan                     | Mevcut olanlar                                                                                        | Sonraki ihtiyaç                                                                |

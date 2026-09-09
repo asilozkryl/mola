@@ -31,6 +31,7 @@ import { installSavedMessages } from './saved-messages.js';
 import { installCollections } from './collections.js';
 import { AttachmentUnavailableError, installReliableMessages } from './message-reliability.js';
 import type { SessionBootstrap, Message } from '../shared/types.js';
+import { createRequestLimits } from './request-limits.js';
 
 declare global { namespace Express { interface Request { auth?: Row; sessionHash?: string; } } }
 
@@ -90,9 +91,6 @@ export function createApp(options: AppOptions = {}) {
   const testAuthLimit = process.env.MOLA_TEST_AUTH_LIMIT?.trim() || '';
   const requestedTestLimit = /^\d+$/.test(testAuthLimit) ? Number(testAuthLimit) : Number.NaN;
   const authLimit = !production && process.env.NODE_ENV === 'test' && Number.isInteger(requestedTestLimit) && requestedTestLimit >= 20 && requestedTestLimit <= 500 ? requestedTestLimit : 20;
-  const testApiLimit = process.env.MOLA_TEST_API_LIMIT?.trim() || '';
-  const requestedTestApiLimit = /^\d+$/.test(testApiLimit) ? Number(testApiLimit) : Number.NaN;
-  const apiLimit = !production && process.env.NODE_ENV === 'test' && Number.isInteger(requestedTestApiLimit) && requestedTestApiLimit >= 300 && requestedTestApiLimit <= 5000 ? requestedTestApiLimit : 300;
   const testUploadLimit = process.env.MOLA_TEST_UPLOAD_LIMIT?.trim() || '';
   const requestedTestUploadLimit = /^\d+$/.test(testUploadLimit) ? Number(testUploadLimit) : Number.NaN;
   const uploadLimit = !production && process.env.NODE_ENV === 'test' && Number.isInteger(requestedTestUploadLimit) && requestedTestUploadLimit >= 12 && requestedTestUploadLimit <= 500 ? requestedTestUploadLimit : 12;
@@ -108,6 +106,7 @@ export function createApp(options: AppOptions = {}) {
   try { mail = createMailService(repo, { production, dataDir, origin, mailTransport: options.mailTransport, mailEncryptionKey: options.mailEncryptionKey }); }
   catch (error) { db.close(); throw error; }
   const app = express();
+  const requestLimits = createRequestLimits({ production, resolveUserId: req => findSession(req.cookies?.[COOKIE])?.id });
   const server = createServer(app);
   const io = new Server(server, { maxHttpBufferSize: 256 * 1024, serveClient: false, cors: { origin: [...allowedOrigins], credentials: true }, allowRequest: (req, callback) => callback(null, Boolean(req.headers.origin && allowedOrigins.has(req.headers.origin))) });
   const integrations = createIntegrations({repo,io,key:featureKey,origin,onMessageCreated:id=>collaborationData.onMessageCreated(id)});
@@ -129,11 +128,12 @@ export function createApp(options: AppOptions = {}) {
   });
   app.use((_req, res, next) => { res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self), geolocation=()'); next(); });
   app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'blob:'], mediaSrc: ["'self'", 'blob:'], connectSrc: ["'self'", 'blob:', origin.replace(/^http/, 'ws')], objectSrc: ["'none'"], workerSrc: ["'self'"], frameAncestors: ["'none'"], upgradeInsecureRequests: production ? [] : null } }, crossOriginEmbedderPolicy: false }));
+  app.use('/api', requestLimits.ipGuard);
   integrations.installPublicRoutes(app);
   app.use(express.json({ limit: '96kb' }));
   app.use(cookieParser());
   app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
-  app.use('/api', rateLimit({ windowMs: 60_000, limit: apiLimit, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Biraz yavaşlayın; bir dakika sonra yeniden deneyin.' } }));
+  app.use('/api', requestLimits.api);
   app.use('/api', (req, _res, next) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && (!req.headers.origin || !allowedOrigins.has(req.headers.origin))) return next(new HttpError(403, 'İstek kaynağı doğrulanamadı. Sayfayı yenileyip tekrar deneyin.'));
     next();
@@ -141,7 +141,7 @@ export function createApp(options: AppOptions = {}) {
 
   const opsApp = opsPort === undefined ? undefined : express();
   if (opsApp) { opsApp.disable('x-powered-by'); opsApp.use(helmet()); opsApp.use(requestMetrics); }
-  const operations = installOperations(opsApp || app, { db, io, dataDir, uploadDir, production });
+  const operations = installOperations(opsApp || app, { db, io, dataDir, uploadDir, production, pushMetrics: () => collaborationData.getPushMetrics() });
   if (opsApp) {
     opsApp.use((_req, res) => { res.status(404).json({ error: 'Not found.' }); });
     opsApp.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
