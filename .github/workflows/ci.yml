@@ -8,7 +8,7 @@ concurrency:
   group: validate-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  validate:
+  core:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -29,6 +29,70 @@ jobs:
           node --test scripts/check-turn-wan.test.mjs
       - run: npm audit --omit=dev --audit-level=high
       - run: npx playwright install --with-deps chromium
+      - run: npm run test:auth
+      - run: npm run test:admin
+      - name: Validate monitoring rules
+        run: docker run --rm --entrypoint /bin/promtool -v "$PWD/ops:/etc/prometheus:ro" prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0 test rules /etc/prometheus/alerts.test.yml
+      - name: Validate alert routing
+        run: docker run --rm --entrypoint /bin/amtool -v "$PWD/ops:/etc/alertmanager:ro" prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d check-config /etc/alertmanager/alertmanager.local.yml /etc/alertmanager/alertmanager.yml /etc/alertmanager/alertmanager-disabled.yml
+      - run: docker build --tag mola:ci .
+      - name: Verify Coolify deployment package in an isolated stack
+        run: npm run check:coolify
+      - name: Verify Coolify with email and relay setup deferred
+        run: npm run check:coolify -- --deferred
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: core-validation-report
+          path: |
+            test-results/
+            artifacts/coolify-smoke.json
+            artifacts/coolify-deferred-smoke.json
+          retention-days: 3
+          if-no-files-found: ignore
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.20.0
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Validate browser workflows (shard ${{ matrix.shard }}/2)
+        run: npm run test:e2e -- --grep-invert 'six distinct members sustain a full mesh' --shard=${{ matrix.shard }}/2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: browser-report-${{ matrix.shard }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 3
+          if-no-files-found: ignore
+
+  media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.20.0
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - name: Validate six-member media and recovery
         run: |
           mkdir -p artifacts
@@ -43,29 +107,31 @@ jobs:
           media_sampler=$!
           trap 'kill "$media_sampler" 2>/dev/null || true' EXIT
           npm run test:e2e -- tests/resilience.e2e.spec.ts
-      - name: Validate remaining browser workflows
-        run: npm run test:e2e -- --grep-invert 'six distinct members sustain a full mesh'
-      - run: npm run test:auth
-      - run: npm run test:admin
-      - name: Validate monitoring rules
-        run: docker run --rm --entrypoint /bin/promtool -v "$PWD/ops:/etc/prometheus:ro" prom/prometheus:v3.14.0@sha256:5ce7540c3c00ef4ab0c9d2c995c6a5b9c421f44b4a115d97a2c7af3b1c21cbb0 test rules /etc/prometheus/alerts.test.yml
-      - name: Validate alert routing
-        run: docker run --rm --entrypoint /bin/amtool -v "$PWD/ops:/etc/alertmanager:ro" prom/alertmanager:v0.34.0@sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d check-config /etc/alertmanager/alertmanager.local.yml /etc/alertmanager/alertmanager.yml /etc/alertmanager/alertmanager-disabled.yml
-      - run: docker build --tag mola:ci .
-      - name: Verify Coolify deployment package in an isolated stack
-        run: npm run check:coolify
-      - name: Verify Coolify with email and relay setup deferred
-        run: npm run check:coolify -- --deferred
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: failure()
+        if: always()
         with:
-          name: browser-failure-report
+          name: media-validation-report
           path: |
             playwright-report/
             test-results/
-            artifacts/coolify-smoke.json
-            artifacts/coolify-deferred-smoke.json
             artifacts/media-mesh-*.json
             artifacts/media-processes.log
           retention-days: 3
           if-no-files-found: ignore
+
+  validate:
+    if: always()
+    needs: [core, browser, media]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every validation job to succeed
+        env:
+          CORE_RESULT: ${{ needs.core.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          MEDIA_RESULT: ${{ needs.media.result }}
+        run: |
+          printf 'core=%s browser=%s media=%s\n' "$CORE_RESULT" "$BROWSER_RESULT" "$MEDIA_RESULT"
+          if [ "$CORE_RESULT" != success ] || [ "$BROWSER_RESULT" != success ] || [ "$MEDIA_RESULT" != success ]; then
+            exit 1
+          fi

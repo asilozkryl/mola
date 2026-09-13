@@ -124,6 +124,13 @@ screen sharing and mobile controls.
   transitions until the new colors are painted together; normal interaction
   transitions resume afterward.
 
+CI runs the general browser suite on two independent runners, with the six-member
+media test isolated on its own runner. Server/auth/admin/deployment checks run
+independently. The final `validate` check requires every job to succeed. This
+preserves all 230 scenarios and their per-test limits while avoiding the former
+single job's 30-minute ceiling; the first migration CI run completed 200 browser
+scenarios successfully before reaching that total time limit.
+
 The build's existing 500 kB chunk advisory remains: the main JavaScript bundle
 is 944.49 kB (281.23 kB gzip). PDF rendering remains a separate lazy-loaded chunk.
 This is a bundle-size advisory, not a build failure.
