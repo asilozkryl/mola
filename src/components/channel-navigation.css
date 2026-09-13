@@ -18,7 +18,7 @@
   top: 2px;
 }
 .channel-nav-row:hover {
-  background: #e8eddf;
+  background: var(--secondary);
 }
 .sidebar .channel-row-menu {
   opacity: 0;
@@ -27,7 +27,7 @@
   min-width: 30px;
   min-height: 30px;
   border-radius: 5px;
-  color: #566d58;
+  color: var(--muted-foreground);
 }
 .sidebar .channel-nav-row:hover .channel-row-menu,
 .sidebar .voice-channel-row:hover .channel-row-menu,
@@ -37,7 +37,7 @@
   opacity: 1;
 }
 .sidebar .channel-row-menu:hover {
-  background: #d8e4d1;
+  background: var(--accent);
 }
 .voice-channel-row > .channel-nav {
   min-width: 0;
@@ -52,7 +52,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #687052;
+  color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 600;
   margin-left: 9px;
@@ -69,7 +69,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid #e3e9df;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px;
 }
@@ -86,7 +86,7 @@
   overflow-wrap: anywhere;
 }
 .archive-channel-row small {
-  color: #66716b;
+  color: var(--muted-foreground);
   font-size: 11px;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -96,7 +96,7 @@
 }
 .archive-empty {
   padding: 20px 0;
-  color: #66716b;
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.6;
 }

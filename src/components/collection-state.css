@@ -5,10 +5,10 @@
   margin: 24px;
   padding: 18px;
   max-width: 620px;
-  border: 1px solid #e3d7ce;
+  border: 1px solid var(--danger-border);
   border-radius: 9px;
-  background: #fcf9f5;
-  color: #79513a;
+  background: var(--muted);
+  color: var(--destructive);
 }
 .collection-error > svg {
   margin-top: 2px;
@@ -20,7 +20,7 @@
 .collection-error h2 {
   font-size: 14px;
   line-height: 1.5;
-  color: #293730;
+  color: var(--foreground);
 }
 .collection-error p {
   margin-top: 5px;

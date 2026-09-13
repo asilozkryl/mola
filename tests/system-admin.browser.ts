@@ -66,6 +66,7 @@ async function loginAndOpen(page: Page) {
     await page
       .getByRole("button", { name: "Profil ayarları", exact: true })
       .click();
+    await page.getByRole("tab", { name: "Çalışma alanı", exact: true }).click();
     await page
       .getByRole("button", { name: "Yönetim panelini aç", exact: true })
       .click();

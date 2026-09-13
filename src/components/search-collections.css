@@ -11,10 +11,10 @@
   max-width: 100%;
   overflow-wrap: anywhere;
   padding: 4px 7px;
-  background: #f0f5f2;
+  background: var(--muted);
   border-radius: 5px;
   font-size: 11px;
-  color: #38594a;
+  color: var(--primary);
 }
 .search-result-files svg {
   flex-shrink: 0;
@@ -25,8 +25,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px;
-  background: #fff7f3;
-  color: #8c452c;
+  background: var(--muted);
+  color: var(--destructive);
   border-radius: 6px;
 }
 .search-load-error p {
@@ -45,7 +45,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  color: #8c452c;
+  color: var(--destructive);
   font-size: 12px;
   padding: 12px;
 }

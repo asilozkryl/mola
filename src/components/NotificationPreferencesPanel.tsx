@@ -1,3 +1,6 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Bell, Clock3, Moon, RefreshCw, Search } from "lucide-react";
 import type { Channel, User } from "../../shared/types";
@@ -264,15 +267,33 @@ function MuteControls({
         role="group"
         aria-label={label}
       >
-        <button type="button" disabled={busy} onClick={() => onMute("30m")}>
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="button"
+          disabled={busy}
+          onClick={() => onMute("30m")}
+        >
           30 dakika
-        </button>
-        <button type="button" disabled={busy} onClick={() => onMute("1h")}>
+        </Button>
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="button"
+          disabled={busy}
+          onClick={() => onMute("1h")}
+        >
           1 saat
-        </button>
-        <button type="button" disabled={busy} onClick={() => onMute("today")}>
+        </Button>
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="button"
+          disabled={busy}
+          onClick={() => onMute("today")}
+        >
           Gün sonuna kadar
-        </button>
+        </Button>
       </div>
       <p className="notification-preference-help">
         Gün sonu için saat dilimi: {timeZone}.
@@ -282,9 +303,15 @@ function MuteControls({
           <span>
             {muteLabel(mutedUntil, timeZone)} tarihine kadar susturuldu.
           </span>
-          <button type="button" disabled={busy} onClick={() => onMute(null)}>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="button"
+            disabled={busy}
+            onClick={() => onMute(null)}
+          >
             Susturmayı kaldır
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -369,7 +396,8 @@ function QuietHoursForm({
         <div className="notification-quiet-fields">
           <label>
             Başlangıç saati
-            <input
+            <Input
+              unstyled
               type="time"
               required
               value={form.start}
@@ -381,7 +409,8 @@ function QuietHoursForm({
           </label>
           <label>
             Bitiş saati
-            <input
+            <Input
+              unstyled
               type="time"
               required
               value={form.end}
@@ -393,7 +422,8 @@ function QuietHoursForm({
           </label>
           <label className="notification-time-zone">
             Saat dilimi
-            <input
+            <Input
+              unstyled
               list={`${id}-zones`}
               value={form.timeZone}
               required
@@ -412,14 +442,16 @@ function QuietHoursForm({
           </label>
         </div>
         {form.timeZone !== localZone() && (
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             className="notification-use-local-zone"
             disabled={busy}
             onClick={() => setForm({ ...form, timeZone: localZone() })}
           >
             Cihazımın saat dilimini kullan ({localZone()})
-          </button>
+          </Button>
         )}
         {form.enabled && form.start > form.end && (
           <p className="notification-preference-help">
@@ -438,15 +470,19 @@ function QuietHoursForm({
           </p>
         )}
         <div className="notification-quiet-actions">
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             className="notification-preference-save"
             type="submit"
             disabled={busy || !dirty || Boolean(error)}
           >
             {busy ? "Kaydediliyor…" : "Sessiz saatleri kaydet"}
-          </button>
+          </Button>
           {dirty && (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               type="button"
               disabled={busy}
               onClick={() => {
@@ -455,7 +491,7 @@ function QuietHoursForm({
               }}
             >
               Değişiklikleri geri al
-            </button>
+            </Button>
           )}
         </div>
       </form>
@@ -475,9 +511,15 @@ function ResourceError({
   return (
     <div className="notification-preference-error" role="alert">
       <span>{message}</span>
-      <button type="button" disabled={busy} onClick={retry}>
+      <Button
+        variant="unstyled"
+        size="unset"
+        type="button"
+        disabled={busy}
+        onClick={retry}
+      >
         <RefreshCw size={13} aria-hidden="true" /> Tercihleri yeniden yükle
-      </button>
+      </Button>
     </div>
   );
 }
@@ -560,7 +602,8 @@ function WorkspacePreferences(props: PanelProps) {
         <>
           <label className="notification-mode-row">
             <span>Varsayılan bildirimler</span>
-            <select
+            <NativeSelect
+              unstyled
               value={value.defaultMode}
               disabled={saving}
               onChange={(event) =>
@@ -572,7 +615,7 @@ function WorkspacePreferences(props: PanelProps) {
                   {label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <p className="notification-preference-help">
             Bahsetmeler seçeneği sana gelen yanıtları, kanal çağrılarını ve özel
@@ -606,7 +649,8 @@ function WorkspacePreferences(props: PanelProps) {
             </summary>
             <div className="notification-channel-search">
               <Search size={14} aria-hidden="true" />
-              <input
+              <Input
+                unstyled
                 type="search"
                 aria-label="Bildirim tercihlerinde kanal ara"
                 placeholder="Kanal veya kişi ara"
@@ -652,7 +696,8 @@ function WorkspacePreferences(props: PanelProps) {
                         </small>
                       )}
                     </span>
-                    <select
+                    <NativeSelect
+                      unstyled
                       aria-label={`${name} bildirimleri`}
                       value={preference?.mode || "inherit"}
                       disabled={saving}
@@ -669,7 +714,7 @@ function WorkspacePreferences(props: PanelProps) {
                           {label}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                 );
               })}
@@ -739,7 +784,8 @@ function ChannelPreferences(
         <>
           <label className="notification-mode-row">
             <span>Bu kanaldaki bildirimler</span>
-            <select
+            <NativeSelect
+              unstyled
               value={value.mode}
               disabled={saving}
               onChange={(event) => void patch({ mode: event.target.value })}
@@ -750,7 +796,7 @@ function ChannelPreferences(
                   {label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <p className="notification-preference-help">
             {value.mode === "inherit"

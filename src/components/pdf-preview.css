@@ -5,7 +5,7 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  color: #293730;
+  color: var(--accent-foreground);
 }
 .pdf-preview-toolbar {
   display: flex;
@@ -15,8 +15,8 @@
   gap: 8px;
   min-height: 43px;
   padding: 4px 8px;
-  border-bottom: 1px solid #dfe7e2;
-  background: #fff;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
 }
 .pdf-preview-toolbar button {
   display: inline-flex;
@@ -27,11 +27,11 @@
   min-width: 34px;
   padding: 5px 8px;
   border-radius: 5px;
-  color: #245d43;
+  color: var(--primary);
   font-size: 11px;
 }
 .pdf-preview-toolbar button:hover {
-  background: #edf4ef;
+  background: var(--secondary);
 }
 .pdf-preview-toolbar button:disabled {
   opacity: 0.42;
@@ -42,7 +42,7 @@
   flex-shrink: 0;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: #566a5e;
+  color: var(--muted-foreground);
 }
 .pdf-preview-page {
   display: flex;
@@ -78,7 +78,7 @@
   display: grid;
   place-items: center;
   min-width: 190px;
-  color: #566a5e;
+  color: var(--muted-foreground);
 }
 .pdf-preview-loading {
   display: grid;
@@ -86,20 +86,20 @@
   flex: 1;
   min-height: 120px;
   padding: 16px;
-  color: #566a5e;
+  color: var(--muted-foreground);
 }
 .pdf-preview-text {
   flex-shrink: 0;
   min-width: 0;
   max-height: 48%;
   overflow: auto;
-  border-top: 1px solid #dfe7e2;
-  background: #fff;
+  border-top: 1px solid var(--border);
+  background: var(--card);
 }
 .pdf-preview-text summary {
   padding: 10px 12px;
   min-height: 36px;
-  color: #245d43;
+  color: var(--primary);
   font-size: 11px;
   cursor: pointer;
 }
@@ -114,10 +114,10 @@
 .pdf-preview-error {
   margin: 16px;
   padding: 12px;
-  border: 1px solid #ecd6cd;
+  border: 1px solid var(--danger-border);
   border-radius: 6px;
-  background: #fff8f4;
-  color: #8c452c;
+  background: var(--muted);
+  color: var(--destructive);
 }
 .pdf-preview-error p {
   margin: 0 0 10px;
@@ -130,7 +130,7 @@
   gap: 6px;
 }
 .pdf-preview :is(button, summary, [tabindex]):focus-visible {
-  outline: 2px solid #237459;
+  outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
 @media (max-width: 480px) {

@@ -49,7 +49,9 @@ test("voice creation shortcut selects voice and returns to normal text creation 
       (item) => item.name === "Hızlı ses odası",
     )?.kind,
   ).toBe("voice");
-  await page.getByRole("button", { name: "Kanal oluştur", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Kanal oluştur", exact: true })
+    .click();
   await expect(
     dialog.getByRole("button", { name: /Yazılı kanal/ }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -112,7 +114,7 @@ test("room preview shows capacity and privacy without capturing a microphone and
       );
     });
     const accessibility = await new AxeBuilder({ page })
-      .include("dialog[open]")
+      .include('[role="dialog"][aria-modal="true"]')
       .analyze();
     expect(
       accessibility.violations.filter(

@@ -1,7 +1,7 @@
 .composer-ux .composer {
-  border-color: #dce2e4;
+  border-color: var(--border);
   border-radius: 9px;
-  background: #fff;
+  background: var(--card);
   box-shadow: 0 1px 2px #20292b06;
   transition:
     border-color 120ms ease,
@@ -9,7 +9,7 @@
 }
 
 .composer-ux .composer:focus-within {
-  border-color: #237459;
+  border-color: var(--ring);
   box-shadow: 0 0 0 3px #2374590d;
 }
 
@@ -20,11 +20,11 @@
   overflow-y: auto;
   font-size: 13px;
   line-height: 1.6;
-  color: #20292b;
+  color: var(--accent-foreground);
 }
 
 .composer-ux .composer > textarea::placeholder {
-  color: #687176;
+  color: var(--muted-foreground);
 }
 
 .composer-ux .composer.is-sending > textarea {
@@ -45,7 +45,7 @@
   gap: 7px;
   font-size: 11px;
   font-weight: 700;
-  background: #153d36;
+  background: var(--brand-solid);
   border: 1px solid transparent;
   border-radius: 6px;
   transition:
@@ -55,30 +55,30 @@
 }
 
 .composer-ux .send-button:hover:not(:disabled) {
-  background: #237459;
+  background: var(--brand-solid);
   box-shadow: 0 2px 5px #153d3624;
 }
 
 .composer-ux .send-button:active:not(:disabled) {
-  background: #153d36;
+  background: var(--brand-solid);
   box-shadow: none;
 }
 
 .composer-ux .send-button:disabled {
   opacity: 1;
-  color: #687176;
-  background: #f0f3f4;
+  color: var(--muted-foreground);
+  background: var(--muted);
 }
 
 .composer-ux .send-button[aria-busy="true"] {
-  color: #153d36;
-  background: #eaf4ef;
+  color: var(--accent-foreground);
+  background: var(--secondary);
 }
 
 .composer-ux .send-button.is-sent:disabled {
-  color: #237459;
-  background: #eaf4ef;
-  border-color: #d9e9e0;
+  color: var(--primary);
+  background: var(--secondary);
+  border-color: var(--border);
 }
 
 .composer-ux .send-button > svg {
@@ -102,37 +102,37 @@
   width: 32px;
   height: 32px;
   border-radius: 5px;
-  color: #687176;
+  color: var(--muted-foreground);
   transition:
     background-color 100ms ease,
     color 100ms ease;
 }
 
 .composer-ux .composer-tools .icon-button:hover:not(:disabled) {
-  color: #20292b;
-  background: #f0f3f4;
+  color: var(--accent-foreground);
+  background: var(--muted);
 }
 
 .composer-ux .composer-tools .icon-button[aria-pressed="true"] {
-  color: #237459;
-  background: #eaf4ef;
+  color: var(--primary);
+  background: var(--secondary);
 }
 
 .composer-ux .composer-tools .icon-button:focus-visible,
 .composer-ux .send-button:focus-visible {
-  outline: 2px solid #237459;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
 .composer-ux .tool-divider {
-  background: #e2e6e8;
+  background: var(--secondary);
 }
 
 .composer-ux .composer-hint {
   flex-wrap: wrap;
   row-gap: 4px;
   font-size: 10px;
-  color: #687176;
+  color: var(--muted-foreground);
 }
 
 .composer-ux .composer-hint kbd,
@@ -148,8 +148,8 @@
   margin: 8px 10px 0;
   padding: 7px 9px;
   border-radius: 6px;
-  background: #eaf4ef;
-  color: #153d36;
+  background: var(--secondary);
+  color: var(--accent-foreground);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -165,8 +165,8 @@
 }
 
 .composer-ux .composer-feedback.is-error {
-  background: #fff4ed;
-  color: #8c452c;
+  background: var(--danger-surface);
+  color: var(--destructive);
 }
 
 .composer-ux .composer-feedback .icon-button {
@@ -179,14 +179,14 @@
 .composer-ux .composer-attachments > span {
   max-width: min(250px, 100%);
   font-size: 11px;
-  color: #20292b;
-  background: #f5f7f8;
-  border-color: #e2e6e8;
+  color: var(--accent-foreground);
+  background: var(--muted);
+  border-color: var(--border);
 }
 
 .composer-ux .composer-attachments small {
   font-size: 10px;
-  color: #687176;
+  color: var(--muted-foreground);
 }
 
 .composer-ux .composer-attachments > span > span {
@@ -200,9 +200,9 @@
 }
 
 .composer-ux .composer-attachments > span.is-unavailable {
-  color: #8c452c;
-  background: #fff4ed;
-  border-color: #ecd2c4;
+  color: var(--destructive);
+  background: var(--danger-surface);
+  border-color: var(--danger-border);
 }
 
 .composer-ux .composer-attachments > span.is-unavailable small {
@@ -235,16 +235,16 @@
   min-height: 36px;
   flex-shrink: 0;
   padding: 6px 9px;
-  border: 1px solid #dcb59f;
+  border: 1px solid var(--danger-border);
   border-radius: 5px;
-  background: #fff;
-  color: #8c452c;
+  background: var(--card);
+  color: var(--destructive);
   font-size: 11px;
   font-weight: 700;
 }
 
 .composer-ux .delivery-release:focus-visible {
-  outline: 2px solid #8c452c;
+  outline: 2px solid var(--danger-border);
   outline-offset: 2px;
 }
 
@@ -262,7 +262,7 @@
 
 .composer-ux .composer-picker {
   max-width: calc(100% - 20px);
-  border-color: #e2e6e8;
+  border-color: var(--border);
   border-radius: 8px;
   box-shadow: 0 6px 24px #20292b1a;
 }
@@ -288,13 +288,13 @@
   width: 100%;
   min-height: 36px;
   flex-shrink: 0;
-  border: 1px solid #dce5e0;
+  border: 1px solid var(--border);
   border-radius: 5px;
   padding: 7px 9px;
   margin-bottom: 5px;
   font-size: 13px;
-  color: #20292b;
-  background: #fff;
+  color: var(--accent-foreground);
+  background: var(--card);
 }
 
 .composer-ux .mention-options {
@@ -316,11 +316,11 @@
 
 .composer-ux .mention-options > button:hover,
 .composer-ux .mention-options > button:focus-visible {
-  background: #eaf4ef;
+  background: var(--secondary);
 }
 
 .composer-ux .mention-options > button:focus-visible {
-  outline: 2px solid #237459;
+  outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
 
@@ -336,17 +336,17 @@
 
 .composer-ux .mention-options strong {
   font-size: 12px;
-  color: #20292b;
+  color: var(--foreground);
 }
 
 .composer-ux .mention-options small {
   font-size: 11px;
-  color: #586568;
+  color: var(--muted-foreground);
 }
 
 .composer-ux .composer-picker-empty {
   margin: 8px 4px;
-  color: #687176;
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
@@ -360,10 +360,10 @@
   justify-content: center;
   gap: 5px;
   padding: 12px;
-  border: 2px dashed #237459;
+  border: 2px dashed var(--ring);
   border-radius: inherit;
-  background: #eaf4ef;
-  color: #153d36;
+  background: var(--secondary);
+  color: var(--accent-foreground);
   pointer-events: none;
   text-align: center;
   font-size: 12px;
@@ -374,17 +374,17 @@
 }
 
 .composer-ux.composer-direct .composer {
-  border-color: #dce5e0;
+  border-color: var(--border);
   border-radius: 8px;
   box-shadow: none;
 }
 
 .composer-ux.composer-direct .composer.has-content {
-  border-color: #b4c9bd;
+  border-color: var(--border);
 }
 
 .composer-ux.composer-direct .composer:focus-within {
-  border-color: #153d36;
+  border-color: var(--ring);
   box-shadow: 0 0 0 2px #153d3610;
 }
 
@@ -394,7 +394,7 @@
 }
 
 .composer-ux.composer-direct .composer > textarea::placeholder {
-  color: #586568;
+  color: var(--muted-foreground);
 }
 
 .composer-ux.composer-direct .composer-tools {
@@ -403,13 +403,13 @@
 }
 
 .composer-ux.composer-direct .composer-tools .icon-button {
-  color: #586568;
+  color: var(--muted-foreground);
 }
 
 .composer-ux.composer-direct .composer-tools .icon-button:hover:not(:disabled),
 .composer-ux.composer-direct .composer-tools .icon-button[aria-pressed="true"] {
-  color: #153d36;
-  background: #eaf4ef;
+  color: var(--accent-foreground);
+  background: var(--secondary);
 }
 
 .composer-ux.composer-direct .send-button {
@@ -417,18 +417,18 @@
 }
 
 .composer-ux.composer-direct .send-button:not(:disabled) {
-  background: #153d36;
+  background: var(--brand-solid);
   color: #fff;
   box-shadow: none;
 }
 
 .composer-ux.composer-direct .send-button:hover:not(:disabled) {
-  background: #237459;
+  background: var(--brand-solid);
 }
 
 .composer-ux.composer-direct .composer-hint {
   font-size: 11px;
-  color: #586568;
+  color: var(--muted-foreground);
 }
 
 @media (max-width: 600px) {

@@ -18,7 +18,7 @@
 }
 
 .dm-timeline .message[data-message-id]:focus-visible {
-  outline: 2px solid #237459;
+  outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
 
@@ -44,14 +44,14 @@
   min-width: 0;
   max-width: 68ch;
   padding: 9px 11px;
-  border: 1px solid #e4ebe7;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #f4f7f6;
+  background: var(--muted);
 }
 
 .dm-timeline .message[data-self="true"] > .message-body {
-  border-color: #d5e6dc;
-  background: #eaf4ef;
+  border-color: var(--border);
+  background: var(--secondary);
 }
 
 .dm-timeline .message .message-meta {
@@ -70,25 +70,25 @@
 .dm-timeline .message .message-author-name > strong {
   font-size: 12px;
   font-weight: 700;
-  color: #153d36;
+  color: var(--foreground);
 }
 
 .dm-timeline .message .message-meta > time,
 .dm-timeline .message .message-meta > small {
   font-size: 10px;
-  color: #586568;
+  color: var(--muted-foreground);
 }
 
 .dm-timeline .message .self-label {
   padding: 0;
   background: transparent;
-  color: #3b675a;
+  color: var(--primary);
   font-size: 10px;
 }
 
 .dm-timeline .message .message-text {
   max-width: 68ch;
-  color: #283d38;
+  color: var(--foreground);
   font-size: 14px;
   line-height: 1.6;
 }
@@ -97,8 +97,8 @@
   top: -12px;
   right: 0;
   box-shadow: none;
-  border-color: #dce5e0;
-  background: #fff;
+  border-color: var(--border);
+  background: var(--card);
 }
 
 .dm-timeline .message[data-self="true"] > .message-actions {
@@ -127,8 +127,8 @@
 .dm-timeline .message .file-attachment {
   min-width: 0;
   width: min(280px, 100%);
-  background: #ffffffb3;
-  border-color: #dce5e0;
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+  border-color: var(--border);
 }
 
 .dm-timeline .message .file-attachment strong {
@@ -141,11 +141,11 @@
 }
 
 .dm-timeline .message .message-reactions > button {
-  background: #ffffffb3;
+  background: color-mix(in srgb, var(--card) 70%, transparent);
 }
 
 .dm-timeline .message .message-reactions > button.reacted {
-  background: #dceddf;
+  background: var(--accent);
 }
 
 .dm-timeline .message .thread-preview {
@@ -158,7 +158,7 @@
 }
 
 .dm-timeline .message.message-pinned > .message-body {
-  border-color: #a9c8b9;
+  border-color: var(--border);
 }
 
 .dm-timeline .message .message-pin-label {

@@ -1,10 +1,10 @@
 .modal:has(.call-preflight-polished) {
   width: min(480px, calc(100vw - 32px));
-  color: #20292b;
+  color: var(--accent-foreground);
 }
 
 .call-preflight-polished {
-  color: #20292b;
+  color: var(--accent-foreground);
   gap: 16px;
   padding-top: 0;
 }
@@ -19,8 +19,8 @@
   height: 36px;
   flex-shrink: 0;
   border-radius: 9px;
-  background: #eaf4ef;
-  color: #237459;
+  background: var(--secondary);
+  color: var(--primary);
 }
 
 .call-preflight-polished .call-preflight-room > div {
@@ -36,7 +36,7 @@
 }
 
 .call-preflight-polished .call-preflight-room p {
-  color: #687176;
+  color: var(--muted-foreground);
   font-size: 11px;
   line-height: 1.6;
   margin-top: 3px;
@@ -46,16 +46,16 @@
   display: flex;
   align-items: center;
   gap: 11px;
-  border: 1px solid #e2e6e8;
+  border: 1px solid var(--border);
   border-radius: 9px;
   padding: 12px;
-  background: #f5f7f8;
+  background: var(--muted);
 }
 
 .call-join-mode-icon {
   display: flex;
   flex-shrink: 0;
-  color: #687176;
+  color: var(--muted-foreground);
 }
 
 .call-join-mode > div {
@@ -72,7 +72,7 @@
 }
 
 .call-preflight-polished .call-muted-choice input {
-  accent-color: #237459;
+  accent-color: var(--brand-solid);
   flex: 0 0 16px;
   margin: 0;
 }
@@ -81,7 +81,7 @@
   margin: 3px 25px 0 0;
   font-size: 11px;
   line-height: 1.6;
-  color: #687176;
+  color: var(--muted-foreground);
 }
 
 .call-preflight-polished .call-mic-test {
@@ -104,7 +104,7 @@
 .call-preflight-polished .call-mic-test small {
   line-height: 1.6;
   margin-top: 3px;
-  color: #687176;
+  color: var(--muted-foreground);
 }
 
 .call-preflight-polished .call-mic-test button {
@@ -117,12 +117,12 @@
 
 .call-preflight-polished .call-level-meter {
   height: 5px;
-  background: #e2e6e8;
+  background: var(--secondary);
   border-radius: 3px;
 }
 
 .call-preflight-polished .call-level-meter span {
-  background: #237459;
+  background: var(--brand-solid);
 }
 
 .call-test-status {
@@ -132,7 +132,7 @@
   margin: 0;
   font-size: 11px;
   line-height: 1.6;
-  color: #687176;
+  color: var(--muted-foreground);
 }
 
 .call-test-status > svg {
@@ -140,11 +140,11 @@
 }
 
 .call-test-status-detected {
-  color: #237459;
+  color: var(--primary);
 }
 
 .call-setup-devices {
-  border-top: 1px solid #e2e6e8;
+  border-top: 1px solid var(--border);
   padding-top: 5px;
 }
 
@@ -158,7 +158,7 @@
   background: transparent;
   border: 0;
   border-radius: 4px;
-  color: #20292b;
+  color: var(--accent-foreground);
   font: inherit;
   font-size: 12px;
   font-weight: 650;
@@ -168,7 +168,7 @@
 
 .call-setup-disclosure > svg:last-child {
   margin-left: auto;
-  color: #687176;
+  color: var(--muted-foreground);
   transition: transform 120ms ease;
 }
 
@@ -182,42 +182,42 @@
 
 .call-device-settings-polished {
   gap: 11px;
-  color: #20292b;
+  color: var(--accent-foreground);
 }
 
 .call-device-settings-polished select {
   min-height: 38px;
   padding: 8px 9px;
-  border-color: #e2e6e8;
+  border-color: var(--border);
   border-radius: 7px;
-  color: #20292b;
+  color: var(--accent-foreground);
 }
 
 .call-device-settings-polished select:disabled {
-  color: #687176;
-  background: #f5f7f8;
+  color: var(--muted-foreground);
+  background: var(--muted);
 }
 
 .call-device-settings-polished .call-device-help {
-  color: #687176;
+  color: var(--muted-foreground);
 }
 
 .call-preflight-polished .call-secondary,
 .call-device-settings-polished .call-secondary {
-  border: 1px solid #e2e6e8;
-  background: white;
-  color: #20292b;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--accent-foreground);
   border-radius: 7px;
 }
 
 .call-preflight-polished .call-secondary:hover,
 .call-device-settings-polished .call-secondary:hover {
-  background: #f5f7f8;
+  background: var(--muted);
 }
 
 .call-preflight-polished .call-primary {
   border-radius: 7px;
-  background: #153d36;
+  background: var(--brand-solid);
 }
 
 .call-preflight-polished button:disabled {
@@ -226,14 +226,14 @@
 }
 
 .call-preflight-polished .call-preflight-actions {
-  border-top: 1px solid #e2e6e8;
+  border-top: 1px solid var(--border);
   padding-top: 15px;
   margin-top: -4px;
 }
 
 .call-preflight-polished :is(button, input):focus-visible,
 .call-device-settings-polished :is(button, select):focus-visible {
-  outline: 2px solid #237459;
+  outline: 2px solid var(--ring);
   outline-offset: 3px;
 }
 

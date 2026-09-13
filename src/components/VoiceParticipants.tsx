@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import {
   MicOff,
   MonitorUp,
@@ -210,7 +211,10 @@ export function VoiceRoomPreview({
               ? "Ses bağlantın devam ediyor."
               : "Katılmadan önce mikrofonunu ayarlayabilirsin."}
           </span>
-          <button
+          <Button
+            variant="default"
+            size="unset"
+            type="submit"
             className="primary-button full-width"
             disabled={(busy && !isCurrentCall) || !connected || full}
             onClick={onJoin}
@@ -222,7 +226,7 @@ export function VoiceRoomPreview({
                 ? "Oda dolu"
                 : "Sesli odaya katıl"}
             <ArrowRight size={15} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { AlertCircle, RotateCw } from "lucide-react";
 import "./collection-state.css";
 
@@ -20,9 +21,15 @@ export function CollectionError({
       <div>
         <h2>{title}</h2>
         <p>{message}</p>
-        <button type="button" className="secondary-button" onClick={onRetry}>
+        <Button
+          variant="outline"
+          size="unset"
+          type="button"
+          className="secondary-button"
+          onClick={onRetry}
+        >
           <RotateCw size={15} aria-hidden="true" /> Yeniden dene
-        </button>
+        </Button>
       </div>
     </section>
   );

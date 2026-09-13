@@ -1,12 +1,17 @@
+.context-menu-positioner {
+  z-index: 240;
+  outline: none;
+}
+
 .context-menu {
-  position: fixed;
-  z-index: 150;
   width: 244px;
+  max-width: min(var(--available-width), calc(100vw - 16px));
+  max-height: min(var(--available-height), calc(100dvh - 16px));
   padding: 5px;
   overflow-y: auto;
   overscroll-behavior: contain;
   color: var(--ink, #26342d);
-  background: #fff;
+  background: var(--popover, #fff);
   border: 1px solid var(--line, #e3e7e0);
   border-radius: 10px;
   box-shadow:
@@ -36,8 +41,9 @@
 }
 
 .context-menu > button:hover:not(:disabled),
+.context-menu > button[data-highlighted],
 .context-menu > button:focus-visible {
-  background: #eef3e9;
+  background: var(--accent, #eef3e9);
 }
 
 .context-menu > button:focus-visible {
@@ -51,12 +57,17 @@
 }
 
 .context-menu > .context-menu-danger {
-  color: #a03a36;
+  color: var(--destructive, #a03a36);
 }
 
 .context-menu > .context-menu-danger:hover:not(:disabled),
+.context-menu > .context-menu-danger[data-highlighted],
 .context-menu > .context-menu-danger:focus-visible {
-  background: #fbefed;
+  background: color-mix(
+    in srgb,
+    var(--destructive, #a03a36) 9%,
+    var(--popover, white)
+  );
 }
 
 .context-menu-separator {

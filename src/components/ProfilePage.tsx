@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -228,9 +229,15 @@ export default function ProfilePage({
   return (
     <section className="member-profile-page" aria-label="Üye profili">
       <header className="member-profile-toolbar">
-        <button type="button" className="member-profile-back" onClick={onBack}>
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="button"
+          className="member-profile-back"
+          onClick={onBack}
+        >
           <ArrowLeft size={17} aria-hidden="true" /> Sohbete dön
-        </button>
+        </Button>
         <span>Üye profili</span>
       </header>
       {!profile && !error && (
@@ -245,13 +252,15 @@ export default function ProfilePage({
             Profil görüntülenemiyor
           </h1>
           <p role="alert">{error}</p>
-          <button
+          <Button
+            variant="outline"
+            size="unset"
             type="button"
             className="secondary-button"
             onClick={() => setRetry((value) => value + 1)}
           >
             <RefreshCw size={15} aria-hidden="true" /> Yeniden dene
-          </button>
+          </Button>
         </div>
       )}
       {profile && user && (
@@ -283,11 +292,19 @@ export default function ProfilePage({
           </div>
           <div className="member-profile-actions">
             {isSelf ? (
-              <button type="button" className="primary-button" onClick={onEdit}>
+              <Button
+                variant="default"
+                size="unset"
+                type="button"
+                className="primary-button"
+                onClick={onEdit}
+              >
                 <Pencil size={15} aria-hidden="true" /> Profili düzenle
-              </button>
+              </Button>
             ) : profile.canMessage ? (
-              <button
+              <Button
+                variant="default"
+                size="unset"
                 type="button"
                 className="primary-button"
                 onClick={() => void message()}
@@ -300,9 +317,11 @@ export default function ProfilePage({
                     <MessageSquare size={16} aria-hidden="true" /> Mesaj gönder
                   </>
                 )}
-              </button>
+              </Button>
             ) : null}
-            <button
+            <Button
+              variant="outline"
+              size="unset"
               type="button"
               className="secondary-button member-profile-copy"
               onClick={() => void copyLink()}
@@ -313,7 +332,7 @@ export default function ProfilePage({
                 <Link size={15} aria-hidden="true" />
               )}
               {copied ? "Bağlantı kopyalandı" : "Profil bağlantısını kopyala"}
-            </button>
+            </Button>
             <span className="sr-only" role="status">
               {copied ? "Profil bağlantısı kopyalandı." : ""}
             </span>
@@ -339,9 +358,14 @@ export default function ProfilePage({
                       : "Henüz bir tanıtım eklenmemiş."}
                   </p>
                   {isSelf && (
-                    <button type="button" onClick={onEdit}>
+                    <Button
+                      variant="unstyled"
+                      size="unset"
+                      type="button"
+                      onClick={onEdit}
+                    >
                       Tanıtım ekle
-                    </button>
+                    </Button>
                   )}
                 </div>
               )}

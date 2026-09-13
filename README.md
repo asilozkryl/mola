@@ -29,6 +29,7 @@ npm run test:load
 
 ## Kullanım
 
+- **Görünüm:** Profil ve ayarlar → Görünüm bölümünden açık, koyu veya sistem temasını ve kompakt/rahat yoğunluğu seçin. Tercihler bu tarayıcıda saklanır; sistem teması işletim sistemiyle birlikte değişir. Arayüzün ortak bileşenleri shadcn/ui ve Base UI üzerine kuruludur. [Tasarım sistemi](docs/UI_DESIGN_SYSTEM.md).
 - **Kanallar ve özel mesajlar:** kalıcı mesajlar, yanıt dizileri, düzenleme/silme, emoji tepkileri, kanala sabitleme, tüm geçmişte arama.
 - **Hızlı işlemler:** kanala veya mesaja sağ tıklayın; telefonda **⋯** düğmesini kullanın. Kanal menüsünden ad/açıklama düzenleme, erişim yönetimi, arşivleme ve kalıcı silme açılır. Kalıcı silme için kanalın güncel adını aynen yazmak gerekir. **Arşivlenmiş kanallar** bölümünden geçmişi okuyabilir veya yetkiniz varsa kanalı geri açabilirsiniz.
 - **Kaydedilenler:** mesajları kişisel listene ekle; diğer cihazlarından aç, kayıtlarında ara ve doğrudan kaynak mesaja git.

@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
@@ -136,14 +138,20 @@ export function WorkspaceSwitcher({
               taslakların alanında saklanır.
             </p>
             <div className="workspace-form-actions">
-              <button
+              <Button
+                variant="outline"
+                size="unset"
+                type="submit"
                 className="secondary-button"
                 disabled={busy}
                 onClick={() => setPending(null)}
               >
                 Vazgeç
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="default"
+                size="unset"
+                type="submit"
                 className="primary-button"
                 disabled={busy}
                 onClick={() => void run(pending, true)}
@@ -153,7 +161,7 @@ export function WorkspaceSwitcher({
                 ) : (
                   "Görüşmeden ayrıl ve devam et"
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         ) : mode === "list" ? (
@@ -164,7 +172,8 @@ export function WorkspaceSwitcher({
             {items.length > 4 && (
               <label className="workspace-filter">
                 <Search size={17} />
-                <input
+                <Input
+                  unstyled
                   aria-label="Çalışma alanlarında ara"
                   placeholder="Bir alan bul…"
                   value={query}
@@ -188,7 +197,10 @@ export function WorkspaceSwitcher({
                     item.membershipSuspended || item.suspended,
                   );
                   return (
-                    <button
+                    <Button
+                      variant="unstyled"
+                      size="unset"
+                      type="submit"
                       key={item.id}
                       className={`workspace-choice ${selected ? "is-current" : ""}`}
                       aria-label={`${item.name} alanına geç`}
@@ -221,7 +233,7 @@ export function WorkspaceSwitcher({
                       ) : (
                         <ArrowRight size={17} />
                       )}
-                    </button>
+                    </Button>
                   );
                 })}
               {!items.some((item) =>
@@ -235,7 +247,10 @@ export function WorkspaceSwitcher({
               )}
             </div>
             <div className="workspace-add-actions">
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
                 aria-label="Yeni çalışma alanı"
                 disabled={busy || isDemo}
                 onClick={() => show("create")}
@@ -246,8 +261,11 @@ export function WorkspaceSwitcher({
                   <small>Kendi ekibine bir yer aç</small>
                 </span>
                 <ArrowRight size={16} />
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
                 aria-label="Davetle katıl"
                 disabled={busy || isDemo}
                 onClick={() => show("join")}
@@ -258,18 +276,21 @@ export function WorkspaceSwitcher({
                   <small>Başka bir ekibe hesabınla bağlan</small>
                 </span>
                 <ArrowRight size={16} />
-              </button>
+              </Button>
             </div>
           </>
         ) : (
           <>
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="workspace-back"
               disabled={busy}
               onClick={() => show("list")}
             >
               <ArrowLeft size={16} /> Alanlarıma dön
-            </button>
+            </Button>
             <h3>
               {mode === "create" ? "Ekibine yeni bir alan aç" : "Ekibine katıl"}
             </h3>
@@ -284,7 +305,8 @@ export function WorkspaceSwitcher({
                   ? "Çalışma alanı adı"
                   : "Davet bağlantısı veya kodu"}
                 {mode === "create" ? (
-                  <input
+                  <Input
+                    unstyled
                     autoFocus
                     required
                     minLength={2}
@@ -296,7 +318,8 @@ export function WorkspaceSwitcher({
                     disabled={busy || isDemo}
                   />
                 ) : (
-                  <input
+                  <Input
+                    unstyled
                     autoFocus
                     required
                     maxLength={2048}
@@ -313,7 +336,10 @@ export function WorkspaceSwitcher({
                   <ShieldCheck size={16} /> Yeni alanın sahibi sen olacaksın.
                 </p>
               )}
-              <button
+              <Button
+                variant="default"
+                size="unset"
+                type="submit"
                 className="primary-button full-width"
                 disabled={busy || isDemo}
               >
@@ -325,7 +351,7 @@ export function WorkspaceSwitcher({
                   "Çalışma alanına katıl"
                 )}
                 {!busy && <ArrowRight size={17} />}
-              </button>
+              </Button>
             </form>
           </>
         )}

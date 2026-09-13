@@ -1,3 +1,6 @@
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Archive, ArchiveRestore, Hash, Volume2 } from "lucide-react";
 import type { Channel } from "../../shared/types";
@@ -148,7 +151,8 @@ function ChannelActionForm({
               Kanalın adını ve ne için kullanıldığını ekibin için netleştir.
             </p>
             <label htmlFor={`${id}-name`}>Kanal adı</label>
-            <input
+            <Input
+              unstyled
               id={`${id}-name`}
               ref={nameInput}
               data-autofocus
@@ -178,7 +182,8 @@ function ChannelActionForm({
               Açıklama{" "}
               <span className="channel-action-optional">(isteğe bağlı)</span>
             </label>
-            <textarea
+            <Textarea
+              unstyled
               id={`${id}-description`}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -234,7 +239,8 @@ function ChannelActionForm({
               adını aşağıya aynen yaz.
             </p>
             <label htmlFor={`${id}-confirm`}>Kanal adını doğrula</label>
-            <input
+            <Input
+              unstyled
               id={`${id}-confirm`}
               data-autofocus
               value={confirmName}
@@ -253,7 +259,9 @@ function ChannelActionForm({
           </p>
         )}
         <div className="channel-action-footer">
-          <button
+          <Button
+            variant="outline"
+            size="unset"
             type="button"
             className="secondary-button"
             disabled={pending}
@@ -261,8 +269,10 @@ function ChannelActionForm({
             data-autofocus={mode === "archive" ? true : undefined}
           >
             Vazgeç
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
             type="submit"
             className={mode === "delete" ? "danger-button" : "primary-button"}
             disabled={
@@ -278,7 +288,7 @@ function ChannelActionForm({
             ) : (
               action
             )}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

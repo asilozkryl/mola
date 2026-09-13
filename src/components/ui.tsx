@@ -1,8 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { X, LoaderCircle } from "lucide-react";
 import { MENTION_TOKEN_SOURCE, mentionPreview } from "../../shared/mentions";
 import type { User } from "../../shared/types";
+import { Button } from "./ui/button";
+import {
+  Avatar as AvatarPrimitive,
+  AvatarFallback,
+  AvatarImage,
+} from "./ui/avatar";
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "./ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import "./avatar.css";
+import "./overlays.css";
 
 export function Logo({ small = false }: { small?: boolean }) {
   return (
@@ -32,40 +41,30 @@ export function Avatar({
   size?: "tiny" | "small" | "normal" | "large";
   online?: boolean;
 }) {
-  const [failedUrl, setFailedUrl] = useState<string>();
-  const photo =
-    user?.avatarUrl && user.avatarUrl !== failedUrl
-      ? user.avatarUrl
-      : undefined;
   return (
-    <span
+    <AvatarPrimitive
       className={`avatar avatar-${size}`}
       style={{ background: user?.color || "#dce7d1" }}
       aria-label={user?.name || "Üye"}
     >
-      {photo ? (
-        <img
-          src={photo}
-          alt=""
-          decoding="async"
-          onError={() => setFailedUrl(photo)}
-        />
-      ) : (
-        <span>
-          {(user?.name || "?")
-            .split(" ")
-            .map((s) => s[0])
-            .slice(0, 2)
-            .join("")
-            .toLocaleUpperCase("tr")}
-        </span>
+      {user?.avatarUrl && (
+        <AvatarImage src={user.avatarUrl} alt="" decoding="async" />
       )}
+      <AvatarFallback className="mola-avatar-fallback">
+        {(user?.name || "?")
+          .split(" ")
+          .map((s) => s[0])
+          .slice(0, 2)
+          .join("")
+          .toLocaleUpperCase("tr")}
+      </AvatarFallback>
       {online && (
         <i className="presence-dot" role="img" aria-label="Çevrimiçi" />
       )}
-    </span>
+    </AvatarPrimitive>
   );
 }
+
 export function IconButton({
   label,
   children,
@@ -82,17 +81,26 @@ export function IconButton({
   pressed?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      aria-pressed={pressed}
-      className={`icon-button ${className}`}
-      onClick={onClick}
-      disabled={disabled}
-    >
-      {children}
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        disabled={disabled}
+        render={
+          <Button
+            type="button"
+            variant="unstyled"
+            size="unset"
+            aria-label={label}
+            aria-pressed={pressed}
+            className={`icon-button ${className}`}
+            onClick={onClick}
+            disabled={disabled}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent className="mola-tooltip">{label}</TooltipContent>
+    </Tooltip>
   );
 }
 export function Modal({
@@ -106,113 +114,97 @@ export function Modal({
   onClose: () => void;
   wide?: boolean;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const opener = document.activeElement;
-    ref.current?.showModal();
-    const dialog = ref.current;
-    // React's autoFocus runs before a closed native dialog can receive focus.
-    dialog?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
-    return () => {
-      dialog?.close();
-      requestAnimationFrame(() => {
-        if (
-          opener instanceof HTMLElement &&
-          opener.isConnected &&
-          !opener.closest("[inert], [hidden]") &&
-          opener.getClientRects().length > 0 &&
-          getComputedStyle(opener).visibility !== "hidden" &&
-          ![
+  const popup = useRef<HTMLDivElement>(null);
+  const [opener] = useState(() =>
+    document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  );
+  return (
+    <Dialog
+      open
+      onOpenChange={(open, details) => {
+        if (!open) {
+          // A rejected close (for example a dirty profile) leaves this
+          // controlled dialog open while its confirmation is presented.
+          if (details.reason === "escape-key") details.event.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent
+        ref={popup}
+        aria-label={title}
+        className={`modal mola-dialog ${wide ? "modal-wide" : ""}`}
+        overlayClassName="mola-dialog-backdrop"
+        showCloseButton={false}
+        initialFocus={() =>
+          popup.current?.querySelector<HTMLElement>("[data-autofocus]") || true
+        }
+        finalFocus={() => {
+          if (
+            !opener?.isConnected ||
+            opener.closest("[inert], [hidden]") ||
+            !opener.getClientRects().length ||
+            getComputedStyle(opener).visibility === "hidden"
+          )
+            return false;
+          // Closing one surface can immediately open another. Do not move
+          // focus behind the new active modal in that case.
+          const competingModal = [
             ...document.querySelectorAll<HTMLElement>(
               'dialog[open], [role="dialog"][aria-modal="true"]',
             ),
           ].some(
             (modal) =>
-              modal !== dialog &&
+              modal !== popup.current &&
               !modal.contains(opener) &&
-              modal.getClientRects().length > 0,
-          )
-        )
-          opener.focus({ preventScroll: true });
-      });
-    };
-  }, []);
-  return (
-    <dialog
-      aria-label={title}
-      ref={ref}
-      className={`modal ${wide ? "modal-wide" : ""}`}
-      onKeyDown={(event) => {
-        if (
-          event.defaultPrevented ||
-          (event.target instanceof Element &&
-            event.target.closest("dialog[open]") !== event.currentTarget)
-        )
-          return;
-        if (event.key === "Escape") {
-          // The native cancel event closes this dialog; parent shortcuts
-          // must not also close the drawer or conversation underneath it.
-          event.stopPropagation();
-          return;
-        }
-        if (event.key !== "Tab") return;
-        const dialog = event.currentTarget;
-        const items = [
-          ...dialog.querySelectorAll<HTMLElement>(
-            'a[href], button, input, select, textarea, [tabindex], [contenteditable="true"]',
-          ),
-        ].filter(
-          (element) =>
-            (element.tabIndex >= 0 ||
-              (element.isContentEditable &&
-                !element.hasAttribute("tabindex"))) &&
-            !element.matches(":disabled") &&
-            !element.closest("[inert]") &&
-            element.getClientRects().length > 0 &&
-            getComputedStyle(element).visibility !== "hidden",
-        );
-        const first = items[0],
-          last = items.at(-1);
-        // Native dialogs can send boundary Tab presses to browser chrome.
-        // Keep keyboard navigation in the active application dialog.
-        if (
-          !first ||
-          (event.shiftKey
-            ? document.activeElement === first
-            : document.activeElement === last)
-        ) {
-          event.preventDefault();
-          (event.shiftKey ? last || dialog : first || dialog).focus();
-        }
-      }}
-      onCancel={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onClose();
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          const r = e.currentTarget.getBoundingClientRect();
+              modal.getClientRects().length > 0 &&
+              !modal.closest('[aria-hidden="true"]'),
+          );
+          return competingModal ? false : opener;
+        }}
+        onKeyDown={(event) => {
+          // Base UI owns dismissal and focus trapping. Keep application
+          // shortcuts from also handling keys from the active modal.
+          if (event.key === "Escape") event.stopPropagation();
+        }}
+        onBlurCapture={(event) => {
+          const next = event.relatedTarget;
           if (
-            e.clientX < r.left ||
-            e.clientX > r.right ||
-            e.clientY < r.top ||
-            e.clientY > r.bottom
-          )
-            onClose();
-        }
-      }}
-    >
-      <div className="modal-heading">
-        <h2>{title}</h2>
-        <IconButton label="Kapat" onClick={onClose}>
-          <X size={19} />
-        </IconButton>
-      </div>
-      {children}
-    </dialog>
+            next instanceof HTMLElement &&
+            !next.hasAttribute("data-base-ui-focus-guard") &&
+            next.closest('[aria-hidden="true"], [inert]') &&
+            !event.currentTarget.hasAttribute("data-nested-dialog-open")
+          ) {
+            // Background shortcuts and delayed composer effects may request
+            // focus programmatically. Keep the current control in the modal.
+            (event.target as HTMLElement).focus({ preventScroll: true });
+          }
+        }}
+      >
+        <div className="modal-heading">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogClose
+            render={
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="button"
+                className="icon-button"
+                aria-label="Kapat"
+              />
+            }
+          >
+            <X size={19} />
+          </DialogClose>
+        </div>
+        {children}
+      </DialogContent>
+    </Dialog>
   );
 }
+
 export function Spinner({ label = "Yükleniyor" }: { label?: string }) {
   return (
     <span className="loading-inline" role="status">

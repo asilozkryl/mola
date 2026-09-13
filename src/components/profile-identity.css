@@ -13,23 +13,27 @@
   cursor: pointer;
 }
 .profile-identity:focus-visible {
-  outline: 2px solid var(--green, #237459);
+  outline: 2px solid var(--green, var(--ring));
   outline-offset: 3px;
 }
 .profile-identity .avatar {
   flex-shrink: 0;
 }
-.profile-hover-card {
-  position: fixed;
+[data-slot="hover-card-positioner"] {
   z-index: 160;
-  width: 286px;
+}
+.profile-hover-card {
+  position: relative;
+  z-index: 160;
+  width: min(286px, var(--available-width));
+  max-width: calc(100vw - 20px);
+  max-height: var(--available-height);
   padding: 16px 16px 0;
   overflow: auto;
-  visibility: hidden;
-  border: 1px solid #dbe2df;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: #fff;
-  color: var(--ink, #20292b);
+  background: var(--card);
+  color: var(--ink, var(--accent-foreground));
   box-shadow:
     0 8px 28px #17382c1c,
     0 2px 5px #17382c0a;
@@ -62,14 +66,14 @@
 }
 .profile-hover-heading strong small {
   margin-left: 7px;
-  color: var(--muted, #687176);
+  color: var(--muted-foreground);
   font-size: 10px;
   font-weight: 500;
 }
 .profile-hover-heading > div > span {
   display: block;
   margin-top: 2px;
-  color: var(--muted, #687176);
+  color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
 .profile-hover-presence {
@@ -83,24 +87,24 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--muted, #687176);
+  color: var(--muted-foreground);
   white-space: nowrap;
 }
 .profile-presence > i {
   display: inline-block;
   width: 7px;
   height: 7px;
-  border: 1px solid #88918e;
+  border: 1px solid var(--border);
   border-radius: 50%;
   background: transparent;
 }
 .profile-presence[data-online="true"] > i {
-  border-color: #278366;
-  background: #278366;
+  border-color: var(--ring);
+  background: var(--brand-solid);
 }
 .profile-hover-status {
   overflow-wrap: anywhere;
-  color: #475650;
+  color: var(--muted-foreground);
 }
 .profile-hover-bio {
   display: -webkit-box;
@@ -108,7 +112,7 @@
   overflow: hidden;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  color: #687176;
+  color: var(--muted-foreground);
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -121,9 +125,9 @@
   margin: 14px -16px 0;
   padding: 10px 16px;
   border: 0;
-  border-top: 1px solid #e7ebe9;
-  background: #f9fbfa;
-  color: var(--forest, #153d36);
+  border-top: 1px solid var(--border);
+  background: var(--muted);
+  color: var(--accent-foreground);
   font: inherit;
   font-size: 11px;
   font-weight: 700;
@@ -131,10 +135,10 @@
   cursor: pointer;
 }
 .profile-hover-open:hover {
-  background: #edf4f0;
+  background: var(--muted);
 }
 .profile-hover-open:focus-visible {
-  outline: 2px solid var(--green, #237459);
+  outline: 2px solid var(--green, var(--ring));
   outline-offset: -3px;
 }
 @keyframes profile-card-appear {

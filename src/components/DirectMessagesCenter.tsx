@@ -1,3 +1,5 @@
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { mentionPreview } from "../../shared/mentions";
 import type { Socket } from "socket.io-client";
@@ -266,7 +268,8 @@ export function DirectMessagesCenter({
       <div className="dm-center-toolbar">
         <div className="dm-center-search">
           <Search size={17} aria-hidden="true" />
-          <input
+          <Input
+            unstyled
             type="search"
             aria-label="Özel konuşmalarda ara"
             placeholder="Kişi veya mesaj ara…"
@@ -275,39 +278,53 @@ export function DirectMessagesCenter({
             onChange={(e) => setQuery(e.target.value)}
           />
           {query && (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               type="button"
               className="icon-button"
               aria-label="Konuşma aramasını temizle"
               onClick={() => setQuery("")}
             >
               <X size={16} />
-            </button>
+            </Button>
           )}
         </div>
-        <button type="button" className="primary-button" onClick={onNewMessage}>
+        <Button
+          variant="default"
+          size="unset"
+          type="button"
+          className="primary-button"
+          onClick={onNewMessage}
+        >
           <PenLine size={17} />
           Yeni mesaj
-        </button>
+        </Button>
       </div>
       <div className="dm-center-filters">
         <div className="dm-center-segments" aria-label="Konuşma filtresi">
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             aria-pressed={!unreadOnly}
             onClick={() => setUnreadOnly(false)}
           >
             Tümü
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             aria-pressed={unreadOnly}
             onClick={() => setUnreadOnly(true)}
           >
             Okunmamış
-          </button>
+          </Button>
         </div>
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
           type="button"
           className="icon-button"
           aria-label="Konuşmaları yenile"
@@ -315,14 +332,19 @@ export function DirectMessagesCenter({
           onClick={() => setRevision((n) => n + 1)}
         >
           <RefreshCw size={16} />
-        </button>
+        </Button>
       </div>
       {updates && (
         <div className="dm-center-update" role="status">
           Konuşmalar güncellendi.
-          <button type="button" onClick={() => setRevision((n) => n + 1)}>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="button"
+            onClick={() => setRevision((n) => n + 1)}
+          >
             Yenile
-          </button>
+          </Button>
         </div>
       )}
       {!connected && (
@@ -333,9 +355,14 @@ export function DirectMessagesCenter({
       {error && (
         <div className="dm-center-error" role="alert">
           <span>{error}</span>
-          <button type="button" onClick={() => setRevision((n) => n + 1)}>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="button"
+            onClick={() => setRevision((n) => n + 1)}
+          >
             Tekrar dene
-          </button>
+          </Button>
         </div>
       )}
       {loading && !current ? (
@@ -370,7 +397,9 @@ export function DirectMessagesCenter({
                         online={connected && data.onlineIds.includes(user.id)}
                       />
                     </ProfileIdentity>
-                    <button
+                    <Button
+                      variant="unstyled"
+                      size="unset"
                       type="button"
                       className="dm-center-conversation"
                       aria-label={`${user.name} ile konuşmayı aç`}
@@ -420,7 +449,7 @@ export function DirectMessagesCenter({
                           />
                         )}
                       </span>
-                    </button>
+                    </Button>
                   </li>
                 );
               })}
@@ -444,7 +473,9 @@ export function DirectMessagesCenter({
                       : "Ekibinden birini seç. Özel konuşmalarınız burada bir arada kalır."}
                 </p>
                 {query || unreadOnly ? (
-                  <button
+                  <Button
+                    variant="outline"
+                    size="unset"
                     type="button"
                     className="secondary-button"
                     onClick={() => {
@@ -453,23 +484,27 @@ export function DirectMessagesCenter({
                     }}
                   >
                     Filtreleri temizle
-                  </button>
+                  </Button>
                 ) : (
-                  <button
+                  <Button
+                    variant="outline"
+                    size="unset"
                     type="button"
                     className="secondary-button"
                     onClick={onNewMessage}
                   >
                     <PenLine size={16} />
                     Konuşma başlat
-                  </button>
+                  </Button>
                 )}
               </div>
             )
           )}
           {current?.cursor && (
             <div className="dm-center-more">
-              <button
+              <Button
+                variant="outline"
+                size="unset"
                 type="button"
                 className="secondary-button"
                 disabled={loading || loadingMore}
@@ -480,7 +515,7 @@ export function DirectMessagesCenter({
                 ) : (
                   "Daha fazla konuşma yükle"
                 )}
-              </button>
+              </Button>
             </div>
           )}
           {loading && current && (

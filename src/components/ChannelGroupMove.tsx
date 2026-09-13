@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { Check, Folder, Hash } from "lucide-react";
 import type { SidebarChannelGroup } from "../../shared/sidebar";
@@ -49,7 +50,9 @@ export function ChannelGroupMove({
       </p>
       <div className="members-modal-list">
         {[{ id: null, name: "Kanallar" }, ...groups].map((group) => (
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             key={group.id || "default"}
             aria-label={`${group.name} bölümüne taşı`}
@@ -62,7 +65,7 @@ export function ChannelGroupMove({
               {current === group.id && <small>Şu an burada</small>}
             </span>
             {current === group.id && <Check size={17} />}
-          </button>
+          </Button>
         ))}
       </div>
       {!groups.length && (

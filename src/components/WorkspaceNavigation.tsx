@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   useEffect,
   useId,
@@ -138,7 +140,10 @@ function Section({
       onDrop={onDrop}
     >
       <div className="nav-section-title">
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className="nav-section-toggle"
           aria-expanded={!collapsed}
           aria-controls={id}
@@ -150,7 +155,7 @@ function Section({
           {collapsed && count > 0 && (
             <span className="count-badge">{count}</span>
           )}
-        </button>
+        </Button>
         {actions}
       </div>
       <div id={id} hidden={collapsed}>
@@ -575,7 +580,9 @@ export function WorkspaceNavigation(p: Props) {
         onDragOver={(e) => dragOver(e, c, section, groupId)}
         onDrop={(e) => dropped(e, c, section, groupId)}
       >
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
           className="channel-drag-handle"
           type="button"
           aria-label={`${c.name} kanalını sırala`}
@@ -585,8 +592,11 @@ export function WorkspaceNavigation(p: Props) {
           onClick={(e) => rowMenu(c, e.currentTarget, section)}
         >
           <GripVertical size={13} />
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className={`channel-nav ${voice ? "voice-nav" : ""} ${selected ? "selected" : ""} ${voice && p.call.joined && inCall ? "voice-active" : ""}`}
           aria-label={c.name}
           draggable={!busy && !query && !unreadOnly}
@@ -614,8 +624,10 @@ export function WorkspaceNavigation(p: Props) {
             <span className="count-badge">{p.unread[c.id]}</span>
           )}
           {inCall && <span className="small-status-dot" />}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="unstyled"
+          size="unset"
           type="button"
           className="icon-button channel-row-menu"
           aria-label={`${c.name} kanal işlemleri`}
@@ -624,7 +636,7 @@ export function WorkspaceNavigation(p: Props) {
           onClick={(e) => rowMenu(c, e.currentTarget, section)}
         >
           <MoreHorizontal size={16} />
-        </button>
+        </Button>
         {voice && (
           <div
             className={`live-voice-details ${peers.length ? "has-peers" : ""}`}
@@ -662,7 +674,9 @@ export function WorkspaceNavigation(p: Props) {
                 </div>
               ))}
             </div>
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               type="button"
               className="live-voice-members"
               aria-label={`${c.name} katılımcılarını gör`}
@@ -676,7 +690,7 @@ export function WorkspaceNavigation(p: Props) {
                   <span className="visually-hidden">Katılımcılar</span>
                 </>
               )}
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -685,7 +699,9 @@ export function WorkspaceNavigation(p: Props) {
   function sectionActions(kind: "text" | "voice") {
     return (
       <div className="live-section-actions">
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
           type="button"
           className="icon-button"
           aria-label={`${kind === "text" ? "Kanallar" : "Sesli odalar"} bölüm işlemleri`}
@@ -722,7 +738,7 @@ export function WorkspaceNavigation(p: Props) {
           }
         >
           <MoreHorizontal size={15} />
-        </button>
+        </Button>
         <IconButton
           label={kind === "text" ? "Kanal oluştur" : "Sesli oda oluştur"}
           disabled={!p.canCreate}
@@ -742,7 +758,9 @@ export function WorkspaceNavigation(p: Props) {
     };
     return (
       <div className="live-section-actions">
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
           type="button"
           className="icon-button"
           aria-label={`${group.name} bölüm işlemleri`}
@@ -782,13 +800,16 @@ export function WorkspaceNavigation(p: Props) {
           }
         >
           <MoreHorizontal size={15} />
-        </button>
+        </Button>
       </div>
     );
   }
   return (
     <>
-      <button
+      <Button
+        variant="unstyled"
+        size="unset"
+        type="submit"
         className="workspace-heading"
         aria-label="Çalışma alanı menüsü"
         aria-haspopup="menu"
@@ -874,11 +895,14 @@ export function WorkspaceNavigation(p: Props) {
           </small>
         </span>
         <ChevronDown size={16} />
-      </button>
+      </Button>
       <div
         className={`sidebar-content live-sidebar-content ${editing ? "sidebar-editing" : ""}`}
       >
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className="sidebar-search"
           aria-label="Çalışma alanında ara"
           onClick={p.onSearch}
@@ -888,9 +912,12 @@ export function WorkspaceNavigation(p: Props) {
           <kbd>
             {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"} K
           </kbd>
-        </button>
+        </Button>
         <nav className="primary-nav" aria-label="Kişisel alanın">
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className={p.view === "messages" ? "selected" : ""}
             aria-label="Özel mesajlar"
             aria-current={p.view === "messages" ? "page" : undefined}
@@ -907,8 +934,11 @@ export function WorkspaceNavigation(p: Props) {
                   .reduce((n, c) => n + (p.unread[c.id] || 0), 0)}
               </span>
             )}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className={p.view === "inbox" ? "selected" : ""}
             aria-label="Aktivite"
             aria-current={p.view === "inbox" ? "page" : undefined}
@@ -919,8 +949,11 @@ export function WorkspaceNavigation(p: Props) {
             {p.activityCount > 0 && (
               <span className="count-badge">{p.activityCount}</span>
             )}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className={p.view === "saved" ? "selected" : ""}
             aria-current={p.view === "saved" ? "page" : undefined}
             onClick={() => p.onView("saved")}
@@ -928,18 +961,24 @@ export function WorkspaceNavigation(p: Props) {
             <Bookmark size={17} />
             <span>Kaydedilenler</span>
             {p.savedCount > 0 && <small>{p.savedCount}</small>}
-          </button>
+          </Button>
         </nav>
         <div className="sidebar-list-tools">
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className={unreadOnly ? "filter-active" : ""}
             aria-pressed={unreadOnly}
             onClick={() => setUnreadOnly(!unreadOnly)}
           >
             <ListFilter size={13} />
             {unreadOnly ? "Okunmamış" : "Tüm konuşmalar"}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className="icon-button"
             aria-label="Kanal veya kişi bul"
             aria-expanded={filterOpen}
@@ -950,8 +989,11 @@ export function WorkspaceNavigation(p: Props) {
             }}
           >
             <Search size={14} />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className="icon-button sidebar-edit-toggle"
             aria-label={
               editing ? "Düzenlemeyi bitir" : "Kenar çubuğunu düzenle"
@@ -960,18 +1002,22 @@ export function WorkspaceNavigation(p: Props) {
             onClick={() => setEditing(!editing)}
           >
             <GripVertical size={14} />
-          </button>
+          </Button>
         </div>
         {filterOpen && (
           <label className="sidebar-list-search">
-            <input
+            <Input
+              unstyled
               ref={filterRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Kanal veya kişi bul…"
               aria-label="Kanal veya kişi bul"
             />
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="icon-button"
               aria-label="Kanal filtresini temizle"
               onClick={() => {
@@ -980,7 +1026,7 @@ export function WorkspaceNavigation(p: Props) {
               }}
             >
               <X size={14} />
-            </button>
+            </Button>
           </label>
         )}
         {editing && (
@@ -991,7 +1037,14 @@ export function WorkspaceNavigation(p: Props) {
         {prefs.error && (
           <div className="sidebar-feedback" role="alert">
             {prefs.error}
-            <button onClick={() => void prefs.reload()}>Yeniden dene</button>
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
+              onClick={() => void prefs.reload()}
+            >
+              Yeniden dene
+            </Button>
           </div>
         )}
         {groupError && !groupDialog && !prefs.error && (
@@ -1103,7 +1156,10 @@ export function WorkspaceNavigation(p: Props) {
         >
           {(showAllDms ? conversations : conversations.slice(0, 5)).map((c) => (
             <div className="dm-nav-row" key={c.channelId}>
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
                 className={`channel-nav dm-nav ${p.currentId === c.channelId && p.view === "channel" ? "selected" : ""}`}
                 aria-current={
                   p.currentId === c.channelId && p.view === "channel"
@@ -1118,7 +1174,7 @@ export function WorkspaceNavigation(p: Props) {
                 {(p.unread[c.channelId] || 0) > 0 && (
                   <span className="count-badge">{p.unread[c.channelId]}</span>
                 )}
-              </button>
+              </Button>
               <ProfileIdentity
                 className="dm-profile-avatar"
                 user={c.user!}
@@ -1136,12 +1192,15 @@ export function WorkspaceNavigation(p: Props) {
             </div>
           ))}
           {conversations.length > 5 && (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="add-channel"
               onClick={() => p.onView("messages")}
             >
               Tüm konuşmalar
-            </button>
+            </Button>
           )}
           {!conversations.length && !prefs.conversationsLoading && (
             <p className="sidebar-empty-note">
@@ -1153,7 +1212,14 @@ export function WorkspaceNavigation(p: Props) {
           {prefs.conversationsError && (
             <p className="sidebar-feedback" role="alert">
               {prefs.conversationsError}
-              <button onClick={() => void prefs.reload()}>Yeniden dene</button>
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
+                onClick={() => void prefs.reload()}
+              >
+                Yeniden dene
+              </Button>
             </p>
           )}
         </Section>
@@ -1162,7 +1228,10 @@ export function WorkspaceNavigation(p: Props) {
           !voiceChannels.length &&
           !favoriteChannels.length &&
           !conversations.length && (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="sidebar-clear-filter"
               onClick={() => {
                 setQuery("");
@@ -1170,22 +1239,31 @@ export function WorkspaceNavigation(p: Props) {
               }}
             >
               Eşleşme yok. Filtreleri temizle
-            </button>
+            </Button>
           )}
       </div>
       <div className="sidebar-bottom live-sidebar-bottom">
         {p.call.joined && (
-          <button className="active-call-banner" onClick={p.onCallOpen}>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
+            className="active-call-banner"
+            onClick={p.onCallOpen}
+          >
             <AudioLines size={20} />
             <span>
               <strong>Sesli görüşmedesin</strong>
               <small>{p.call.channelName}</small>
             </span>
             <ChevronRight size={16} />
-          </button>
+          </Button>
         )}
         <div className="sidebar-account">
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className="sidebar-account-profile"
             title="Profil ve ayarlar"
             onClick={p.onSettings}
@@ -1202,7 +1280,7 @@ export function WorkspaceNavigation(p: Props) {
                   : "Yeniden bağlanılıyor"}
               </small>
             </span>
-          </button>
+          </Button>
           <IconButton
             label="Bildirimler ve uygulama"
             onClick={p.onNotifications}
@@ -1214,14 +1292,24 @@ export function WorkspaceNavigation(p: Props) {
           </IconButton>
         </div>
         <div className="sidebar-mobile-tools">
-          <button onClick={() => p.onWorkspaces()}>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
+            onClick={() => p.onWorkspaces()}
+          >
             <Users size={14} />
             Çalışma alanları
-          </button>
-          <button onClick={p.onHelp}>
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
+            onClick={p.onHelp}
+          >
             <CircleHelp size={14} />
             Yardım
-          </button>
+          </Button>
         </div>
       </div>
       <div
@@ -1337,7 +1425,8 @@ export function WorkspaceNavigation(p: Props) {
                 </p>
                 <label>
                   Bölüm adı
-                  <input
+                  <Input
+                    unstyled
                     data-autofocus
                     value={groupName}
                     maxLength={48}
@@ -1358,15 +1447,19 @@ export function WorkspaceNavigation(p: Props) {
               </p>
             )}
             <div className="sidebar-group-form-actions">
-              <button
+              <Button
+                variant="outline"
+                size="unset"
                 type="button"
                 className="secondary-button"
                 disabled={groupSaving}
                 onClick={() => setGroupDialog(null)}
               >
                 Vazgeç
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="default"
+                size="unset"
                 type="submit"
                 className="primary-button"
                 disabled={
@@ -1380,7 +1473,7 @@ export function WorkspaceNavigation(p: Props) {
                     : groupDialog.kind === "rename"
                       ? "Kaydet"
                       : "Bölümü kaldır"}
-              </button>
+              </Button>
             </div>
           </form>
         </Modal>

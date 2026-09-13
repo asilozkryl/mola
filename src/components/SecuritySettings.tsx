@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   Check,
@@ -229,7 +231,9 @@ export function SecuritySettings() {
                         <p className="security-meta">
                           {status.recoveryCodesRemaining} kurtarma kodun kaldı.
                         </p>
-                        <button
+                        <Button
+                          variant="outline"
+                          size="unset"
                           type="button"
                           className="secondary-button"
                           onClick={() => {
@@ -239,8 +243,10 @@ export function SecuritySettings() {
                           }}
                         >
                           <RefreshCw size={16} /> Kurtarma kodlarını yenile
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="unstyled"
+                          size="unset"
                           type="button"
                           className="security-text-button"
                           onClick={() => {
@@ -250,10 +256,12 @@ export function SecuritySettings() {
                           }}
                         >
                           <ShieldOff size={16} /> İki aşamalı doğrulamayı kapat
-                        </button>
+                        </Button>
                       </>
                     ) : (
-                      <button
+                      <Button
+                        variant="outline"
+                        size="unset"
                         type="button"
                         className="secondary-button full-width"
                         onClick={() => {
@@ -263,7 +271,7 @@ export function SecuritySettings() {
                         }}
                       >
                         <ShieldCheck size={17} /> İki aşamalı doğrulamayı kur
-                      </button>
+                      </Button>
                     )}
                   </div>
                 )}
@@ -303,13 +311,15 @@ export function SecuritySettings() {
                             zamana dayalı.
                           </p>
                           <code>{setup.secret}</code>
-                          <button
+                          <Button
+                            variant="unstyled"
+                            size="unset"
                             className="security-text-button"
                             type="button"
                             onClick={() => void copy(setup.secret)}
                           >
                             <Copy size={15} /> Kurulum anahtarını kopyala
-                          </button>
+                          </Button>
                         </details>
                       </>
                     ) : (
@@ -328,7 +338,8 @@ export function SecuritySettings() {
                         )}
                         <label>
                           Mevcut parolan
-                          <input
+                          <Input
+                            unstyled
                             type="password"
                             name="password"
                             autoComplete="current-password"
@@ -344,7 +355,8 @@ export function SecuritySettings() {
                         {setup
                           ? "Doğrulama kodu"
                           : "Doğrulama veya kurtarma kodu"}
-                        <input
+                        <Input
+                          unstyled
                           name="code"
                           autoComplete="one-time-code"
                           inputMode={setup ? "numeric" : "text"}
@@ -358,7 +370,10 @@ export function SecuritySettings() {
                       </label>
                     )}
                     <div className="security-actions">
-                      <button
+                      <Button
+                        variant="default"
+                        size="unset"
+                        type="submit"
                         className="primary-button full-width"
                         disabled={busy}
                       >
@@ -373,8 +388,10 @@ export function SecuritySettings() {
                         ) : (
                           "Yeni kodları oluştur"
                         )}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="unstyled"
+                        size="unset"
                         type="button"
                         className="security-text-button"
                         disabled={busy}
@@ -385,7 +402,7 @@ export function SecuritySettings() {
                         }}
                       >
                         Vazgeç
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 )}
@@ -409,27 +426,33 @@ export function SecuritySettings() {
                       ))}
                     </ul>
                     <div className="security-actions">
-                      <button
+                      <Button
+                        variant="outline"
+                        size="unset"
                         type="button"
                         className="secondary-button"
                         onClick={downloadCodes}
                       >
                         <Download size={16} /> Kodları indir
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="unset"
                         type="button"
                         className="secondary-button"
                         onClick={() => void copy(codes.join("\n"))}
                       >
                         <Copy size={16} /> Kopyala
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="unset"
                         type="button"
                         className="primary-button full-width"
                         onClick={() => setCodes([])}
                       >
                         <Check size={16} /> Kodlarımı sakladım
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -438,7 +461,9 @@ export function SecuritySettings() {
             <section className="security-devices" aria-label="Açık oturumlar">
               <div className="security-device-heading">
                 <h3>Açık oturumlar</h3>
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
                   type="button"
                   className="security-text-button"
                   disabled={busy}
@@ -452,7 +477,7 @@ export function SecuritySettings() {
                   }}
                 >
                   <RefreshCw size={16} />
-                </button>
+                </Button>
               </div>
               <p className="modal-description">
                 Tanımadığın bir cihazın oturumunu kapatabilirsin.
@@ -472,25 +497,31 @@ export function SecuritySettings() {
                         (revokeId === session.id ? (
                           <div className="security-session-confirm">
                             <p>Bu cihazın bağlantısı hemen kesilecek.</p>
-                            <button
+                            <Button
+                              variant="outline"
+                              size="unset"
                               type="button"
                               className="secondary-button"
                               disabled={busy}
                               onClick={() => void revoke(session.id)}
                             >
                               Oturumu kapat
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                              variant="unstyled"
+                              size="unset"
                               type="button"
                               className="security-text-button"
                               disabled={busy}
                               onClick={() => setRevokeId(null)}
                             >
                               Vazgeç
-                            </button>
+                            </Button>
                           </div>
                         ) : (
-                          <button
+                          <Button
+                            variant="unstyled"
+                            size="unset"
                             type="button"
                             className="security-text-button"
                             disabled={busy}
@@ -498,7 +529,7 @@ export function SecuritySettings() {
                             aria-label={`${session.device} oturumunu kapat`}
                           >
                             Bu oturumu kapat
-                          </button>
+                          </Button>
                         ))}
                     </div>
                   </li>

@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "./ui/dialog";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
@@ -360,6 +362,7 @@ export function CallPanel({
   onOpenProfile?: (id: string) => void;
 }) {
   const dialog = useRef<HTMLDivElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const screenStage = useRef<HTMLDivElement>(null);
   const [deafened, setDeafened] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
@@ -437,66 +440,6 @@ export function CallPanel({
     );
     return () => window.clearInterval(timer);
   }, [call.joined]);
-  useEffect(() => {
-    if (!visible) return;
-    const previous = document.activeElement as HTMLElement | null;
-    const element = dialog.current;
-    element?.focus();
-    const keydown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || document.querySelector("dialog[open]"))
-        return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        escapeCallback.current();
-      }
-      if (event.key !== "Tab" || !element) return;
-      const stage = screenStage.current;
-      const focusRoot =
-        stage &&
-        (document.fullscreenElement === stage ||
-          stage.classList.contains("call-share-expanded"))
-          ? stage
-          : element;
-      const focusable = [
-        ...focusRoot.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), [tabindex="0"]',
-        ),
-      ].filter((node) => node.offsetParent !== null);
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (
-        event.shiftKey &&
-        (document.activeElement === first ||
-          document.activeElement === focusRoot ||
-          !focusRoot.contains(document.activeElement))
-      ) {
-        event.preventDefault();
-        last?.focus();
-      } else if (
-        !event.shiftKey &&
-        (document.activeElement === last ||
-          !focusRoot.contains(document.activeElement))
-      ) {
-        event.preventDefault();
-        first?.focus();
-      }
-    };
-    document.addEventListener("keydown", keydown);
-    return () => {
-      document.removeEventListener("keydown", keydown);
-      window.requestAnimationFrame(() => {
-        if (
-          document.activeElement !== document.body &&
-          !element?.contains(document.activeElement)
-        )
-          return;
-        const target = previous?.isConnected
-          ? previous
-          : document.querySelector<HTMLButtonElement>(".call-dock-main");
-        target?.focus({ preventScroll: true });
-      });
-    };
-  }, [visible]);
   useEffect(() => {
     if (!visible || !settingsOpen) return;
     const frame = window.requestAnimationFrame(() => {
@@ -586,13 +529,16 @@ export function CallPanel({
           onOutputError={outputErrorCallback.current}
         />
       ))}
-      {minimized ? (
+      {minimized && (
         <div
           className="call-dock call-dock-polished"
           role="region"
           aria-label="Devam eden görüşme"
         >
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className="call-dock-main"
             onClick={onExpand}
             title="Görüşmeyi aç"
@@ -622,9 +568,12 @@ export function CallPanel({
               )}
             </span>
             <ArrowUpRight size={18} />
-          </button>
+          </Button>
           {call.joined && (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className={`call-dock-button ${!call.mic ? "call-dock-muted" : ""}`}
               aria-label={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
               title={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
@@ -632,10 +581,13 @@ export function CallPanel({
               onClick={call.toggleMic}
             >
               {call.mic ? <Mic size={18} /> : <MicOff size={18} />}
-            </button>
+            </Button>
           )}
           {call.joined && (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className={`call-dock-button ${deafened ? "call-dock-muted" : ""}`}
               aria-label={
                 deafened
@@ -651,25 +603,31 @@ export function CallPanel({
               onClick={() => setDeafened((value) => !value)}
             >
               {deafened ? <VolumeX size={18} /> : <Volume2 size={18} />}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className="call-dock-button call-dock-leave"
             aria-label="Görüşmeden ayrıl"
             title="Görüşmeden ayrıl"
             onClick={leaveCall}
           >
             <PhoneOff size={18} />
-          </button>
+          </Button>
           {call.sharing && (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="call-dock-sharing"
               onClick={() => void call.toggleScreen()}
               disabled={call.mediaBusy}
               aria-label="Ekran paylaşımını durdur"
             >
               <MonitorUp size={14} /> Paylaşımı bitir
-            </button>
+            </Button>
           )}
           {call.camera && (
             <span className="call-dock-camera">
@@ -677,425 +635,542 @@ export function CallPanel({
             </span>
           )}
           {dockNotice && (
-            <button className="call-dock-notice" onClick={onExpand}>
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
+              className="call-dock-notice"
+              onClick={onExpand}
+            >
               <AlertCircle size={14} />
               <span>{dockNotice}</span>
               <ArrowUpRight size={14} />
-            </button>
+            </Button>
           )}
         </div>
-      ) : (
-        <div className="call-backdrop">
-          <div
-            className={`call-dialog call-panel ${audioOnly && !activeShare ? "call-panel-audio" : "call-panel-media"}${roomExpanded ? " call-panel-expanded" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="call-heading"
-            ref={dialog}
-            tabIndex={-1}
-          >
-            <header className="call-header">
-              <div className="call-header-title">
-                <span className="call-header-icon">
-                  <Headphones size={21} />
-                </span>
-                <div>
-                  <h2 id="call-heading">{call.channelName || "Görüşme"}</h2>
-                  <p>
-                    {call.joining ? (
-                      "Mikrofon ve bağlantı hazırlanıyor"
-                    ) : call.joined ? (
-                      <>
-                        <span className="call-live-dot" />
-                        {participants.length > 1
-                          ? `${participants.length} kişi görüşmede`
-                          : "Katılımcılar bekleniyor"}
-                        <span className="call-header-divider" />
-                        {time}
-                      </>
-                    ) : (
-                      "Sesli ve görüntülü görüşme"
-                    )}
-                  </p>
-                </div>
-              </div>
-              <div className="call-header-actions">
-                <button
-                  type="button"
-                  className="call-icon-button call-room-expand"
-                  aria-label={
-                    roomExpanded ? "Normal görünüme dön" : "Görüşmeyi genişlet"
-                  }
-                  title={
-                    roomExpanded ? "Normal görünüme dön" : "Görüşmeyi genişlet"
-                  }
-                  aria-pressed={roomExpanded}
-                  ref={roomExpandButton}
-                  onClick={() => setRoomExpanded((value) => !value)}
-                >
-                  {roomExpanded ? (
-                    <Minimize2 size={18} />
+      )}
+      {/* Keep the dialog controller mounted while its dock appears. Base UI
+          resolves final focus when closing finishes, after the dock is present. */}
+      <Dialog
+        open={visible}
+        disablePointerDismissal
+        onOpenChange={(open) => {
+          if (!open) escapeCallback.current();
+        }}
+      >
+        <DialogContent
+          className={`call-dialog call-panel ${audioOnly && !activeShare ? "call-panel-audio" : "call-panel-media"}${roomExpanded ? " call-panel-expanded" : ""}`}
+          overlayClassName="call-backdrop"
+          showCloseButton={false}
+          aria-labelledby="call-heading"
+          ref={dialog}
+          tabIndex={-1}
+          initialFocus={() => {
+            if (
+              document.activeElement instanceof HTMLElement &&
+              !dialog.current?.contains(document.activeElement)
+            ) {
+              opener.current = document.activeElement;
+            }
+            return dialog.current;
+          }}
+          finalFocus={() => {
+            const dock =
+              document.querySelector<HTMLButtonElement>(".call-dock-main");
+            if (dock) return dock;
+            return opener.current !== document.body &&
+              opener.current?.isConnected &&
+              opener.current.getClientRects().length
+              ? opener.current
+              : false;
+          }}
+          onKeyDown={(event) => {
+            const stage = screenStage.current;
+            // The share stage has its own fullscreen boundary inside the call.
+            if (
+              event.key !== "Tab" ||
+              !stage ||
+              !(document.fullscreenElement === stage || expandedScreen)
+            )
+              return;
+            const items = [
+              ...stage.querySelectorAll<HTMLElement>(
+                'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), [tabindex="0"]',
+              ),
+            ].filter((node) => node.getClientRects().length > 0);
+            const first = items[0],
+              last = items.at(-1);
+            if (
+              event.shiftKey &&
+              (document.activeElement === first ||
+                !stage.contains(document.activeElement))
+            ) {
+              event.preventDefault();
+              last?.focus();
+            } else if (
+              !event.shiftKey &&
+              (document.activeElement === last ||
+                !stage.contains(document.activeElement))
+            ) {
+              event.preventDefault();
+              first?.focus();
+            }
+          }}
+        >
+          <header className="call-header">
+            <div className="call-header-title">
+              <span className="call-header-icon">
+                <Headphones size={21} />
+              </span>
+              <div>
+                <h2 id="call-heading">{call.channelName || "Görüşme"}</h2>
+                <p>
+                  {call.joining ? (
+                    "Mikrofon ve bağlantı hazırlanıyor"
+                  ) : call.joined ? (
+                    <>
+                      <span className="call-live-dot" />
+                      {participants.length > 1
+                        ? `${participants.length} kişi görüşmede`
+                        : "Katılımcılar bekleniyor"}
+                      <span className="call-header-divider" />
+                      {time}
+                    </>
                   ) : (
-                    <Maximize2 size={18} />
+                    "Sesli ve görüntülü görüşme"
                   )}
-                  <span>{roomExpanded ? "Normal görünüm" : "Genişlet"}</span>
-                </button>
-                <button
-                  className="call-icon-button"
-                  aria-label={call.joined ? "Görüşmeyi küçült" : "Kapat"}
-                  title={call.joined ? "Görüşmeyi küçült" : "Kapat"}
-                  onClick={() => closeCallback.current()}
-                >
-                  {call.joined ? <ChevronDown size={21} /> : <X size={21} />}
-                </button>
+                </p>
               </div>
-            </header>
-
-            {outputError && (
-              <div className="call-error" role="alert">
-                <span>
-                  Seçili hoparlöre ses aktarılamadı. Ses ayarlarından sistem
-                  varsayılanını veya bağlı bir cihazı seçin.
-                </span>
-                <button
-                  aria-label="Hoparlör uyarısını kapat"
-                  onClick={() => setOutputError(false)}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            )}
-            {(screenError || shareWindow.error) && (
-              <div className="call-error" role="alert">
-                {screenError || shareWindow.error}
-              </div>
-            )}
-            {settingsOpen && call.joined && (
-              <section
-                className="call-settings-section"
-                aria-label="Görüşme ses ayarları"
-                id="call-media-settings"
-                tabIndex={-1}
+            </div>
+            <div className="call-header-actions">
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="button"
+                className="call-icon-button call-room-expand"
+                aria-label={
+                  roomExpanded ? "Normal görünüme dön" : "Görüşmeyi genişlet"
+                }
+                title={
+                  roomExpanded ? "Normal görünüme dön" : "Görüşmeyi genişlet"
+                }
+                aria-pressed={roomExpanded}
+                ref={roomExpandButton}
+                onClick={() => setRoomExpanded((value) => !value)}
               >
-                <MediaSettings call={call} />
-              </section>
-            )}
+                {roomExpanded ? (
+                  <Minimize2 size={18} />
+                ) : (
+                  <Maximize2 size={18} />
+                )}
+                <span>{roomExpanded ? "Normal görünüm" : "Genişlet"}</span>
+              </Button>
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
+                className="call-icon-button"
+                aria-label={call.joined ? "Görüşmeyi küçült" : "Kapat"}
+                title={call.joined ? "Görüşmeyi küçült" : "Kapat"}
+                onClick={() => closeCallback.current()}
+              >
+                {call.joined ? <ChevronDown size={21} /> : <X size={21} />}
+              </Button>
+            </div>
+          </header>
 
-            {call.error && (
-              <div className="call-error" role="alert">
-                <span>{call.error}</span>
-                <button aria-label="Uyarıyı kapat" onClick={call.clearError}>
-                  <X size={16} />
-                </button>
-              </div>
-            )}
-            {call.joined && !call.relayConfigured && (
-              <div className="call-audio-prompt" role="status">
-                <Signal size={17} />
-                <span>
-                  Bazı mobil ve kurumsal ağlarda görüşme bağlanamayabilir. Ses
-                  gelmiyorsa başka bir ağ deneyin veya yöneticinize bildirin.
-                </span>
-              </div>
-            )}
-            {audioBlocked && call.joined && (
-              <div className="call-audio-prompt" role="status">
-                <Volume2 size={17} />
-                <span>Tarayıcınız sesi başlatmak için onay bekliyor.</span>
-                <button
-                  onClick={() => {
-                    setPlaybackAttempt((value) => value + 1);
-                    setAudioBlocked(false);
-                  }}
-                >
-                  Sesi etkinleştir
-                </button>
-              </div>
-            )}
-
-            <div
-              className={`call-body ${activeShare ? "call-body-sharing" : ""}`}
+          {outputError && (
+            <div className="call-error" role="alert">
+              <span>
+                Seçili hoparlöre ses aktarılamadı. Ses ayarlarından sistem
+                varsayılanını veya bağlı bir cihazı seçin.
+              </span>
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
+                aria-label="Hoparlör uyarısını kapat"
+                onClick={() => setOutputError(false)}
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          )}
+          {(screenError || shareWindow.error) && (
+            <div className="call-error" role="alert">
+              {screenError || shareWindow.error}
+            </div>
+          )}
+          {settingsOpen && call.joined && (
+            <section
+              className="call-settings-section"
+              aria-label="Görüşme ses ayarları"
+              id="call-media-settings"
+              tabIndex={-1}
             >
-              {call.joining ? (
-                <div className="call-waiting">
-                  <div className="call-joining-symbol">
-                    <LoaderCircle size={30} />
-                  </div>
-                  <h3>Görüşmeye katılıyorsunuz</h3>
-                  <p>Tarayıcınız sorarsa mikrofon erişimine izin verin.</p>
-                  <button className="call-secondary" onClick={leaveCall}>
-                    İptal et
-                  </button>
+              <MediaSettings call={call} />
+            </section>
+          )}
+
+          {call.error && (
+            <div className="call-error" role="alert">
+              <span>{call.error}</span>
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
+                aria-label="Uyarıyı kapat"
+                onClick={call.clearError}
+              >
+                <X size={16} />
+              </Button>
+            </div>
+          )}
+          {call.joined && !call.relayConfigured && (
+            <div className="call-audio-prompt" role="status">
+              <Signal size={17} />
+              <span>
+                Bazı mobil ve kurumsal ağlarda görüşme bağlanamayabilir. Ses
+                gelmiyorsa başka bir ağ deneyin veya yöneticinize bildirin.
+              </span>
+            </div>
+          )}
+          {audioBlocked && call.joined && (
+            <div className="call-audio-prompt" role="status">
+              <Volume2 size={17} />
+              <span>Tarayıcınız sesi başlatmak için onay bekliyor.</span>
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
+                onClick={() => {
+                  setPlaybackAttempt((value) => value + 1);
+                  setAudioBlocked(false);
+                }}
+              >
+                Sesi etkinleştir
+              </Button>
+            </div>
+          )}
+
+          <div
+            className={`call-body ${activeShare ? "call-body-sharing" : ""}`}
+          >
+            {call.joining ? (
+              <div className="call-waiting">
+                <div className="call-joining-symbol">
+                  <LoaderCircle size={30} />
                 </div>
-              ) : !call.joined ? (
-                <div className="call-waiting">
-                  <span className="call-waiting-symbol">
-                    <Headphones size={33} />
-                  </span>
-                  <h3>Bir araya gelelim</h3>
-                  <p>
-                    Sesli konuşun, kameranızı açın ve ekranınızı paylaşın.
-                    <br />
-                    Bu odada en fazla 6 kişi birlikte görüşebilir.
-                  </p>
-                  {call.channelId && (
-                    <button
-                      className="call-primary"
-                      disabled={!call.canJoin}
-                      onClick={() =>
-                        void call.join({
-                          id: call.channelId!,
-                          name: call.channelName,
-                        })
-                      }
-                    >
-                      <Headphones size={17} />
-                      Yeniden katıl
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {activeShare && (
-                    <div
-                      className={`call-share-stage ${expandedScreen ? "call-share-expanded" : ""}`}
-                      ref={screenStage}
-                      tabIndex={-1}
-                    >
-                      <div className="call-share-heading">
-                        <span>
-                          <MonitorUp size={15} />
-                          {activeShare.socketId === "local"
-                            ? "Ekranınızı paylaşıyorsunuz"
-                            : `${activeShare.user.name} ekranını paylaşıyor`}
-                        </span>
-                        <div className="call-share-actions">
-                          <button
-                            className="call-icon-button"
-                            aria-label="Paylaşılan ekranı ayrı pencerede aç"
-                            title="Ayrı pencerede aç"
-                            onClick={() => void shareWindow.open()}
-                          >
-                            <PictureInPicture2 size={17} />
-                          </button>
-                          <button
-                            className="call-icon-button"
-                            aria-label="Paylaşılan ekranı büyüt"
-                            title={
-                              expandedScreen || fullscreenScreen
-                                ? "Paylaşımı küçült"
-                                : "Paylaşımı büyüt"
-                            }
-                            aria-pressed={expandedScreen || fullscreenScreen}
-                            ref={expandButton}
-                            onClick={() => {
-                              setScreenError("");
-                              if (document.fullscreenElement)
-                                void document
-                                  .exitFullscreen()
-                                  .catch(() =>
-                                    setScreenError(
-                                      "Tam ekrandan çıkılamadı. Escape tuşunu kullanın.",
-                                    ),
-                                  );
-                              else if (
-                                document.fullscreenEnabled &&
-                                screenStage.current?.requestFullscreen
-                              )
-                                void screenStage.current
-                                  .requestFullscreen()
-                                  .catch(() =>
-                                    setExpandedScreen((value) => !value),
-                                  );
-                              else setExpandedScreen((value) => !value);
-                            }}
-                          >
-                            <Maximize2 size={17} />
-                          </button>
-                        </div>
+                <h3>Görüşmeye katılıyorsunuz</h3>
+                <p>Tarayıcınız sorarsa mikrofon erişimine izin verin.</p>
+                <Button
+                  variant="unstyled"
+                  size="unset"
+                  type="submit"
+                  className="call-secondary"
+                  onClick={leaveCall}
+                >
+                  İptal et
+                </Button>
+              </div>
+            ) : !call.joined ? (
+              <div className="call-waiting">
+                <span className="call-waiting-symbol">
+                  <Headphones size={33} />
+                </span>
+                <h3>Bir araya gelelim</h3>
+                <p>
+                  Sesli konuşun, kameranızı açın ve ekranınızı paylaşın.
+                  <br />
+                  Bu odada en fazla 6 kişi birlikte görüşebilir.
+                </p>
+                {call.channelId && (
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
+                    className="call-primary"
+                    disabled={!call.canJoin}
+                    onClick={() =>
+                      void call.join({
+                        id: call.channelId!,
+                        name: call.channelName,
+                      })
+                    }
+                  >
+                    <Headphones size={17} />
+                    Yeniden katıl
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <>
+                {activeShare && (
+                  <div
+                    className={`call-share-stage ${expandedScreen ? "call-share-expanded" : ""}`}
+                    ref={screenStage}
+                    tabIndex={-1}
+                  >
+                    <div className="call-share-heading">
+                      <span>
+                        <MonitorUp size={15} />
+                        {activeShare.socketId === "local"
+                          ? "Ekranınızı paylaşıyorsunuz"
+                          : `${activeShare.user.name} ekranını paylaşıyor`}
+                      </span>
+                      <div className="call-share-actions">
+                        <Button
+                          variant="unstyled"
+                          size="unset"
+                          type="submit"
+                          className="call-icon-button"
+                          aria-label="Paylaşılan ekranı ayrı pencerede aç"
+                          title="Ayrı pencerede aç"
+                          onClick={() => void shareWindow.open()}
+                        >
+                          <PictureInPicture2 size={17} />
+                        </Button>
+                        <Button
+                          variant="unstyled"
+                          size="unset"
+                          type="submit"
+                          className="call-icon-button"
+                          aria-label="Paylaşılan ekranı büyüt"
+                          title={
+                            expandedScreen || fullscreenScreen
+                              ? "Paylaşımı küçült"
+                              : "Paylaşımı büyüt"
+                          }
+                          aria-pressed={expandedScreen || fullscreenScreen}
+                          ref={expandButton}
+                          onClick={() => {
+                            setScreenError("");
+                            if (document.fullscreenElement)
+                              void document
+                                .exitFullscreen()
+                                .catch(() =>
+                                  setScreenError(
+                                    "Tam ekrandan çıkılamadı. Escape tuşunu kullanın.",
+                                  ),
+                                );
+                            else if (
+                              document.fullscreenEnabled &&
+                              screenStage.current?.requestFullscreen
+                            )
+                              void screenStage.current
+                                .requestFullscreen()
+                                .catch(() =>
+                                  setExpandedScreen((value) => !value),
+                                );
+                            else setExpandedScreen((value) => !value);
+                          }}
+                        >
+                          <Maximize2 size={17} />
+                        </Button>
                       </div>
-                      <MediaVideo
-                        stream={activeShare.screen}
-                        className="call-screen-video"
-                      />
-                      {shares.length > 1 && (
-                        <div className="call-share-tabs">
-                          {shares.map((p) => (
-                            <button
-                              key={p.socketId}
-                              onClick={() => setSelectedSharing(p.socketId)}
-                              aria-pressed={p.socketId === activeShare.socketId}
-                            >
-                              {p.socketId === activeShare.socketId && (
-                                <Check size={13} />
-                              )}
-                              {p.user.name}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                    </div>
+                    <MediaVideo
+                      stream={activeShare.screen}
+                      className="call-screen-video"
+                    />
+                    {shares.length > 1 && (
+                      <div className="call-share-tabs">
+                        {shares.map((p) => (
+                          <Button
+                            variant="unstyled"
+                            size="unset"
+                            type="submit"
+                            key={p.socketId}
+                            onClick={() => setSelectedSharing(p.socketId)}
+                            aria-pressed={p.socketId === activeShare.socketId}
+                          >
+                            {p.socketId === activeShare.socketId && (
+                              <Check size={13} />
+                            )}
+                            {p.user.name}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div
+                  className={`call-people call-people-${Math.min(participants.length, 4)} ${audioOnly ? "call-people-audio" : "call-people-video"}`}
+                  data-count={participants.length}
+                  aria-label="Görüşmedeki katılımcılar"
+                >
+                  {participants.map((peer) => (
+                    <ParticipantTile
+                      key={peer.socketId}
+                      peer={peer}
+                      local={peer.socketId === "local"}
+                      selfId={call.user?.id || ""}
+                      onOpenProfile={openProfile}
+                    />
+                  ))}
+                  {participants.length === 1 && !activeShare && (
+                    <div className="call-invite-space">
+                      <span>
+                        <Headphones size={20} />
+                      </span>
+                      <h3>Görüşmedeki ilk kişisiniz</h3>
+                      <p>
+                        Ekip arkadaşların bu odadan katılabilir. Sohbete
+                        döndüğünde görüşme devam eder.
+                      </p>
+                      <div className="call-invite-detail">
+                        <Button
+                          variant="unstyled"
+                          size="unset"
+                          type="submit"
+                          className="call-chat-return"
+                          onClick={() => closeCallback.current()}
+                        >
+                          <MessageSquare size={14} />
+                          Sohbette bekle
+                        </Button>
+                      </div>
                     </div>
                   )}
-                  <div
-                    className={`call-people call-people-${Math.min(participants.length, 4)} ${audioOnly ? "call-people-audio" : "call-people-video"}`}
-                    data-count={participants.length}
-                    aria-label="Görüşmedeki katılımcılar"
-                  >
-                    {participants.map((peer) => (
-                      <ParticipantTile
-                        key={peer.socketId}
-                        peer={peer}
-                        local={peer.socketId === "local"}
-                        selfId={call.user?.id || ""}
-                        onOpenProfile={openProfile}
-                      />
-                    ))}
-                    {participants.length === 1 && !activeShare && (
-                      <div className="call-invite-space">
-                        <span>
-                          <Headphones size={20} />
-                        </span>
-                        <h3>Görüşmedeki ilk kişisiniz</h3>
-                        <p>
-                          Ekip arkadaşların bu odadan katılabilir. Sohbete
-                          döndüğünde görüşme devam eder.
-                        </p>
-                        <div className="call-invite-detail">
-                          <button
-                            className="call-chat-return"
-                            onClick={() => closeCallback.current()}
-                          >
-                            <MessageSquare size={14} />
-                            Sohbette bekle
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {call.joined && (
-              <footer className="call-footer">
-                <div className="call-footer-note">
-                  <button
-                    className="call-chat-return"
-                    onClick={() => closeCallback.current()}
-                  >
-                    <MessageSquare size={15} />
-                    Sohbete dön
-                  </button>
-                  <small>Görüşme devam eder</small>
                 </div>
-                <div
-                  className="call-controls"
-                  role="group"
-                  aria-label="Görüşme kontrolleri"
-                >
-                  <div className="call-control-wrap">
-                    <button
-                      className={`call-control ${!call.mic ? "call-control-off" : "call-control-active"}`}
-                      aria-label={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
-                      aria-pressed={call.mic}
-                      onClick={call.toggleMic}
-                    >
-                      {call.mic ? <Mic size={21} /> : <MicOff size={21} />}
-                    </button>
-                    <span>
-                      Mikrofon <small>{call.mic ? "Açık" : "Kapalı"}</small>
-                    </span>
-                  </div>
-                  <div className="call-control-wrap">
-                    <button
-                      className={`call-control ${call.camera ? "call-control-active" : ""}`}
-                      aria-label={
-                        call.camera ? "Kamerayı kapat" : "Kamerayı aç"
-                      }
-                      aria-pressed={call.camera}
-                      disabled={call.mediaBusy}
-                      onClick={() => void call.toggleCamera()}
-                    >
-                      {call.camera ? (
-                        <Video size={21} />
-                      ) : (
-                        <VideoOff size={21} />
-                      )}
-                    </button>
-                    <span>
-                      Kamera <small>{call.camera ? "Açık" : "Kapalı"}</small>
-                    </span>
-                  </div>
-                  <div className="call-control-wrap">
-                    <button
-                      className={`call-control ${call.sharing ? "call-control-active" : ""}`}
-                      aria-label={
-                        call.sharing
-                          ? "Ekran paylaşımını durdur"
-                          : "Ekranı paylaş"
-                      }
-                      aria-pressed={call.sharing}
-                      disabled={call.mediaBusy}
-                      onClick={() => void call.toggleScreen()}
-                    >
-                      <MonitorUp size={21} />
-                    </button>
-                    <span>
-                      {call.sharing ? "Paylaşımı bitir" : "Ekran paylaş"}
-                    </span>
-                  </div>
-                  <div className="call-control-wrap">
-                    <button
-                      className={`call-control ${deafened ? "call-control-off" : ""}`}
-                      aria-label={
-                        deafened
-                          ? "Katılımcıların sesini aç"
-                          : "Katılımcıların sesini kapat"
-                      }
-                      aria-pressed={!deafened}
-                      onClick={() => setDeafened((value) => !value)}
-                    >
-                      {deafened ? <VolumeX size={21} /> : <Volume2 size={21} />}
-                    </button>
-                    <span>
-                      Hoparlör <small>{deafened ? "Kapalı" : "Açık"}</small>
-                    </span>
-                  </div>
-                  <span className="call-controls-divider" />
-                  <div className="call-control-wrap">
-                    <button
-                      className={`call-control ${settingsOpen ? "call-control-active" : ""}`}
-                      aria-label="Ses ayarları"
-                      aria-expanded={settingsOpen}
-                      aria-controls="call-media-settings"
-                      ref={settingsButton}
-                      onClick={() => setSettingsOpen((value) => !value)}
-                    >
-                      <Settings2 size={21} />
-                    </button>
-                    <span>Ayarlar</span>
-                  </div>
-                  <div className="call-control-wrap">
-                    <button
-                      className="call-control call-control-leave"
-                      aria-label="Görüşmeden ayrıl"
-                      onClick={leaveCall}
-                    >
-                      <PhoneOff size={21} />
-                    </button>
-                    <span>Ayrıl</span>
-                  </div>
-                </div>
-                <span className="call-footer-size" role="status">
-                  {call.mediaBusy
-                    ? "Cihaz yanıtı bekleniyor…"
-                    : `${participants.length}/6 kişi`}
-                </span>
-              </footer>
+              </>
             )}
           </div>
-        </div>
-      )}
+
+          {call.joined && (
+            <footer className="call-footer">
+              <div className="call-footer-note">
+                <Button
+                  variant="unstyled"
+                  size="unset"
+                  type="submit"
+                  className="call-chat-return"
+                  onClick={() => closeCallback.current()}
+                >
+                  <MessageSquare size={15} />
+                  Sohbete dön
+                </Button>
+                <small>Görüşme devam eder</small>
+              </div>
+              <div
+                className="call-controls"
+                role="group"
+                aria-label="Görüşme kontrolleri"
+              >
+                <div className="call-control-wrap">
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
+                    className={`call-control ${!call.mic ? "call-control-off" : "call-control-active"}`}
+                    aria-label={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
+                    aria-pressed={call.mic}
+                    onClick={call.toggleMic}
+                  >
+                    {call.mic ? <Mic size={21} /> : <MicOff size={21} />}
+                  </Button>
+                  <span>
+                    Mikrofon <small>{call.mic ? "Açık" : "Kapalı"}</small>
+                  </span>
+                </div>
+                <div className="call-control-wrap">
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
+                    className={`call-control ${call.camera ? "call-control-active" : ""}`}
+                    aria-label={call.camera ? "Kamerayı kapat" : "Kamerayı aç"}
+                    aria-pressed={call.camera}
+                    disabled={call.mediaBusy}
+                    onClick={() => void call.toggleCamera()}
+                  >
+                    {call.camera ? <Video size={21} /> : <VideoOff size={21} />}
+                  </Button>
+                  <span>
+                    Kamera <small>{call.camera ? "Açık" : "Kapalı"}</small>
+                  </span>
+                </div>
+                <div className="call-control-wrap">
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
+                    className={`call-control ${call.sharing ? "call-control-active" : ""}`}
+                    aria-label={
+                      call.sharing
+                        ? "Ekran paylaşımını durdur"
+                        : "Ekranı paylaş"
+                    }
+                    aria-pressed={call.sharing}
+                    disabled={call.mediaBusy}
+                    onClick={() => void call.toggleScreen()}
+                  >
+                    <MonitorUp size={21} />
+                  </Button>
+                  <span>
+                    {call.sharing ? "Paylaşımı bitir" : "Ekran paylaş"}
+                  </span>
+                </div>
+                <div className="call-control-wrap">
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
+                    className={`call-control ${deafened ? "call-control-off" : ""}`}
+                    aria-label={
+                      deafened
+                        ? "Katılımcıların sesini aç"
+                        : "Katılımcıların sesini kapat"
+                    }
+                    aria-pressed={!deafened}
+                    onClick={() => setDeafened((value) => !value)}
+                  >
+                    {deafened ? <VolumeX size={21} /> : <Volume2 size={21} />}
+                  </Button>
+                  <span>
+                    Hoparlör <small>{deafened ? "Kapalı" : "Açık"}</small>
+                  </span>
+                </div>
+                <span className="call-controls-divider" />
+                <div className="call-control-wrap">
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
+                    className={`call-control ${settingsOpen ? "call-control-active" : ""}`}
+                    aria-label="Ses ayarları"
+                    aria-expanded={settingsOpen}
+                    aria-controls="call-media-settings"
+                    ref={settingsButton}
+                    onClick={() => setSettingsOpen((value) => !value)}
+                  >
+                    <Settings2 size={21} />
+                  </Button>
+                  <span>Ayarlar</span>
+                </div>
+                <div className="call-control-wrap">
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
+                    className="call-control call-control-leave"
+                    aria-label="Görüşmeden ayrıl"
+                    onClick={leaveCall}
+                  >
+                    <PhoneOff size={21} />
+                  </Button>
+                  <span>Ayrıl</span>
+                </div>
+              </div>
+              <span className="call-footer-size" role="status">
+                {call.mediaBusy
+                  ? "Cihaz yanıtı bekleniyor…"
+                  : `${participants.length}/6 kişi`}
+              </span>
+            </footer>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

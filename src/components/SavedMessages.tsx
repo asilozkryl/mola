@@ -1,3 +1,5 @@
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowUpRight,
@@ -77,7 +79,8 @@ export function SavedMessages({
       <div className="saved-center-toolbar">
         <div className="saved-center-search">
           <Search size={16} aria-hidden="true" />
-          <input
+          <Input
+            unstyled
             type="search"
             aria-label="Kaydedilen mesajlarda ara"
             placeholder="Kaydettiklerinde ara…"
@@ -116,14 +119,16 @@ export function SavedMessages({
               <p key={error}>{error}</p>
             ))}
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="unset"
             type="button"
             className="secondary-button"
             onClick={state.retry}
             disabled={state.loading || state.idsLoading}
           >
             <RefreshCw size={14} /> Yeniden dene
-          </button>
+          </Button>
         </div>
       )}
       {openError && (
@@ -154,13 +159,15 @@ export function SavedMessages({
               : "Bir mesajdaki yer imi simgesine bas. Kayıtlarına diğer cihazlarından da ulaşabilirsin."}
           </p>
           {state.query.trim() && (
-            <button
+            <Button
+              variant="outline"
+              size="unset"
               type="button"
               className="secondary-button"
               onClick={() => state.setQuery("")}
             >
               Aramayı temizle
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -174,7 +181,9 @@ export function SavedMessages({
             const name = conversationIdentity(channel, selfId, members).name;
             return (
               <div className="saved-center-item" key={message.id}>
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
                   type="button"
                   className="saved-channel-label"
                   aria-label={`${name} içindeki mesaja git`}
@@ -194,7 +203,7 @@ export function SavedMessages({
                   ) : (
                     <ArrowUpRight size={14} aria-hidden="true" />
                   )}
-                </button>
+                </Button>
                 {renderMessage(message)}
               </div>
             );
@@ -203,7 +212,9 @@ export function SavedMessages({
       )}
       {state.hasMore && (
         <div className="saved-center-more">
-          <button
+          <Button
+            variant="outline"
+            size="unset"
             type="button"
             className="secondary-button"
             disabled={state.loading || state.loadingMore}
@@ -211,7 +222,7 @@ export function SavedMessages({
           >
             {state.loadingMore && <LoaderCircle size={15} className="spin" />}
             {state.loadingMore ? "Yükleniyor…" : "Daha fazla göster"}
-          </button>
+          </Button>
         </div>
       )}
     </section>

@@ -1,3 +1,5 @@
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import {
   useEffect,
   useId,
@@ -160,7 +162,11 @@ export function MessageItem({
       .map((button) =>
         button.animate(
           [
-            { backgroundColor: "#d7efe3" },
+            {
+              backgroundColor: getComputedStyle(button)
+                .getPropertyValue("--accent")
+                .trim(),
+            },
             { backgroundColor: getComputedStyle(button).backgroundColor },
           ],
           { duration: 260, easing: "ease-out" },
@@ -487,7 +493,8 @@ export function MessageItem({
         </div>
         {editing && !readOnly ? (
           <div className="message-edit" aria-busy={saving}>
-            <textarea
+            <Textarea
+              unstyled
               aria-label="Mesajı düzenle"
               aria-describedby={editHintId}
               value={editDocument.text}
@@ -544,14 +551,20 @@ export function MessageItem({
               </p>
             )}
             <div>
-              <button
+              <Button
+                variant="outline"
+                size="unset"
+                type="submit"
                 className="secondary-button"
                 disabled={saving}
                 onClick={cancelEdit}
               >
                 Vazgeç
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="default"
+                size="unset"
+                type="submit"
                 className="primary-button"
                 disabled={
                   saving || !draft.trim() || draft.trim() === message.content
@@ -559,7 +572,7 @@ export function MessageItem({
                 onClick={() => void saveEdit()}
               >
                 <Check size={14} /> {saving ? "Kaydediliyor…" : "Kaydet"}
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -607,14 +620,17 @@ export function MessageItem({
                   <Download size={16} />
                 </a>
                 {onOpenFile && (
-                  <button
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
                     className="message-file-preview"
                     aria-label={`${file.name} dosyasını önizle`}
                     title="Önizle"
                     onClick={() => onOpenFile(file)}
                   >
                     <Eye size={16} />
-                  </button>
+                  </Button>
                 )}
               </div>
             ))}
@@ -625,7 +641,10 @@ export function MessageItem({
             {message.reactions
               .filter((r) => r.userIds.length)
               .map((r) => (
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
+                  type="submit"
                   key={r.emoji}
                   data-reaction-emoji={r.emoji}
                   disabled={readOnly}
@@ -636,9 +655,12 @@ export function MessageItem({
                 >
                   {r.emoji}
                   <span>{r.userIds.length}</span>
-                </button>
+                </Button>
               ))}
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="add-reaction"
               aria-label="Tepki ekle"
               disabled={readOnly}
@@ -652,22 +674,30 @@ export function MessageItem({
               }}
             >
               <SmilePlus size={15} />
-            </button>
+            </Button>
           </div>
         )}
         {!compact && message.replyCount > 0 && (
-          <button className="thread-preview" onClick={onReply}>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
+            className="thread-preview"
+            onClick={onReply}
+          >
             <MessageSquare size={14} />
             <strong>{message.replyCount} yanıt</strong>
             <span>Sohbeti aç</span>
-          </button>
+          </Button>
         )}
       </div>
       <div className="message-actions">
         <IconButton label="Mesaj bağlantısını kopyala" onClick={onCopyLink}>
           <Link size={16} />
         </IconButton>
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
           type="button"
           className="icon-button"
           aria-label="Tepki ekle"
@@ -683,7 +713,7 @@ export function MessageItem({
           }}
         >
           <SmilePlus size={16} />
-        </button>
+        </Button>
         {!compact && (
           <IconButton label="Mesajı yanıtla" onClick={onReply}>
             <MessageSquare size={16} />
@@ -701,7 +731,9 @@ export function MessageItem({
             <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
           )}
         </IconButton>
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
           type="button"
           className="icon-button"
           title="Diğer mesaj işlemleri"
@@ -716,7 +748,7 @@ export function MessageItem({
           }}
         >
           <MoreHorizontal size={17} />
-        </button>
+        </Button>
       </div>
       {reacting && !readOnly && (
         <div
@@ -728,7 +760,10 @@ export function MessageItem({
           onKeyDown={navigatePopover}
         >
           {["🙌", "💚", "🔥", "👏", "👍", "👀", "✨", "🎉"].map((emoji) => (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               key={emoji}
               aria-label={`${emoji} tepkisi ekle`}
               onClick={() => {
@@ -737,7 +772,7 @@ export function MessageItem({
               }}
             >
               {emoji}
-            </button>
+            </Button>
           ))}
           <IconButton
             label="Tepkileri kapat"
@@ -757,7 +792,10 @@ export function MessageItem({
             aria-label="Mesaj işlemleri"
             onKeyDown={navigatePopover}
           >
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="message-touch-action"
               onClick={() => {
                 onCopyLink();
@@ -766,8 +804,11 @@ export function MessageItem({
             >
               <Link size={15} />
               Mesaj bağlantısını kopyala
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="message-touch-action"
               disabled={readOnly}
               onClick={() => {
@@ -777,9 +818,12 @@ export function MessageItem({
             >
               <SmilePlus size={15} />
               Tepki ekle
-            </button>
+            </Button>
             {!compact && (
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
                 className="message-touch-action"
                 onClick={() => {
                   closePopovers(true);
@@ -788,9 +832,12 @@ export function MessageItem({
               >
                 <MessageSquare size={15} />
                 Mesajı yanıtla
-              </button>
+              </Button>
             )}
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="message-touch-action"
               aria-pressed={saved}
               aria-busy={saveBusy}
@@ -806,8 +853,11 @@ export function MessageItem({
                 <Bookmark size={15} fill={saved ? "currentColor" : "none"} />
               )}
               {saved ? "Kaydedilenlerden kaldır" : "Mesajı kaydet"}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               disabled={readOnly}
               onClick={() => {
                 onPin();
@@ -816,17 +866,26 @@ export function MessageItem({
             >
               <Pin size={15} />
               {message.pinned ? "Sabitlemeyi kaldır" : "Kanala sabitle"}
-            </button>
+            </Button>
             {authorIsSelf && (
               <>
-                <button disabled={readOnly} onClick={startEdit}>
+                <Button
+                  variant="unstyled"
+                  size="unset"
+                  type="submit"
+                  disabled={readOnly}
+                  onClick={startEdit}
+                >
                   <Pencil size={15} />
                   Mesajı düzenle
-                </button>
+                </Button>
               </>
             )}
             {(authorIsSelf || canModerate) && (
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
                 className="danger-text"
                 disabled={readOnly}
                 onClick={() => {
@@ -836,7 +895,7 @@ export function MessageItem({
               >
                 <Trash2 size={15} />
                 Mesajı sil
-              </button>
+              </Button>
             )}
           </div>
         </>
@@ -850,13 +909,19 @@ export function MessageItem({
             {mentionPreview(message.content, members)}
           </blockquote>
           <div className="modal-actions">
-            <button
+            <Button
+              variant="outline"
+              size="unset"
+              type="submit"
               className="secondary-button"
               onClick={() => setDeleting(false)}
             >
               Vazgeç
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="danger-button"
               onClick={() => {
                 onDelete();
@@ -864,7 +929,7 @@ export function MessageItem({
               }}
             >
               Mesajı sil
-            </button>
+            </Button>
           </div>
         </Modal>
       )}

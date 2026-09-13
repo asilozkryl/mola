@@ -1,3 +1,5 @@
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Check, Eye, EyeOff } from "lucide-react";
 import type { SessionBootstrap } from "../../shared/types";
@@ -115,7 +117,8 @@ export function Auth({
         >
           <label>
             {useRecovery ? "Kurtarma kodu" : "Doğrulama kodu"}
-            <input
+            <Input
+              unstyled
               key={String(useRecovery)}
               className={useRecovery ? "" : "two-factor-code"}
               name="code"
@@ -135,7 +138,13 @@ export function Auth({
               {error}
             </p>
           )}
-          <button className="primary-button full-width" disabled={busy}>
+          <Button
+            variant="default"
+            size="unset"
+            type="submit"
+            className="primary-button full-width"
+            disabled={busy}
+          >
             {busy ? (
               <Spinner label="Doğrulanıyor" />
             ) : (
@@ -143,9 +152,12 @@ export function Auth({
                 Doğrula ve giriş yap <ArrowRight size={18} />
               </>
             )}
-          </button>
+          </Button>
         </form>
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className="auth-text-button two-factor-switch"
           disabled={busy}
           onClick={() => {
@@ -156,8 +168,11 @@ export function Auth({
           {useRecovery
             ? "Doğrulama uygulamamı kullan"
             : "Telefonuma erişemiyorum"}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className="auth-text-button"
           disabled={busy}
           onClick={() => {
@@ -166,7 +181,7 @@ export function Auth({
           }}
         >
           Giriş ekranına dön
-        </button>
+        </Button>
       </AuthLayout>
     );
   if (mode === "forgot")
@@ -197,7 +212,10 @@ export function Auth({
           : "Birkaç küçük detayla başlayalım."}
       </p>
       <div className="auth-tabs">
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className={mode === "login" ? "active" : ""}
           onClick={() => {
             setMode("login");
@@ -205,8 +223,11 @@ export function Auth({
           }}
         >
           Giriş yap
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className={mode === "register" ? "active" : ""}
           disabled={!registrationAvailable}
           aria-describedby={
@@ -218,7 +239,7 @@ export function Auth({
           }}
         >
           Hesap oluştur
-        </button>
+        </Button>
       </div>
       {!emailDeliveryAvailable && (
         <EmailUnavailableNotice id="email-unavailable">
@@ -228,19 +249,23 @@ export function Auth({
         </EmailUnavailableNotice>
       )}
       {mode === "register" && !registrationAvailable ? (
-        <button
+        <Button
+          variant="default"
+          size="unset"
+          type="submit"
           className="primary-button full-width recovery-secondary"
           onClick={() => setMode("login")}
         >
           Mevcut hesabımla giriş yap
           <ArrowRight size={18} />
-        </button>
+        </Button>
       ) : (
         <form onSubmit={submit}>
           {mode === "register" && (
             <label>
               Adın soyadın
-              <input
+              <Input
+                unstyled
                 name="name"
                 placeholder="Örn. Asil Yılmaz"
                 autoComplete="name"
@@ -252,7 +277,8 @@ export function Auth({
           )}
           <label>
             E-posta adresin
-            <input
+            <Input
+              unstyled
               name="email"
               type="email"
               placeholder="sen@ekibin.com"
@@ -264,7 +290,8 @@ export function Auth({
           <label>
             Parola
             <div className="password-field">
-              <input
+              <Input
+                unstyled
                 name="password"
                 type={showPassword ? "text" : "password"}
                 placeholder={
@@ -286,7 +313,9 @@ export function Auth({
             </div>
           </label>
           {mode === "login" && (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               className="auth-text-button forgot-link"
               type="button"
               disabled={!emailDeliveryAvailable}
@@ -299,12 +328,13 @@ export function Auth({
               }}
             >
               Parolamı unuttum
-            </button>
+            </Button>
           )}
           {mode === "register" && !inviteToken && (
             <label>
               Çalışma alanı adı
-              <input
+              <Input
+                unstyled
                 name="workspaceName"
                 placeholder="Örn. Studio North"
                 required
@@ -318,7 +348,13 @@ export function Auth({
               {error}
             </p>
           )}
-          <button className="primary-button full-width" disabled={busy}>
+          <Button
+            variant="default"
+            size="unset"
+            type="submit"
+            className="primary-button full-width"
+            disabled={busy}
+          >
             {busy ? (
               <Spinner label="Birazdan oradasın" />
             ) : (
@@ -327,7 +363,7 @@ export function Auth({
                 <ArrowRight size={18} />
               </>
             )}
-          </button>
+          </Button>
         </form>
       )}
       {demoEnabled && (
@@ -335,13 +371,16 @@ export function Auth({
           <div className="or-divider">
             <span>Önce bir göz atmak istersen</span>
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="unset"
+            type="submit"
             className="secondary-button full-width"
             onClick={demo}
             disabled={busy}
           >
             Örnek çalışma alanını keşfet
-          </button>
+          </Button>
           <p className="auth-demo-note">
             <Check size={14} /> Hesap gerekmez. Sana özel bir örnek alan açılır.
           </p>

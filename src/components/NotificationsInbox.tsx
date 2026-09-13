@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
   AtSign,
@@ -40,10 +41,16 @@ export function NotificationsInbox({
           <h2>Sohbeti kaçırma.</h2>
           <p>Bahsedilmeler, yanıtlar ve özel mesajların burada.</p>
         </div>
-        <button className="secondary-button" onClick={onSettings}>
+        <Button
+          variant="outline"
+          size="unset"
+          type="submit"
+          className="secondary-button"
+          onClick={onSettings}
+        >
           <Settings2 size={16} />
           Bildirim ayarları
-        </button>
+        </Button>
       </div>
       {error && (
         <p role="alert" className="form-error">
@@ -58,7 +65,10 @@ export function NotificationsInbox({
             <strong>
               {state?.unreadNotifications || 0} okunmamış bildirim
             </strong>
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="text-button"
               onClick={onReadAll}
               disabled={
@@ -68,17 +78,23 @@ export function NotificationsInbox({
             >
               <CheckCheck size={16} />
               Tümünü okundu işaretle
-            </button>
+            </Button>
           </div>
           {!!Object.values(state?.unreadByChannel || {}).some(Boolean) && (
             <div className="unread-channels">
               {channels
                 .filter((c) => (state?.unreadByChannel[c.id] || 0) > 0)
                 .map((c) => (
-                  <button key={c.id} onClick={() => onChannel(c.id)}>
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
+                    key={c.id}
+                    onClick={() => onChannel(c.id)}
+                  >
                     <span>#{c.name}</span>
                     <b>{state!.unreadByChannel[c.id]}</b>
-                  </button>
+                  </Button>
                 ))}
             </div>
           )}
@@ -94,7 +110,10 @@ export function NotificationsInbox({
           ) : (
             <div className="notification-items">
               {notifications.map((n) => (
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
+                  type="submit"
                   className={`notification-item ${n.read ? "" : "is-unread"}`}
                   key={n.id}
                   onClick={() => onOpen(n.messageId)}
@@ -132,7 +151,7 @@ export function NotificationsInbox({
                       role="img"
                     />
                   )}
-                </button>
+                </Button>
               ))}
             </div>
           )}

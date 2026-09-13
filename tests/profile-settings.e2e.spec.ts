@@ -290,7 +290,7 @@ for (const width of [320, 390]) {
         animations: "disabled",
       });
       const results = await new AxeBuilder({ page })
-        .include("dialog[open]")
+        .include('[role="dialog"][aria-modal="true"]')
         .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
         .analyze();
       expect(results.violations).toEqual([]);
@@ -364,6 +364,7 @@ test("unchanged, reverted and already saved profile details close without confir
   await openSettings(page);
   await dialog.getByLabel("Unvanın", { exact: true }).fill("Geçici unvan");
   await dialog.getByLabel("Unvanın", { exact: true }).fill("");
+  await dialog.getByRole("tab", { name: "Bildirimler", exact: true }).click();
   await dialog.getByRole("switch", { name: /Biraz odak zamanı/ }).click();
   await dialog.getByRole("button", { name: "Kapat", exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -580,6 +581,7 @@ for (const action of ["profile", "photo"] as const) {
         dialog.getByRole("button", {
           name: "Yönetim panelini aç",
           exact: true,
+          includeHidden: true,
         }),
       ).toBeDisabled();
     } finally {
@@ -616,6 +618,10 @@ for (const destination of ["logout", "manage"] as const) {
     await dialog
       .getByLabel("Konumun", { exact: true })
       .fill("Kaydedilmemiş konum");
+    if (destination === "manage")
+      await dialog
+        .getByRole("tab", { name: "Çalışma alanı", exact: true })
+        .click();
     await dialog.getByRole("button", { name: label, exact: true }).click();
     const confirmation = discardConfirmation(page);
     await expect(confirmation).toContainText(

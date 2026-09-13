@@ -11,7 +11,7 @@
 .rail-workspaces .workspace-button {
   flex-shrink: 0;
   background: #ffffff19;
-  color: #e1eee6;
+  color: #fff;
   box-shadow: none;
 }
 .rail-workspaces .workspace-button:hover {
@@ -19,7 +19,7 @@
 }
 .rail-workspaces .workspace-button.active {
   background: var(--leaf);
-  color: var(--forest);
+  color: var(--accent-foreground);
 }
 .workspace-rail .rail-add {
   flex-shrink: 0;
@@ -32,7 +32,7 @@
   min-width: 0;
 }
 .workspace-switcher-intro {
-  color: #667368;
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.7;
   margin-bottom: 21px;
@@ -50,7 +50,7 @@
   border: 1px solid var(--line);
   border-radius: 9px;
   margin-bottom: 12px;
-  color: #667368;
+  color: var(--muted-foreground);
 }
 .workspace-filter input {
   flex: 1;
@@ -80,7 +80,7 @@
   background: var(--subtle);
 }
 .workspace-choice.is-current {
-  background: #edf4e8;
+  background: var(--secondary);
 }
 .workspace-monogram {
   display: grid;
@@ -88,13 +88,13 @@
   width: 43px;
   height: 43px;
   flex-shrink: 0;
-  background: #e0e9da;
-  color: var(--forest);
+  background: var(--secondary);
+  color: var(--accent-foreground);
   border-radius: 13px;
   font-weight: 800;
 }
 .workspace-choice.is-current .workspace-monogram {
-  background: var(--forest);
+  background: var(--brand-solid);
   color: var(--leaf);
 }
 .workspace-choice-copy {
@@ -108,7 +108,7 @@
   font-size: 13px;
 }
 .workspace-choice-copy small {
-  color: #59665b;
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 .workspace-current {
@@ -151,14 +151,14 @@
 }
 .workspace-add-actions small {
   font-size: 11px;
-  color: #667368;
+  color: var(--muted-foreground);
 }
 .workspace-back {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   font-size: 12px;
-  color: #667368;
+  color: var(--muted-foreground);
   margin-bottom: 21px;
   padding: 6px 0;
 }
@@ -171,9 +171,9 @@
 .workspace-switcher form input {
   width: 100%;
   padding: 13px;
-  border: 1px solid #dce2d8;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   font-size: 13px;
 }
@@ -185,18 +185,18 @@
   align-items: center;
   gap: 7px;
   margin-top: 13px;
-  color: #667368;
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 .workspace-empty,
 .workspace-demo-note {
   font-size: 12px;
   line-height: 1.7;
-  color: #667368;
+  color: var(--muted-foreground);
   padding: 13px 0 0;
 }
 .workspace-switch-confirm p {
-  color: #667368;
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -229,8 +229,8 @@
 }
 .voice-peer-count {
   font-size: 10px;
-  background: #e2ebdc;
-  color: #43663c;
+  background: var(--secondary);
+  color: var(--primary);
   padding: 2px 6px;
   border-radius: 6px;
   font-weight: 700;
@@ -256,21 +256,21 @@
   white-space: nowrap;
   flex: 1;
   font-size: 11px;
-  color: #4c5e4e;
+  color: var(--muted-foreground);
 }
 .voice-participant > .voice-media-state {
   flex-shrink: 0;
   display: flex;
   gap: 4px;
-  color: #6c7a6c;
+  color: var(--muted-foreground);
 }
 .voice-media-state .is-sharing {
-  color: #2d6650;
+  color: var(--primary);
 }
 .voice-preview-description {
   font-size: 13px;
   line-height: 1.7;
-  color: #667368;
+  color: var(--muted-foreground);
   margin-bottom: 21px;
 }
 .voice-preview .voice-participants {
@@ -302,7 +302,7 @@
 }
 .voice-preview-empty p {
   font-size: 12px;
-  color: #667368;
+  color: var(--muted-foreground);
   line-height: 1.7;
 }
 .workspace-unavailable {
@@ -323,7 +323,7 @@
   margin: 15px 0 23px;
   font-size: 13px;
   line-height: 1.8;
-  color: #667368;
+  color: var(--muted-foreground);
 }
 @media (max-width: 480px) {
   .workspace-current span {

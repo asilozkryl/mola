@@ -1,11 +1,17 @@
 import {
   Fragment,
   useLayoutEffect,
+  useMemo,
   useRef,
-  type KeyboardEvent,
+  useState,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "./ui/dropdown-menu";
 import "./context-menu.css";
 
 export type ContextMenuPosition = { x: number; y: number };
@@ -19,69 +25,67 @@ export type ContextMenuItem = {
   separatorBefore?: boolean;
 };
 
-export function ContextMenu({
-  position,
-  items,
-  onClose,
-  label = "İşlemler",
-  returnFocus,
-}: {
+type ContextMenuProps = {
   position: ContextMenuPosition | null;
   items: ContextMenuItem[];
   onClose: () => void;
   label?: string;
   returnFocus?: HTMLElement | null;
-}) {
-  const menuRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
+};
 
-  function focusOrigin() {
-    if (previousFocusRef.current?.isConnected)
-      previousFocusRef.current.focus({ preventScroll: true });
-  }
+export function ContextMenu(props: ContextMenuProps) {
+  if (!props.position) return null;
+  return (
+    <OpenContextMenu
+      key={`${props.position.x}:${props.position.y}`}
+      {...props}
+      position={props.position}
+    />
+  );
+}
 
-  function close(restoreFocus = true) {
-    if (restoreFocus) focusOrigin();
-    closeRef.current();
-  }
-
-  useLayoutEffect(() => {
-    const menu = menuRef.current;
-    if (!position || !menu) return;
-    previousFocusRef.current =
+function OpenContextMenu({
+  position,
+  items,
+  onClose,
+  label = "İşlemler",
+  returnFocus,
+}: ContextMenuProps & { position: ContextMenuPosition }) {
+  const [menu, setMenu] = useState<HTMLDivElement | null>(null);
+  const [origin] = useState(
+    () =>
       returnFocus ||
       (document.activeElement instanceof HTMLElement
         ? document.activeElement
-        : null);
+        : null),
+  );
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const restoreFocus = useRef(true);
+  const anchor = useMemo(
+    () => ({
+      getBoundingClientRect: () => new DOMRect(position.x, position.y, 0, 0),
+    }),
+    [position.x, position.y],
+  );
+
+  function focusOrigin() {
+    if (origin?.isConnected) origin.focus({ preventScroll: true });
+  }
+
+  useLayoutEffect(() => {
+    if (!menu) return;
     const anchorBounds = returnFocus?.getBoundingClientRect();
-
-    function place() {
-      if (!menu || !position) return;
-      const margin = 8;
-      const viewport = window.visualViewport;
-      const left = (viewport?.offsetLeft || 0) + margin;
-      const top = (viewport?.offsetTop || 0) + margin;
-      const width = viewport?.width || window.innerWidth;
-      const height = viewport?.height || window.innerHeight;
-      menu.style.maxWidth = `${Math.max(0, width - margin * 2)}px`;
-      menu.style.maxHeight = `${Math.max(0, height - margin * 2)}px`;
-      const bounds = menu.getBoundingClientRect();
-      menu.style.left = `${Math.max(left, Math.min(position.x, left + width - margin * 2 - bounds.width))}px`;
-      menu.style.top = `${Math.max(top, Math.min(position.y, top + height - margin * 2 - bounds.height))}px`;
-    }
-
-    function dismissOutside(event: PointerEvent | FocusEvent) {
-      if (event.target instanceof Node && !menu?.contains(event.target))
-        closeRef.current();
-    }
-
+    // Imperative Shift+F10 and row actions focus the same first item as a trigger.
+    const frame = requestAnimationFrame(() => {
+      menu
+        .querySelector<HTMLElement>('[role="menuitem"]:not([data-disabled])')
+        ?.focus({ preventScroll: true });
+    });
     function dismissOnScroll(event: Event) {
       if (event.target instanceof Node && menu?.contains(event.target)) return;
-      // A conversation can finish scrolling while a sidebar menu opens.
-      // Only moving the menu's own anchor makes its position stale.
       const currentBounds = returnFocus?.getBoundingClientRect();
+      // Scrolling a different pane must not dismiss a sidebar or message menu.
       if (
         anchorBounds &&
         currentBounds &&
@@ -90,108 +94,99 @@ export function ContextMenu({
         Math.abs(anchorBounds.top - currentBounds.top) < 1
       )
         return;
+      restoreFocus.current = false;
       closeRef.current();
     }
-
-    place();
-    menu
-      .querySelector<HTMLButtonElement>("button:not(:disabled)")
-      ?.focus({ preventScroll: true });
-    if (!menu.contains(document.activeElement))
-      menu.focus({ preventScroll: true });
-    const observer = new ResizeObserver(place);
-    observer.observe(menu);
-    document.addEventListener("pointerdown", dismissOutside);
-    document.addEventListener("focusin", dismissOutside);
     document.addEventListener("scroll", dismissOnScroll, true);
-    window.addEventListener("resize", place);
-    window.visualViewport?.addEventListener("resize", place);
-    window.visualViewport?.addEventListener("scroll", place);
     return () => {
-      observer.disconnect();
-      document.removeEventListener("pointerdown", dismissOutside);
-      document.removeEventListener("focusin", dismissOutside);
+      cancelAnimationFrame(frame);
       document.removeEventListener("scroll", dismissOnScroll, true);
-      window.removeEventListener("resize", place);
-      window.visualViewport?.removeEventListener("resize", place);
-      window.visualViewport?.removeEventListener("scroll", place);
-      // Preserve a newly focused control or modal when the action opens one.
-      if (menu.contains(document.activeElement)) focusOrigin();
     };
-  }, [position?.x, position?.y, returnFocus]);
+  }, [menu, returnFocus]);
 
-  function navigate(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      close();
-      return;
-    }
-    if (event.key === "Tab") {
-      event.stopPropagation();
-      close();
-      return;
-    }
-    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const buttons = Array.from(
-      event.currentTarget.querySelectorAll<HTMLButtonElement>(
-        "button:not(:disabled)",
-      ),
-    );
-    if (!buttons.length) return;
-    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    const next =
-      event.key === "Home"
-        ? 0
-        : event.key === "End"
-          ? buttons.length - 1
-          : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
-            buttons.length;
-    buttons[next]?.focus();
-  }
-
-  if (!position) return null;
-
-  return createPortal(
-    <div
-      ref={menuRef}
-      className="context-menu"
-      role="menu"
-      aria-label={label}
-      tabIndex={-1}
-      style={{ left: position.x, top: position.y }}
-      onKeyDown={navigate}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
+  return (
+    <DropdownMenu
+      open
+      modal={false}
+      loopFocus
+      onOpenChange={(open, details) => {
+        if (open) return;
+        restoreFocus.current = !["outside-press", "focus-out"].includes(
+          details.reason,
+        );
+        if (details.reason === "escape-key") details.event.stopPropagation();
+        closeRef.current();
       }}
     >
-      {items.map((item) => (
-        <Fragment key={item.label}>
-          {item.separatorBefore && (
-            <div className="context-menu-separator" role="separator" />
-          )}
-          <button
-            type="button"
-            role="menuitem"
-            tabIndex={-1}
-            className={item.danger ? "context-menu-danger" : undefined}
-            disabled={item.disabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              close();
-              item.onSelect();
-            }}
-          >
-            {item.icon && <span aria-hidden="true">{item.icon}</span>}
-            {item.label}
-          </button>
-        </Fragment>
-      ))}
-    </div>,
-    returnFocus?.closest('dialog[open], [role="dialog"][aria-modal="true"]') ||
-      document.body,
+      <DropdownMenuContent
+        ref={setMenu}
+        className="context-menu"
+        aria-label={label}
+        align="start"
+        side="bottom"
+        sideOffset={0}
+        portalContainer={
+          origin?.closest<HTMLElement>(
+            'dialog[open], [role="dialog"][aria-modal="true"]',
+          ) || undefined
+        }
+        positionerProps={{
+          anchor,
+          positionMethod: "fixed",
+          sticky: true,
+          collisionPadding: 8,
+          collisionAvoidance: { side: "shift", align: "shift" },
+          className: "context-menu-positioner",
+        }}
+        finalFocus={() =>
+          restoreFocus.current && origin?.isConnected ? origin : false
+        }
+        onKeyDown={(event) => {
+          if (event.key === "Escape") event.stopPropagation();
+          if (event.key === "Tab") {
+            event.stopPropagation();
+            focusOrigin();
+            closeRef.current();
+          }
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+      >
+        {items.map((item) => (
+          <Fragment key={item.label}>
+            {item.separatorBefore && (
+              <DropdownMenuSeparator className="context-menu-separator" />
+            )}
+            <DropdownMenuItem
+              render={<button type="button" />}
+              nativeButton
+              label={item.label}
+              variant={item.danger ? "destructive" : "default"}
+              className={item.danger ? "context-menu-danger" : undefined}
+              disabled={item.disabled}
+              closeOnClick={false}
+              onClick={(event) => {
+                event.stopPropagation();
+                // Selection closes this imperative menu. Prevent the library's
+                // later click handler from refocusing the disappearing item
+                // after we restore the opener or mount an action's dialog.
+                event.preventBaseUIHandler();
+                // Let an action's editor or dialog take over without menu cleanup
+                // stealing focus back to the opening row.
+                restoreFocus.current = false;
+                focusOrigin();
+                closeRef.current();
+                item.onSelect();
+              }}
+            >
+              {item.icon && <span aria-hidden="true">{item.icon}</span>}
+              {item.label}
+            </DropdownMenuItem>
+          </Fragment>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

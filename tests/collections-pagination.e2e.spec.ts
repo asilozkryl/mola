@@ -675,11 +675,15 @@ test.describe("compact file preview", () => {
       await close.focus();
       for (const key of ["Shift+Tab", "Tab", "Tab", "Tab"]) {
         await page.keyboard.press(key);
-        expect(
-          await preview.evaluate((element) =>
-            element.contains(document.activeElement),
-          ),
-        ).toBe(true);
+        // Base UI's focus guard completes boundary wrapping asynchronously.
+        // Wait for that cycle while still requiring focus inside the popup.
+        await expect
+          .poll(() =>
+            preview.evaluate((element) =>
+              element.contains(document.activeElement),
+            ),
+          )
+          .toBe(true);
       }
       await close.focus();
       await page.keyboard.press("Escape");

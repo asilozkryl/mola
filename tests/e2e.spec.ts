@@ -229,6 +229,7 @@ test('password settings reject an incorrect current password and make the new pa
   const account = await registeredAccount(page, 'Parola Testi');
   await page.getByTitle('Profil ve ayarlar', { exact: true }).click();
   const settings = page.getByRole('dialog', { name: 'Kendine ait bir köşe' });
+  await settings.getByRole('tab', { name: 'Güvenlik', exact: true }).click();
   await settings.getByText('Parolanı değiştir', { exact: true }).click();
   await settings.getByLabel('Mevcut parolan', { exact: true }).fill('wrong-current-password');
   await settings.getByLabel('Yeni parolan', { exact: true }).fill('changed-password-for-browser-test');

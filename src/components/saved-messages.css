@@ -16,13 +16,13 @@
   align-items: center;
   gap: 9px;
   padding: 0 11px;
-  background: #fff;
-  color: #62716c;
-  border: 1px solid #dce4e0;
+  background: var(--card);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
   border-radius: 7px;
 }
 .saved-center-search:focus-within {
-  border-color: #237459;
+  border-color: var(--ring);
   box-shadow: 0 0 0 2px #23745918;
 }
 .saved-center-search input {
@@ -30,27 +30,27 @@
   width: 100%;
   padding: 11px 0;
   font-size: 13px;
-  color: #293730;
+  color: var(--accent-foreground);
   border: 0;
   outline: 0;
   box-shadow: none;
   background: transparent;
 }
 .saved-center-search input::placeholder {
-  color: #62716c;
+  color: var(--muted-foreground);
 }
 .saved-center-count {
   padding: 14px 0 11px;
   font-size: 12px;
   font-weight: 650;
-  color: #62716c;
+  color: var(--muted-foreground);
 }
 .saved-center-list {
-  border-top: 1px solid #e2e8e5;
+  border-top: 1px solid var(--border);
 }
 .saved-center-item {
   padding: 12px 0;
-  border-bottom: 1px solid #e2e8e5;
+  border-bottom: 1px solid var(--border);
 }
 .saved-center .saved-channel-label {
   display: flex;
@@ -62,11 +62,11 @@
   padding: 5px 10px;
   border-radius: 5px;
   font-size: 11px;
-  color: #31624f;
+  color: var(--primary);
   text-align: left;
 }
 .saved-center .saved-channel-label:hover {
-  background: #eef5f1;
+  background: var(--muted);
 }
 .saved-center .saved-channel-label > span {
   display: flex;
@@ -88,14 +88,14 @@
   gap: 12px;
   padding: 56px 20px;
   text-align: center;
-  color: #62716c;
+  color: var(--muted-foreground);
 }
 .saved-center-empty > svg {
-  color: #2d6650;
+  color: var(--primary);
 }
 .saved-center-empty h3 {
   font-size: 15px;
-  color: #293730;
+  color: var(--foreground);
 }
 .saved-center-empty p {
   max-width: 340px;
@@ -106,7 +106,7 @@
   display: grid;
   place-items: center;
   min-height: 140px;
-  color: #2d6650;
+  color: var(--primary);
 }
 .saved-center-error {
   display: flex;
@@ -115,10 +115,10 @@
   gap: 14px;
   padding: 12px;
   margin-bottom: 14px;
-  border: 1px solid #edc9c6;
+  border: 1px solid var(--danger-border);
   border-radius: 7px;
-  background: #fff8f7;
-  color: #9b362e;
+  background: var(--muted);
+  color: var(--destructive);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -130,7 +130,7 @@
 }
 .saved-center-open-error {
   margin-bottom: 12px;
-  color: #9b362e;
+  color: var(--destructive);
   font-size: 12px;
   line-height: 1.6;
 }

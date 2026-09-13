@@ -8,7 +8,7 @@
 
 .voice-participant-profile:hover .voice-participant-name,
 .voice-participant-profile[aria-expanded="true"] .voice-participant-name {
-  color: var(--forest);
+  color: var(--accent-foreground);
 }
 
 @media (pointer: coarse) {

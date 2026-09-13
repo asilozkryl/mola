@@ -4,7 +4,7 @@
 .security-body h3 {
   margin: 0;
   font-size: 15px;
-  color: var(--forest);
+  color: var(--accent-foreground);
 }
 .security-heading {
   display: flex;
@@ -20,16 +20,16 @@
 .security-badge {
   display: inline-flex;
   border-radius: 5px;
-  background: #eee;
-  color: #5d665f;
+  background: var(--secondary);
+  color: var(--muted-foreground);
   padding: 3px 7px;
   font-size: 10px;
   font-weight: 800;
   line-height: 1.2;
 }
 .security-badge.enabled {
-  color: #24573e;
-  background: #edf5e7;
+  color: var(--accent-foreground);
+  background: var(--secondary);
 }
 .security-actions {
   display: flex;
@@ -47,7 +47,7 @@
   padding: 7px 0;
   border: 0;
   background: none;
-  color: var(--forest);
+  color: var(--accent-foreground);
   font-size: 12px;
   font-weight: 650;
   cursor: pointer;
@@ -62,7 +62,7 @@
 .security-meta {
   width: 100%;
   margin: 0 0 5px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 .security-form {
@@ -81,9 +81,9 @@
   padding: 10px 12px;
   margin: 10px 0;
   border-radius: 8px;
-  background: #f6f8f4;
+  background: var(--muted);
   font-size: 12px;
-  color: var(--forest);
+  color: var(--accent-foreground);
 }
 .security-manual summary {
   cursor: pointer;
@@ -99,29 +99,29 @@
 }
 .security-warning {
   padding: 10px 12px;
-  background: #fff4e9;
-  border: 1px solid #f1dfc9;
+  background: var(--danger-surface);
+  border: 1px solid var(--danger-border);
   border-radius: 8px;
   font-size: 12px;
   line-height: 1.6;
-  color: #714d2c;
+  color: var(--destructive);
 }
 .security-recovery {
   margin-top: 15px;
   padding: 14px;
-  border: 1px solid #d9e5cf;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: #f7faf3;
+  background: var(--muted);
 }
 .security-recovery h4 {
   margin: 0;
-  color: var(--forest);
+  color: var(--accent-foreground);
   font-size: 14px;
 }
 .security-recovery p {
   font-size: 12px;
   line-height: 1.6;
-  color: #586650;
+  color: var(--muted-foreground);
 }
 .security-recovery ul {
   list-style: none;
@@ -134,8 +134,8 @@
 .security-recovery li {
   padding: 6px 3px;
   text-align: center;
-  background: #fff;
-  border: 1px solid #e4eadf;
+  background: var(--card);
+  border: 1px solid var(--border);
   border-radius: 5px;
   font-size: 10px;
   user-select: all;
@@ -166,7 +166,7 @@
 }
 .security-session-list > li > svg {
   flex-shrink: 0;
-  color: var(--forest);
+  color: var(--accent-foreground);
   margin-top: 2px;
 }
 .security-session-details {
@@ -182,7 +182,7 @@
 .security-session-details > small {
   width: 100%;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .security-session-details > .security-text-button {
   font-size: 11px;
@@ -203,8 +203,8 @@
   line-height: 1.6;
   padding: 10px 12px;
   border-radius: 7px;
-  background: #eef5e8;
-  color: #285338;
+  background: var(--secondary);
+  color: var(--accent-foreground);
 }
 .two-factor-form .two-factor-code {
   font-size: 23px;
@@ -230,5 +230,5 @@
 }
 .account-security .security-meta,
 .account-security .security-session-details > small {
-  color: #65705f;
+  color: var(--muted-foreground);
 }

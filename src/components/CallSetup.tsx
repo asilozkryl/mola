@@ -1,3 +1,5 @@
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   Check,
@@ -123,7 +125,8 @@ export function MediaSettings({
     >
       <label>
         Mikrofon
-        <select
+        <NativeSelect
+          unstyled
           value={call.preferences.inputDeviceId}
           disabled={busy || call.mediaBusy || loading}
           onChange={(event) => {
@@ -148,11 +151,12 @@ export function MediaSettings({
                 Seçili mikrofon (bağlantısını kontrol edin)
               </option>
             )}
-        </select>
+        </NativeSelect>
       </label>
       <label>
         Hoparlör
-        <select
+        <NativeSelect
+          unstyled
           value={call.preferences.outputDeviceId}
           disabled={busy || call.mediaBusy || loading || !canSelectOutput()}
           onChange={(event) => void changeOutput(event.target.value)}
@@ -171,7 +175,7 @@ export function MediaSettings({
                 Seçili hoparlör
               </option>
             )}
-        </select>
+        </NativeSelect>
       </label>
       {!canSelectOutput() && (
         <p className="call-device-help">
@@ -182,7 +186,9 @@ export function MediaSettings({
       {canSelectOutput() &&
         typeof (navigator.mediaDevices as OutputDevices | undefined)
           ?.selectAudioOutput === "function" && (
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             className="call-secondary"
             disabled={busy || call.mediaBusy}
@@ -203,7 +209,7 @@ export function MediaSettings({
             }}
           >
             Başka bir hoparlör seç
-          </button>
+          </Button>
         )}
       <p className="call-device-help">
         Cihaz adları mikrofon izninden sonra görünür. Seçimin bu tarayıcıdaki
@@ -414,7 +420,9 @@ export function CallSetup({
               <strong>Sesini kontrol et</strong>
               <small>İsteğe bağlı; sesin kaydedilmez veya paylaşılmaz.</small>
             </div>
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               type="button"
               className="call-secondary"
               onClick={() => (testing || busy ? stop() : void testMicrophone())}
@@ -425,7 +433,7 @@ export function CallSetup({
                 : busy
                   ? "Testi iptal et"
                   : "Mikrofonu test et"}
-            </button>
+            </Button>
           </div>
           <div
             className="call-level-meter"
@@ -470,7 +478,9 @@ export function CallSetup({
           </p>
         )}
         <div className="call-setup-devices">
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             className="call-setup-disclosure"
             aria-expanded={settingsOpen}
@@ -480,7 +490,7 @@ export function CallSetup({
             <SlidersHorizontal size={15} aria-hidden="true" />
             Ses ayarları
             <ChevronDown size={15} aria-hidden="true" />
-          </button>
+          </Button>
           <div id={settingsId} hidden={!settingsOpen}>
             {settingsOpen && (
               <MediaSettings
@@ -506,7 +516,10 @@ export function CallSetup({
           </p>
         )}
         <div className="call-preflight-actions">
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className="call-secondary"
             onClick={() => {
               stop();
@@ -514,8 +527,11 @@ export function CallSetup({
             }}
           >
             Vazgeç
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className="call-primary"
             disabled={!call.canJoin || full}
             onClick={() => {
@@ -525,7 +541,7 @@ export function CallSetup({
           >
             <Headphones size={17} />
             Görüşmeye katıl
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

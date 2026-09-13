@@ -1,6 +1,6 @@
 .app-shell .workspace-rail {
   width: 56px;
-  background: var(--forest);
+  background: var(--brand-solid);
 }
 .app-shell .workspace-button.active::before {
   left: -9px;
@@ -21,7 +21,7 @@
 }
 .live-sidebar .workspace-heading small {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .live-sidebar .workspace-heading > span {
   flex: 1;
@@ -47,7 +47,7 @@
   align-items: center;
   gap: 6px;
   font-size: 10px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   padding: 4px;
   flex: 1;
   text-align: left;
@@ -73,7 +73,7 @@
   border-radius: 5px;
   margin: 0 3px 12px;
   padding: 0 4px 0 8px;
-  background: #fff;
+  background: var(--card);
 }
 .sidebar-list-search input {
   width: 100%;
@@ -105,7 +105,7 @@
   min-width: 0;
   font-size: 11px;
   gap: 5px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .live-sidebar .nav-section-toggle > .count-badge {
   margin-left: auto;
@@ -127,7 +127,7 @@
 }
 .favorite-section-icon {
   margin-right: 7px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .live-channel-row {
   position: relative;
@@ -138,7 +138,7 @@
   margin: 1px 0;
 }
 .live-sidebar .live-channel-row:hover {
-  background: #e9edef;
+  background: var(--secondary);
 }
 .live-sidebar .live-channel-row.is-selected {
   background: var(--active-surface);
@@ -169,7 +169,7 @@
   border-radius: 5px;
   font-size: 11px;
   line-height: 1.6;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .is-drop-target .sidebar-group-dropzone {
   border-color: var(--green);
@@ -185,7 +185,7 @@
   margin: 0;
   font-size: 13px;
   line-height: 1.7;
-  color: var(--muted);
+  color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
 .sidebar-group-form label {
@@ -202,10 +202,10 @@
   margin-top: -8px;
   text-align: right;
   font-size: 10px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .sidebar-group-form .sidebar-group-error {
-  color: #a73737;
+  color: var(--destructive);
   font-size: 12px;
 }
 .sidebar-group-form-actions {
@@ -272,7 +272,7 @@
   width: 12px;
   height: 20px;
   padding: 0;
-  color: var(--muted);
+  color: var(--muted-foreground);
   display: grid;
   place-items: center;
   cursor: grab;
@@ -356,7 +356,7 @@
   border-radius: 5px;
 }
 .live-voice-details:not(.has-peers) .live-voice-members:hover {
-  background: #e7eee9;
+  background: var(--secondary);
 }
 .live-sidebar .live-voice-row:not(:has(.has-peers)) > .channel-nav {
   padding-right: 60px;
@@ -372,8 +372,8 @@
   place-items: center;
   width: 12px;
   height: 12px;
-  color: #963b32;
-  background: #fff;
+  color: var(--destructive);
+  background: var(--card);
   border-radius: 50%;
   pointer-events: none;
 }
@@ -381,7 +381,7 @@
 .sidebar-edit-note {
   font-size: 11px;
   line-height: 1.7;
-  color: var(--muted);
+  color: var(--muted-foreground);
   padding: 7px 8px;
   margin: 0;
 }
@@ -389,7 +389,7 @@
   font-size: 11px;
   line-height: 1.7;
   padding: 8px;
-  color: #a73737;
+  color: var(--destructive);
 }
 .sidebar-feedback button {
   text-decoration: underline;
@@ -452,13 +452,13 @@
   gap: 4px;
   font-size: 9px;
   line-height: 18px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .sidebar-account .icon-button {
-  color: var(--muted);
+  color: var(--muted-foreground);
   width: 29px;
   height: 32px;
   min-width: 29px;
@@ -499,7 +499,7 @@
 }
 .toast .sidebar-undo {
   padding: 5px;
-  color: #e1f2e7;
+  color: #fff;
   font-weight: 700;
   font-size: 12px;
   white-space: nowrap;
@@ -591,7 +591,7 @@
     align-items: center;
     gap: 6px;
     min-height: 36px;
-    color: var(--muted);
+    color: var(--muted-foreground);
     font-size: 11px;
   }
 }

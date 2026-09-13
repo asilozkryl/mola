@@ -1,3 +1,5 @@
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Globe2, LockKeyhole, Search, ShieldCheck, Users } from "lucide-react";
 import type {
@@ -332,7 +334,8 @@ export default function ChannelAccessDialog({
             </p>
             <label className="channel-member-search">
               <Search size={16} />
-              <input
+              <Input
+                unstyled
                 type="search"
                 aria-label="Kanal üyelerinde ara"
                 placeholder="İsim veya e-posta ile ara"
@@ -422,25 +425,32 @@ export default function ChannelAccessDialog({
               </p>
             )}
             {accessLost && (
-              <button
+              <Button
+                variant="outline"
+                size="unset"
                 className="secondary-button"
                 type="button"
                 onClick={() => setReload((value) => value + 1)}
               >
                 Erişimi yeniden kontrol et
-              </button>
+              </Button>
             )}
             <div className="channel-access-actions">
-              <button
+              <Button
+                variant="outline"
+                size="unset"
                 className="secondary-button"
                 type="button"
                 onClick={onClose}
                 disabled={busy}
               >
                 Kapat
-              </button>
+              </Button>
               {snapshot.canManage && (
-                <button
+                <Button
+                  variant="default"
+                  size="unset"
+                  type="submit"
                   className="primary-button"
                   disabled={
                     !canEdit ||
@@ -457,7 +467,7 @@ export default function ChannelAccessDialog({
                   ) : (
                     "Erişimi kaydet"
                   )}
-                </button>
+                </Button>
               )}
             </div>
             {snapshot.canModerate && (
@@ -476,7 +486,9 @@ export default function ChannelAccessDialog({
                     kapatarak vazgeç.
                   </p>
                 )}
-                <button
+                <Button
+                  variant="outline"
+                  size="unset"
                   className="secondary-button"
                   type="button"
                   disabled={busy || accessLost || dirty}
@@ -485,7 +497,7 @@ export default function ChannelAccessDialog({
                   {snapshot.channel.archived
                     ? "Kanalı arşivden çıkar"
                     : "Kanalı arşivle"}
-                </button>
+                </Button>
               </details>
             )}
           </form>
@@ -495,13 +507,15 @@ export default function ChannelAccessDialog({
             <p role="alert" className="form-error">
               {error}
             </p>
-            <button
+            <Button
+              variant="outline"
+              size="unset"
               className="secondary-button"
               type="button"
               onClick={() => setReload((value) => value + 1)}
             >
               Yeniden dene
-            </button>
+            </Button>
           </div>
         )}
       </div>

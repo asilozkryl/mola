@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, RotateCw } from "lucide-react";
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from "pdfjs-dist";
@@ -61,7 +62,9 @@ function PdfDocument({ url, title }: Props) {
   return (
     <section className="pdf-preview" aria-label={`${title} PDF önizlemesi`}>
       <div className="pdf-preview-toolbar" aria-label="PDF sayfaları">
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
           type="button"
           aria-label="Önceki PDF sayfası"
           title="Önceki sayfa"
@@ -70,7 +73,7 @@ function PdfDocument({ url, title }: Props) {
         >
           <ChevronLeft size={18} aria-hidden="true" />
           <span>Önceki</span>
-        </button>
+        </Button>
         <span
           className="pdf-preview-page-count"
           role="status"
@@ -78,7 +81,9 @@ function PdfDocument({ url, title }: Props) {
         >
           {document ? `${pageNumber} / ${document.numPages}` : "PDF"}
         </span>
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
           type="button"
           aria-label="Sonraki PDF sayfası"
           title="Sonraki sayfa"
@@ -91,7 +96,7 @@ function PdfDocument({ url, title }: Props) {
         >
           <span>Sonraki</span>
           <ChevronRight size={18} aria-hidden="true" />
-        </button>
+        </Button>
       </div>
       {error ? (
         <PdfError
@@ -125,14 +130,16 @@ function PdfError({
   return (
     <div className="pdf-preview-error" role="alert">
       <p>{message}</p>
-      <button
+      <Button
+        variant="outline"
+        size="unset"
         type="button"
         className="secondary-button"
         aria-label="PDF önizlemesini yeniden dene"
         onClick={onRetry}
       >
         <RotateCw size={15} aria-hidden="true" /> Yeniden dene
-      </button>
+      </Button>
     </div>
   );
 }

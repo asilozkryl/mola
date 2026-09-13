@@ -10,7 +10,7 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
-  color: #62716c;
+  color: var(--muted-foreground);
 }
 .attachment-preview-meta > div {
   min-width: 0;
@@ -19,7 +19,7 @@
   flex-shrink: 0;
 }
 .attachment-preview-meta h3 {
-  color: #293730;
+  color: var(--foreground);
   font-size: 14px;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -35,9 +35,9 @@
   justify-content: center;
   align-items: center;
   overflow: hidden;
-  border: 1px solid #e2e8e5;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #f5f7f8;
+  background: var(--muted);
 }
 .attachment-preview-stage img {
   display: block;
@@ -48,16 +48,16 @@
 
 .attachment-preview-fallback {
   text-align: center;
-  color: #62716c;
+  color: var(--muted-foreground);
   padding: 20px;
 }
 .attachment-preview-fallback p {
-  color: #293730;
+  color: var(--accent-foreground);
   font-weight: 600;
 }
 .attachment-preview-fallback span {
   font-size: 12px;
-  color: #62716c;
+  color: var(--muted-foreground);
 }
 .attachment-preview-actions {
   display: flex;
@@ -71,8 +71,8 @@
 .attachment-preview-error {
   padding: 12px;
   margin-bottom: 12px;
-  background: #fff7f3;
-  color: #8c452c;
+  background: var(--muted);
+  color: var(--destructive);
   border-radius: 6px;
 }
 .attachment-preview-error p {
@@ -93,16 +93,16 @@
   flex-shrink: 0;
   width: 34px;
   height: 34px;
-  border: 1px solid #e2e8e5;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: white;
-  color: #62716c;
+  background: var(--card);
+  color: var(--muted-foreground);
   display: grid;
   place-items: center;
 }
 .message-file-preview:hover {
-  background: #eff6f1;
-  color: #237459;
+  background: var(--muted);
+  color: var(--primary);
 }
 @media (max-width: 480px) {
   .modal:has(.attachment-preview) {

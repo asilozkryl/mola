@@ -1,9 +1,9 @@
 .channel-access {
-  color: var(--ink, #20292b);
+  color: var(--ink, var(--accent-foreground));
 }
 .channel-access-intro {
   margin: 0 0 18px;
-  color: #526369;
+  color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -25,14 +25,14 @@
   gap: 10px;
   padding: 11px 12px;
   margin: 0;
-  border: 1px solid #e2e6e8;
+  border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
-  color: #153d36;
+  color: var(--accent-foreground);
 }
 .modal .channel-access .channel-visibility label.selected {
-  border-color: #7bab97;
-  background: #f1f7f3;
+  border-color: var(--ring);
+  background: var(--muted);
 }
 .modal .channel-access input[type="radio"],
 .modal .channel-access input[type="checkbox"] {
@@ -45,7 +45,7 @@
   box-shadow: none;
   margin: 0;
   flex: 0 0 auto;
-  accent-color: #237459;
+  accent-color: var(--brand-solid);
 }
 .channel-visibility label > svg {
   flex: 0 0 auto;
@@ -62,7 +62,7 @@
 .channel-access-archive p {
   font-size: 12px;
   line-height: 1.5;
-  color: #526369;
+  color: var(--muted-foreground);
 }
 .channel-access-heading {
   display: flex;
@@ -77,8 +77,8 @@
   margin-left: auto;
   border-radius: 5px;
   padding: 3px 7px;
-  background: #f0f4f2;
-  color: #426253;
+  background: var(--muted);
+  color: var(--primary);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -93,15 +93,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid #e2e6e8;
-  background: #f8f9fa;
+  border: 1px solid var(--border);
+  background: var(--muted);
   border-radius: 7px;
   padding: 0 10px;
   margin: 0;
-  color: #687176;
+  color: var(--muted-foreground);
 }
 .modal .channel-access .channel-member-search:focus-within {
-  border-color: #237459;
+  border-color: var(--ring);
   outline: 2px solid #23745926;
   outline-offset: 1px;
 }
@@ -134,10 +134,10 @@
   padding: 7px 7px 5px;
   font-size: 11px;
   font-weight: 650;
-  color: #59676c;
+  color: var(--muted-foreground);
 }
 .channel-member-group h4 span {
-  color: #6b767b;
+  color: var(--muted-foreground);
   font-weight: 500;
 }
 .modal .channel-access .channel-member-row {
@@ -148,20 +148,20 @@
   border-radius: 7px;
   margin: 0;
   cursor: pointer;
-  color: #20292b;
+  color: var(--accent-foreground);
 }
 .channel-member-row:hover {
-  background: #f5f7f8;
+  background: var(--muted);
 }
 .channel-member-row:focus-within {
-  outline: 2px solid #237459;
+  outline: 2px solid var(--ring);
   outline-offset: -1px;
 }
 .modal .channel-access .channel-member-row.automatic {
   cursor: default;
 }
 .channel-member-row.changing {
-  background: #f4f8f5;
+  background: var(--muted);
 }
 .channel-member-row .avatar {
   flex: 0 0 auto;
@@ -180,7 +180,7 @@
 }
 .channel-member-person small {
   font-size: 11px;
-  color: #687176;
+  color: var(--muted-foreground);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -188,20 +188,20 @@
 .channel-member-state {
   font-size: 10px;
   white-space: nowrap;
-  color: #687176;
+  color: var(--muted-foreground);
   flex: 0 0 auto;
 }
 .channel-member-row.changing .channel-member-state {
-  color: #237459;
+  color: var(--primary);
   font-weight: 650;
 }
 .channel-member-row .channel-member-state.removing {
-  color: #a54837;
+  color: var(--destructive);
 }
 .channel-access-empty {
   font-size: 12px;
   line-height: 1.6;
-  color: #687176;
+  color: var(--muted-foreground);
   margin: 8px 7px 12px;
 }
 .channel-access-changes {
@@ -211,13 +211,13 @@
   min-height: 18px;
   margin: 10px 0 0;
   padding-top: 10px;
-  border-top: 1px solid #e2e6e8;
+  border-top: 1px solid var(--border);
   font-size: 11px;
   line-height: 1.6;
-  color: #526369;
+  color: var(--muted-foreground);
 }
 .channel-access-changes > span {
-  color: #245b47;
+  color: var(--primary);
 }
 .channel-access-actions {
   display: flex;
@@ -231,25 +231,25 @@
 .channel-public-confirm {
   font-size: 12px;
   line-height: 1.6;
-  background: #fff8e8;
-  border-left: 3px solid #d5b468;
+  background: var(--muted);
+  border-left: 3px solid var(--warning-border);
   padding: 10px 12px;
   border-radius: 5px;
-  color: #72551f;
+  color: var(--warning);
 }
 .channel-access-archive {
-  border-top: 1px solid #e2e6e8;
+  border-top: 1px solid var(--border);
   margin-top: 18px;
   padding-top: 12px;
 }
 .channel-access-archive summary {
   font-size: 11px;
-  color: #687176;
+  color: var(--muted-foreground);
   cursor: pointer;
   width: fit-content;
 }
 .channel-access-archive summary:focus-visible {
-  outline: 2px solid #237459;
+  outline: 2px solid var(--ring);
   outline-offset: 4px;
 }
 .channel-access-archive p {
@@ -260,11 +260,11 @@
 }
 .adm-role-select {
   font: inherit;
-  color: #153d36;
-  border: 1px solid #d7e0d7;
+  color: var(--accent-foreground);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 7px 10px;
-  background: white;
+  background: var(--card);
   max-width: 145px;
 }
 @media (max-width: 480px) {

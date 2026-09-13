@@ -119,7 +119,7 @@ test("owner deletes the final workspace with current confirmation, keeps the acc
     dialog.getByLabel("Mevcut parolan", { exact: true }),
   ).toHaveValue("");
   await page.setViewportSize({ width: 320, height: 740 });
-  await accessible(page, "dialog[open]");
+  await accessible(page, '[role="dialog"][aria-modal="true"]');
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
     .toBeLessThanOrEqual(320);
@@ -211,7 +211,9 @@ test("deleting one workspace switches to the surviving team and refreshes a seco
   await composer.fill(keepMessage);
   await page.getByRole("button", { name: "Mesaj gönder", exact: true }).click();
   await expect(
-    page.getByText(keepMessage, { exact: true }).and(page.locator(".message-text")),
+    page
+      .getByText(keepMessage, { exact: true })
+      .and(page.locator(".message-text")),
   ).toBeVisible();
   await expect(composer).toHaveValue("");
   await expect(composer).toBeEnabled();
@@ -243,7 +245,9 @@ test("deleting one workspace switches to the surviving team and refreshes a seco
   await ready(page);
   await ready(otherTab);
   await expect(
-    page.getByText(keepMessage, { exact: true }).and(page.locator(".message-text")),
+    page
+      .getByText(keepMessage, { exact: true })
+      .and(page.locator(".message-text")),
   ).toBeVisible();
   await expect(
     otherTab

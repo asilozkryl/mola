@@ -5,8 +5,8 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  background: #fff;
-  color: var(--ink, #20292b);
+  background: var(--card);
+  color: var(--ink, var(--accent-foreground));
 }
 .member-profile-toolbar {
   display: flex;
@@ -16,10 +16,10 @@
   gap: 14px;
   min-height: 62px;
   padding: 12px 24px;
-  border-bottom: 1px solid var(--line, #e2e6e8);
+  border-bottom: 1px solid var(--line, var(--border));
 }
 .member-profile-toolbar > span {
-  color: var(--muted, #687176);
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 .member-profile-back {
@@ -31,14 +31,14 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #45534d;
+  color: var(--muted-foreground);
   font: inherit;
   font-size: 12px;
   font-weight: 650;
   cursor: pointer;
 }
 .member-profile-back:hover {
-  color: var(--green, #237459);
+  color: var(--green, var(--primary));
 }
 .member-profile-content {
   width: 100%;
@@ -78,9 +78,9 @@
   display: inline-block;
   padding: 2px 6px;
   margin-left: 9px;
-  border: 1px solid #e2e9e5;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  color: #687176;
+  color: var(--muted-foreground);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0;
@@ -88,7 +88,7 @@
 }
 .member-profile-name > p {
   margin: 5px 0 0;
-  color: #535f5a;
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -101,7 +101,7 @@
   font-size: 11px;
 }
 .member-profile-status {
-  color: #58685e;
+  color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
 .member-profile-actions {
@@ -118,12 +118,12 @@
   gap: 7px;
 }
 .member-profile-actions .secondary-button {
-  border-color: #dfe5e2;
-  background: #fff;
-  color: #48564e;
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
 }
 .member-profile-actions .secondary-button:hover {
-  background: #f5f8f6;
+  background: var(--muted);
 }
 .member-profile-action-error {
   margin: -13px 0 24px;
@@ -134,7 +134,7 @@
   grid-template-columns: minmax(0, 1fr) minmax(230px, 0.86fr);
   gap: 40px;
   padding-top: 29px;
-  border-top: 1px solid var(--line, #e2e6e8);
+  border-top: 1px solid var(--line, var(--border));
 }
 .member-profile-details h2 {
   margin: 0 0 19px;
@@ -146,14 +146,14 @@
 .member-profile-about > p,
 .member-profile-empty-about > p {
   margin: 0;
-  color: #59655e;
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.85;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .member-profile-empty-about > p {
-  color: var(--muted, #687176);
+  color: var(--muted-foreground);
 }
 .member-profile-empty-about > button {
   padding: 4px 0;
@@ -161,7 +161,7 @@
   border: 0;
   border-radius: 3px;
   background: transparent;
-  color: var(--green, #237459);
+  color: var(--green, var(--primary));
   font: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -169,7 +169,7 @@
 }
 .member-profile-information {
   padding-left: 28px;
-  border-left: 1px solid var(--line, #e2e6e8);
+  border-left: 1px solid var(--line, var(--border));
 }
 .member-profile-information dl {
   display: flex;
@@ -181,22 +181,22 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  color: var(--muted, #687176);
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 .member-profile-information dt svg {
   flex-shrink: 0;
-  color: #7c8981;
+  color: var(--muted-foreground);
 }
 .member-profile-information dd {
   margin: 5px 0 0 22px;
-  color: #394840;
+  color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
 .member-profile-information dd a {
-  color: var(--green, #237459);
+  color: var(--green, var(--primary));
   text-decoration: none;
 }
 .member-profile-information dd a:hover {
@@ -210,11 +210,11 @@
   gap: 16px;
   max-width: 500px;
   padding: 44px;
-  color: #687176;
+  color: var(--muted-foreground);
 }
 .member-profile-unavailable h1 {
   margin: 0;
-  color: #20292b;
+  color: var(--foreground);
   font-size: 20px;
   font-weight: 700;
 }
@@ -233,7 +233,7 @@
 }
 .member-profile-page button:focus-visible,
 .member-profile-page a:focus-visible {
-  outline: 2px solid var(--green, #237459);
+  outline: 2px solid var(--green, var(--ring));
   outline-offset: 3px;
 }
 @media (max-width: 1100px) {
@@ -294,7 +294,7 @@
   .member-profile-information {
     padding: 24px 0 0;
     border: 0;
-    border-top: 1px solid var(--line, #e2e6e8);
+    border-top: 1px solid var(--line, var(--border));
   }
   .member-profile-information dl {
     display: grid;

@@ -638,11 +638,14 @@ test.describe("compact personal channel preferences", () => {
       const close = dialog.getByRole("button", { name: "Kapat", exact: true });
       await close.focus();
       await page.keyboard.press("Shift+Tab");
-      expect(
-        await dialog.evaluate((element) =>
-          element.contains(document.activeElement),
-        ),
-      ).toBe(true);
+      // Base UI wraps boundary focus on the next animation frame.
+      await expect
+        .poll(() =>
+          dialog.evaluate((element) =>
+            element.contains(document.activeElement),
+          ),
+        )
+        .toBe(true);
       await page.keyboard.press("Tab");
       await expect(close).toBeFocused();
       await audit(page);

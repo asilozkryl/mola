@@ -3,7 +3,7 @@
   width: min(100%, 960px);
   margin: 0 auto;
   padding: 22px 26px 32px;
-  color: #293730;
+  color: var(--accent-foreground);
 }
 .channel-collection-toolbar {
   display: grid;
@@ -20,7 +20,7 @@
   min-width: 0;
   font-size: 11px;
   font-weight: 600;
-  color: #62716c;
+  color: var(--muted-foreground);
 }
 .channel-collection-toolbar input,
 .channel-collection-toolbar select {
@@ -28,15 +28,15 @@
   min-width: 0;
   min-height: 36px;
   padding: 7px 9px;
-  border: 1px solid #dce4e0;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: #293730;
-  background: #fff;
+  color: var(--accent-foreground);
+  background: var(--card);
   font: inherit;
   font-size: 12px;
 }
 .channel-collection-toolbar :is(input, select):focus-visible {
-  outline: 2px solid #237459;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 .channel-collection-search {
@@ -45,13 +45,13 @@
   min-width: 0;
   gap: 8px;
   padding: 0 10px;
-  color: #62716c;
-  border: 1px solid #dce4e0;
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--card);
 }
 .channel-collection-search:focus-within {
-  border-color: #237459;
+  border-color: var(--ring);
   box-shadow: 0 0 0 2px #23745918;
 }
 .channel-collection-search > svg {
@@ -70,7 +70,7 @@
   outline: 0;
 }
 .channel-collection-search input::placeholder {
-  color: #62716c;
+  color: var(--muted-foreground);
 }
 .channel-collection-search .icon-button {
   width: 24px;
@@ -80,7 +80,7 @@
 .channel-collection-toolbar .channel-collection-refresh {
   width: 36px;
   height: 36px;
-  color: #456456;
+  color: var(--primary);
 }
 .channel-collection-summary {
   display: flex;
@@ -89,21 +89,21 @@
   gap: 10px;
   min-height: 45px;
   padding: 6px 0;
-  color: #62716c;
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 .channel-collection-summary button {
   min-height: 30px;
   padding: 4px 6px;
   font-size: 11px;
-  color: #237459;
+  color: var(--primary);
 }
 .channel-collections .channel-file-list {
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: 0;
-  border-top: 1px solid #e2e8e5;
+  border-top: 1px solid var(--border);
 }
 .channel-file-row {
   display: grid;
@@ -111,7 +111,7 @@
   align-items: center;
   gap: 4px;
   padding: 6px 0;
-  border-bottom: 1px solid #e2e8e5;
+  border-bottom: 1px solid var(--border);
 }
 .channel-file-preview {
   display: flex;
@@ -124,7 +124,7 @@
   text-align: left;
 }
 .channel-file-preview:hover {
-  background: #f2f6f3;
+  background: var(--muted);
 }
 .channel-file-kind {
   display: grid;
@@ -132,10 +132,10 @@
   width: 34px;
   height: 38px;
   flex-shrink: 0;
-  color: #2f6a50;
-  border: 1px solid #dbe6df;
+  color: var(--primary);
+  border: 1px solid var(--border);
   border-radius: 5px;
-  background: #f5f8f6;
+  background: var(--muted);
 }
 .channel-file-detail {
   display: block;
@@ -151,7 +151,7 @@
   font-size: 13px;
   font-weight: 650;
   line-height: 1.55;
-  color: #293730;
+  color: var(--foreground);
 }
 .channel-file-meta {
   display: flex;
@@ -161,7 +161,7 @@
   margin-top: 3px;
   font-size: 11px;
   line-height: 1.6;
-  color: #62716c;
+  color: var(--muted-foreground);
 }
 .channel-file-meta > span {
   overflow-wrap: anywhere;
@@ -176,7 +176,7 @@
   width: 34px;
   height: 36px;
   border-radius: 5px;
-  color: #486557;
+  color: var(--primary);
 }
 .channel-file-download .sr-only {
   position: absolute;
@@ -192,11 +192,11 @@
 }
 .channel-file-download:hover,
 .channel-file-source:hover {
-  background: #eaf2ed;
-  color: #19553c;
+  background: var(--secondary);
+  color: var(--accent-foreground);
 }
 .channel-collections :is(button, a, [data-collection-item]):focus-visible {
-  outline: 2px solid #237459;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 .channel-collections button:disabled {
@@ -219,15 +219,15 @@
   gap: 12px;
   padding: 42px 16px;
   text-align: center;
-  color: #62716c;
+  color: var(--muted-foreground);
 }
 .channel-collection-empty > svg {
-  color: #2f6a50;
+  color: var(--primary);
 }
 .channel-collection-empty h2 {
   font-size: 15px;
   line-height: 1.6;
-  color: #293730;
+  color: var(--foreground);
 }
 .channel-collection-empty p {
   max-width: 350px;
@@ -241,14 +241,14 @@
   padding: 0 0 14px;
   font-size: 12px;
   line-height: 1.65;
-  color: #9b362e;
+  color: var(--destructive);
 }
 .channel-pin-list {
-  border-top: 1px solid #e2e8e5;
+  border-top: 1px solid var(--border);
 }
 .channel-pin-item {
   padding: 8px 0;
-  border-bottom: 1px solid #e2e8e5;
+  border-bottom: 1px solid var(--border);
 }
 .channel-pin-item > .message {
   padding-inline: 8px;
@@ -261,11 +261,11 @@
   min-height: 30px;
   padding: 4px 8px;
   font-size: 11px;
-  color: #32634e;
+  color: var(--primary);
   border-radius: 5px;
 }
 .channel-pin-source:hover {
-  background: #eef5f1;
+  background: var(--muted);
 }
 .channel-collection-more {
   display: flex;

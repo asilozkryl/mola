@@ -3,7 +3,7 @@
   min-width: 0;
   margin: 0 auto;
   padding: 22px 28px 36px;
-  color: #20292b;
+  color: var(--accent-foreground);
 }
 .activity-toolbar {
   display: flex;
@@ -18,13 +18,13 @@
   min-width: 0;
   height: 38px;
   padding: 0 11px;
-  border: 1px solid #e2e6e8;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
-  color: #586568;
+  background: var(--card);
+  color: var(--muted-foreground);
 }
 .activity-search:focus-within {
-  border-color: #237459;
+  border-color: var(--ring);
   box-shadow: 0 0 0 2px #23745912;
 }
 .activity-search input {
@@ -33,7 +33,7 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: #20292b;
+  color: var(--accent-foreground);
   padding: 0;
   font: inherit;
   font-size: 12px;
@@ -42,7 +42,7 @@
   display: none;
 }
 .activity-search input::placeholder {
-  color: #586568;
+  color: var(--muted-foreground);
 }
 .activity-search > svg {
   flex-shrink: 0;
@@ -59,14 +59,14 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: #586568;
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .activity-settings {
   height: 36px;
   width: 36px;
-  border: 1px solid #e2e6e8;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--card);
 }
 .activity-filters {
   display: flex;
@@ -74,13 +74,13 @@
   flex-wrap: wrap;
   gap: 10px;
   padding: 14px 0 16px;
-  border-bottom: 1px solid #e2e6e8;
+  border-bottom: 1px solid var(--border);
 }
 .activity-tabs {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  background: #f0f3f4;
+  background: var(--muted);
   border-radius: 6px;
   padding: 3px;
 }
@@ -93,23 +93,23 @@
   border-radius: 4px;
   padding: 5px 10px;
   background: transparent;
-  color: #586568;
+  color: var(--muted-foreground);
   font: inherit;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
 }
 .activity-tabs button[aria-pressed="true"] {
-  background: #fff;
-  color: #153d36;
-  border-color: #e2e6e8;
+  background: var(--card);
+  color: var(--accent-foreground);
+  border-color: var(--border);
   box-shadow: 0 1px 2px #20392c08;
 }
 .activity-tabs button > span {
   min-width: 16px;
   padding: 0 3px;
-  color: #237459;
-  background: #eaf4ef;
+  color: var(--primary);
+  background: var(--secondary);
   border-radius: 3px;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
@@ -122,11 +122,11 @@
 .activity-kind select {
   max-width: 150px;
   appearance: none;
-  border: 1px solid #e2e6e8;
+  border: 1px solid var(--border);
   border-radius: 5px;
   padding: 7px 27px 7px 10px;
-  color: #4e5c62;
-  background: #fff;
+  color: var(--muted-foreground);
+  background: var(--card);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
@@ -135,7 +135,7 @@
   position: absolute;
   right: 9px;
   pointer-events: none;
-  color: #586568;
+  color: var(--muted-foreground);
 }
 .activity-read-all {
   display: inline-flex;
@@ -145,7 +145,7 @@
   margin-left: auto;
   border: 0;
   background: transparent;
-  color: #526369;
+  color: var(--muted-foreground);
   padding: 7px 0;
   font: inherit;
   font-size: 11px;
@@ -159,7 +159,7 @@
 }
 .activity-day > h2 {
   margin: 0 0 8px 0;
-  color: #586568;
+  color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 650;
   line-height: 1.5;
@@ -182,7 +182,7 @@
     border-color 120ms ease;
 }
 .activity-item.is-unread {
-  background: #f1f8f4;
+  background: var(--muted);
 }
 .activity-item.is-unread::before {
   position: absolute;
@@ -191,18 +191,18 @@
   top: 16px;
   bottom: 16px;
   width: 2px;
-  background: #237459;
+  background: var(--brand-solid);
   border-radius: 2px;
 }
 .activity-item:hover,
 .activity-item:focus-within {
-  background: #f5f7f8;
-  border-color: #e2e6e8;
+  background: var(--muted);
+  border-color: var(--border);
 }
 .activity-item.is-unread:hover,
 .activity-item.is-unread:focus-within {
-  background: #eaf4ef;
-  border-color: #d5e8dd;
+  background: var(--secondary);
+  border-color: var(--border);
 }
 .activity-open {
   display: flex;
@@ -243,12 +243,12 @@
   width: 17px;
   border: 2px solid white;
   border-radius: 5px;
-  background: #edf1f2;
-  color: #65757b;
+  background: var(--secondary);
+  color: var(--muted-foreground);
 }
 .activity-item.is-unread .activity-kind-symbol {
-  background: #dceee2;
-  color: #237459;
+  background: var(--accent);
+  color: var(--primary);
 }
 .activity-copy {
   display: flex;
@@ -271,7 +271,7 @@
   overflow-wrap: anywhere;
 }
 .activity-person > span {
-  color: #586568;
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 .activity-preview {
@@ -280,19 +280,19 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
-  color: #4e5c62;
+  color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.7;
 }
 .activity-item.is-unread .activity-preview {
-  color: #263d33;
+  color: var(--accent-foreground);
 }
 .activity-context {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  color: #586568;
+  color: var(--muted-foreground);
   font-size: 10px;
   line-height: 1.6;
   margin-top: 1px;
@@ -316,7 +316,7 @@
 .activity-open-affordance {
   display: flex;
   flex-shrink: 0;
-  color: #586568;
+  color: var(--muted-foreground);
   opacity: 0;
   margin-top: 2px;
   transition: opacity 120ms ease;
@@ -328,15 +328,15 @@
 }
 .activity-read {
   margin: 10px 8px 0 0;
-  color: #237459;
+  color: var(--primary);
 }
 .activity-read:hover:not(:disabled),
 .activity-icon-button:hover:not(:disabled),
 .activity-search button:hover {
-  background: #e7eded;
+  background: var(--secondary);
 }
 .activity-read-all:hover:not(:disabled) {
-  color: #153d36;
+  color: var(--accent-foreground);
 }
 .activity-loading,
 .activity-empty {
@@ -346,7 +346,7 @@
   justify-content: center;
   gap: 12px;
   padding: 62px 24px;
-  color: #586568;
+  color: var(--muted-foreground);
   font-size: 12px;
   text-align: center;
 }
@@ -359,14 +359,14 @@
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  background: #f0f4f2;
-  color: #5b786b;
+  background: var(--muted);
+  color: var(--primary);
 }
 .activity-empty h2 {
   margin: 2px 0 0;
   font-size: 14px;
   font-weight: 650;
-  color: #334a40;
+  color: var(--foreground);
 }
 .activity-empty p {
   margin: 0;
@@ -380,10 +380,10 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid #dfe5e3;
+  border: 1px solid var(--border);
   border-radius: 5px;
-  background: #fff;
-  color: #237459;
+  background: var(--card);
+  color: var(--primary);
   padding: 8px 12px;
   font: inherit;
   font-size: 11px;
@@ -397,7 +397,7 @@
 .activity-connection,
 .activity-refreshing {
   margin: 12px 0 0;
-  color: #586568;
+  color: var(--muted-foreground);
   font-size: 11px;
   line-height: 1.6;
 }
@@ -410,14 +410,14 @@
   padding: 10px 12px;
   margin-top: 12px;
   border-radius: 5px;
-  background: #eaf4ef;
-  color: #236048;
+  background: var(--secondary);
+  color: var(--primary);
   font-size: 11px;
   line-height: 1.6;
 }
 .activity-error {
-  background: #fff2ef;
-  color: #8a4036;
+  background: var(--danger-surface);
+  color: var(--destructive);
 }
 .activity-update button,
 .activity-error button {
@@ -440,7 +440,7 @@
 }
 .activity-center button:focus-visible,
 .activity-kind select:focus-visible {
-  outline: 2px solid #237459;
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 .activity-spinner {

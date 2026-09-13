@@ -101,9 +101,11 @@ test("right-click keeps the current conversation and channel edits survive error
     .getByRole("menuitem", { name: "Kanalı düzenle", exact: true })
     .click();
   expect(page.url()).toBe(currentUrl);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    currentTitle,
-  );
+  // The active modal hides the unchanged conversation from assistive tools.
+  // Verify its retained title without requiring background interaction.
+  await expect(
+    page.getByRole("heading", { level: 1, includeHidden: true }),
+  ).toHaveText(currentTitle);
   const edit = page.getByRole("dialog", {
     name: "Kanalı düzenle",
     exact: true,
@@ -663,10 +665,14 @@ test.describe("touch channel actions", () => {
     const bounds = await page.evaluate(() => ({
       viewport: innerWidth,
       document: document.documentElement.scrollWidth,
-      dialog: document.querySelector("dialog[open]")!.getBoundingClientRect()
-        .width,
-      content: document.querySelector("dialog[open]")!.scrollWidth,
-      dialogClient: document.querySelector("dialog[open]")!.clientWidth,
+      dialog: document
+        .querySelector('[role="dialog"][aria-modal="true"]')!
+        .getBoundingClientRect().width,
+      content: document.querySelector('[role="dialog"][aria-modal="true"]')!
+        .scrollWidth,
+      dialogClient: document.querySelector(
+        '[role="dialog"][aria-modal="true"]',
+      )!.clientWidth,
     }));
     expect(bounds.document).toBeLessThanOrEqual(bounds.viewport + 1);
     expect(bounds.dialog).toBeLessThanOrEqual(bounds.viewport);

@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import {
   Bell,
@@ -517,7 +518,9 @@ export function NotificationSettings({
           </dl>
           <div className="notification-actions">
             {!enabledHere && (
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
                 type="button"
                 className="notification-primary"
                 disabled={Boolean(busy) || !canEnable}
@@ -527,10 +530,12 @@ export function NotificationSettings({
                 {busy === "enable"
                   ? "Bağlanıyor…"
                   : "Bu cihazda bildirimleri aç"}
-              </button>
+              </Button>
             )}
             {enabledHere && (
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
                 type="button"
                 className="notification-primary"
                 disabled={
@@ -581,9 +586,11 @@ export function NotificationSettings({
               >
                 <Send size={15} />
                 {busy === "test" ? "Gönderiliyor…" : "Test bildirimi gönder"}
-              </button>
+              </Button>
             )}
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               type="button"
               className="notification-secondary"
               disabled={Boolean(busy) || checking}
@@ -594,7 +601,7 @@ export function NotificationSettings({
             >
               <RefreshCw size={14} />
               {checking ? "Kontrol ediliyor…" : "Durumu yenile"}
-            </button>
+            </Button>
           </div>
           {error && (
             <p className="notification-error" role="alert">
@@ -663,14 +670,16 @@ export function NotificationSettings({
               {diagnosticError && (
                 <div className="notification-diagnostic-error" role="alert">
                   <p>{diagnosticError}</p>
-                  <button
+                  <Button
+                    variant="unstyled"
+                    size="unset"
                     type="button"
                     className="notification-secondary"
                     onClick={() => setDiagnosticRetry((value) => value + 1)}
                   >
                     <RefreshCw size={14} aria-hidden="true" /> Sonucu yeniden
                     kontrol et
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -683,14 +692,16 @@ export function NotificationSettings({
           {currentPreferences?.pushEnabled && (
             <div className="notification-account-action">
               <p>Hesabına bağlı tüm cihazlarda bildirimleri durdur.</p>
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
                 type="button"
                 className="notification-text-button"
                 disabled={Boolean(busy) || checking}
                 onClick={disable}
               >
                 {busy === "disable" ? "Kapatılıyor…" : "Tüm cihazlarda kapat"}
-              </button>
+              </Button>
             </div>
           )}
         </section>
@@ -712,7 +723,9 @@ export function NotificationSettings({
                 : "Mola cihazına eklendi."}
             </p>
           ) : installAvailable ? (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               type="button"
               className="notification-secondary"
               disabled={Boolean(busy) || checking}
@@ -727,7 +740,7 @@ export function NotificationSettings({
             >
               <Download size={15} />
               Mola'yı yükle
-            </button>
+            </Button>
           ) : (
             <p className="notification-help">
               {ios

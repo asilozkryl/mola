@@ -9,7 +9,7 @@
   gap: 16px;
   padding: 20px 30px;
   border-bottom: 1px solid var(--line);
-  background: #fff;
+  background: var(--card);
 }
 .account-workspaces > header > div {
   display: flex;
@@ -39,7 +39,7 @@
   margin: 0 0 15px;
 }
 .account-workspaces-content p {
-  color: var(--muted);
+  color: var(--muted-foreground);
   line-height: 1.85;
   font-size: 14px;
 }
@@ -60,7 +60,7 @@
 .account-workspaces-content > small {
   display: block;
   margin-top: 25px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .workspace-lifecycle-form {
   display: grid;
@@ -68,7 +68,7 @@
 }
 .workspace-lifecycle-form p {
   font-size: 13px;
-  color: var(--muted);
+  color: var(--muted-foreground);
   line-height: 1.8;
   margin: 0;
 }
@@ -83,8 +83,8 @@
   width: 42px;
   height: 42px;
   border-radius: 8px;
-  background: #fcf0ee;
-  color: #a73737;
+  background: var(--danger-surface);
+  color: var(--destructive);
 }
 .workspace-lifecycle-heading h3 {
   font-size: 16px;
@@ -98,7 +98,7 @@
 }
 .workspace-lifecycle-form .form-error,
 .account-workspaces-content .form-error {
-  color: #963b32;
+  color: var(--destructive);
 }
 .workspace-lifecycle-form input {
   display: block;
@@ -122,7 +122,7 @@
   color: #fff;
   font-weight: 600;
   font-size: 12px;
-  border: 1px solid #a73737;
+  border: 1px solid var(--danger-border);
 }
 .workspace-lifecycle-form .danger-button:disabled {
   opacity: 0.5;
@@ -138,7 +138,7 @@
 }
 .workspace-deletion-counts dt {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .workspace-deletion-counts dd {
   font-size: 17px;
@@ -148,19 +148,19 @@
 .workspace-deletion-counts small {
   font-size: 11px;
   font-weight: 400;
-  color: var(--muted);
+  color: var(--muted-foreground);
 }
 .workspace-lifecycle-form .workspace-access-note {
   font-size: 12px;
 }
 .workspace-danger-zone {
-  border-top: 1px solid #e6c9c6;
+  border-top: 1px solid var(--danger-border);
   padding-top: 22px;
   margin-top: 10px;
 }
 .workspace-danger-zone > button {
-  color: #a73737;
-  border-color: #dbb6b2;
+  color: var(--destructive);
+  border-color: var(--danger-border);
   margin-top: 14px;
 }
 @media (max-width: 600px) {

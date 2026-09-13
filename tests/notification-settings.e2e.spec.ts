@@ -294,7 +294,7 @@ test("push diagnostic is explicit, retries a request failure and distinguishes p
     path: test.info().outputPath("notification-status-desktop.png"),
   });
   const accessibility = await new AxeBuilder({ page })
-    .include("dialog[open]")
+    .include('[role="dialog"][aria-modal="true"]')
     .analyze();
   expect(
     accessibility.violations.filter((item) =>
@@ -315,7 +315,7 @@ test("push diagnostic is explicit, retries a request failure and distinguishes p
       .evaluate((element) => element.scrollWidth <= element.clientWidth),
   ).toBe(true);
   const mobileAccessibility = await new AxeBuilder({ page })
-    .include("dialog[open]")
+    .include('[role="dialog"][aria-modal="true"]')
     .analyze();
   expect(
     mobileAccessibility.violations.filter((item) =>

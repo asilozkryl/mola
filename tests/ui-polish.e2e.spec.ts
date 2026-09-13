@@ -57,7 +57,7 @@ test("channel information opens as a popup without resizing chat or losing the r
   await page.keyboard.press("Shift+Tab");
   await expect(close).toBeFocused();
   const audit = await new AxeBuilder({ page })
-    .include("dialog[open]")
+    .include('[role="dialog"][aria-modal="true"]')
     .analyze();
   expect(
     audit.violations.filter(
@@ -142,7 +142,7 @@ for (const width of [320, 390, 768]) {
       ),
     ).toBe(true);
     const audit = await new AxeBuilder({ page })
-      .include("dialog[open]")
+      .include('[role="dialog"][aria-modal="true"]')
       .analyze();
     expect(
       audit.violations.filter(

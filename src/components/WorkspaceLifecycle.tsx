@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight,
@@ -62,22 +64,31 @@ export function AccountOnlyHome({
           <Avatar user={data.user} size="small" />
           <span>{data.user.name}</span>
           {data.user.siteAdmin && (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               className="icon-button"
               aria-label="Uygulama yönetimi"
               onClick={() => setSystemOpen(true)}
             >
               <Settings2 size={19} />
-            </button>
+            </Button>
           )}
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className="icon-button"
             aria-label="Hesap güvenliği"
             onClick={() => setSecurity(true)}
           >
             <ShieldCheck size={19} />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className="icon-button"
             aria-label="Çıkış yap"
             disabled={busy}
@@ -89,7 +100,7 @@ export function AccountOnlyHome({
             }}
           >
             <LogOut size={19} />
-          </button>
+          </Button>
         </div>
       </header>
       <section className="account-workspaces-content">
@@ -104,7 +115,10 @@ export function AccountOnlyHome({
         {available.length > 0 && (
           <div className="account-workspace-list">
             {available.map((w) => (
-              <button
+              <Button
+                variant="outline"
+                size="unset"
+                type="submit"
                 className="secondary-button"
                 key={w.id}
                 disabled={busy}
@@ -116,27 +130,33 @@ export function AccountOnlyHome({
               >
                 {w.name}
                 <ArrowRight size={17} />
-              </button>
+              </Button>
             ))}
           </div>
         )}
         <div className="account-workspace-actions">
-          <button
+          <Button
+            variant="default"
+            size="unset"
+            type="submit"
             className="primary-button"
             disabled={busy}
             onClick={() => setMode("create")}
           >
             <Plus size={17} />
             Çalışma alanı oluştur
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            size="unset"
+            type="submit"
             className="secondary-button"
             disabled={busy}
             onClick={() => setMode("join")}
           >
             <Link2 size={17} />
             Davet ile katıl
-          </button>
+          </Button>
         </div>
         {data.workspaces.some((w) => w.suspended || w.membershipSuspended) && (
           <p className="workspace-access-note">
@@ -353,7 +373,8 @@ export function WorkspaceLifecycleDialog({
           <>
             <label>
               Onaylamak için <strong>{preview.workspaceName}</strong> yaz
-              <input
+              <Input
+                unstyled
                 autoComplete="off"
                 spellCheck={false}
                 value={name}
@@ -365,7 +386,8 @@ export function WorkspaceLifecycleDialog({
             </label>
             <label>
               Mevcut parolan
-              <input
+              <Input
+                unstyled
                 type="password"
                 autoComplete="current-password"
                 value={password}
@@ -380,26 +402,32 @@ export function WorkspaceLifecycleDialog({
           <div className="form-error" role="alert">
             {error}
             {deleting && !preview && !loading && (
-              <button
+              <Button
+                variant="outline"
+                size="unset"
                 type="button"
                 className="secondary-button"
                 onClick={() => setRevision((n) => n + 1)}
               >
                 Tekrar dene
-              </button>
+              </Button>
             )}
           </div>
         )}
         <footer>
-          <button
+          <Button
+            variant="outline"
+            size="unset"
             type="button"
             className="secondary-button"
             disabled={busy}
             onClick={onClose}
           >
             Vazgeç
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
             type="submit"
             className="danger-button"
             disabled={
@@ -416,7 +444,7 @@ export function WorkspaceLifecycleDialog({
             ) : (
               "Çalışma alanından ayrıl"
             )}
-          </button>
+          </Button>
         </footer>
       </form>
     </Modal>

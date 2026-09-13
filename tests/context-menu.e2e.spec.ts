@@ -147,6 +147,11 @@ test("message context menu supports keyboard navigation, dismissal and focus res
   ).toBeFocused();
   await page.keyboard.press("Home");
   await expect(first).toBeFocused();
+  await page.keyboard.press("t");
+  await expect(
+    menu.getByRole("menuitem", { name: "Tepki ekle", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Home");
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(article).toBeFocused();

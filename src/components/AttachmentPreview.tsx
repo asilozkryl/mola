@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { Download, FileText, MessageSquare, RotateCw } from "lucide-react";
 import type { Attachment } from "../../shared/types";
@@ -117,13 +118,16 @@ export function AttachmentPreview({
         {error && (
           <div className="attachment-preview-error" role="alert">
             <p>{error}</p>
-            <button
+            <Button
+              variant="outline"
+              size="unset"
+              type="submit"
               className="secondary-button"
               onClick={() => setRetry((value) => value + 1)}
             >
               <RotateCw size={15} />
               Tekrar dene
-            </button>
+            </Button>
           </div>
         )}
         <div
@@ -156,14 +160,17 @@ export function AttachmentPreview({
           )}
         </div>
         <div className="attachment-preview-actions">
-          <button
+          <Button
+            variant="outline"
+            size="unset"
+            type="submit"
             className="secondary-button"
             disabled={opening}
             onClick={() => void openMessage()}
           >
             <MessageSquare size={16} />
             {opening ? "Mesaj açılıyor…" : "Mesaja git"}
-          </button>
+          </Button>
           <a
             className="primary-button"
             href={`/api/files/${encodeURIComponent(file.id)}`}

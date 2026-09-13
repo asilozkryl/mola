@@ -1,15 +1,9 @@
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ArrowUpRight } from "lucide-react";
 import type { User } from "../../shared/types";
 import { Avatar } from "./ui";
+import { Button } from "./ui/button";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "./ui/hover-card";
 import "./profile-identity.css";
 
 export function profileRoleLabel(user: User) {
@@ -56,162 +50,115 @@ export function ProfileIdentity({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-  const openTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
-  const skipFocus = useRef(false);
+  const restoringFocus = useRef(false);
   const cardId = useId();
-
-  function clearTimers() {
-    clearTimeout(openTimer.current);
-    clearTimeout(closeTimer.current);
-  }
-
-  function reveal(immediate = false) {
-    clearTimers();
-    const show = () => {
-      window.dispatchEvent(
-        new CustomEvent("mola:profile-preview", { detail: cardId }),
-      );
-      setOpen(true);
-    };
-    if (immediate) show();
-    else openTimer.current = setTimeout(show, 300);
-  }
-
-  function close() {
-    clearTimers();
-    setOpen(false);
-  }
-
-  function scheduleClose() {
-    clearTimers();
-    closeTimer.current = setTimeout(() => {
-      if (
-        triggerRef.current === document.activeElement ||
-        cardRef.current?.contains(document.activeElement)
-      )
-        return;
-      setOpen(false);
-    }, 160);
-  }
+  const triggerId = useId();
 
   function viewProfile() {
-    close();
+    setOpen(false);
     onOpen(user.id);
   }
 
   useEffect(() => {
     function dismissOther(event: Event) {
-      if ((event as CustomEvent<string>).detail !== cardId) close();
+      if ((event as CustomEvent<string>).detail !== cardId) setOpen(false);
     }
     window.addEventListener("mola:profile-preview", dismissOther);
-    return () => {
-      clearTimers();
+    return () =>
       window.removeEventListener("mola:profile-preview", dismissOther);
-    };
-  }, [cardId, user.id, selfId]);
+  }, [cardId]);
 
   useEffect(() => {
-    close();
+    setOpen(false);
   }, [user.id, selfId]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!open) return;
-    const card = cardRef.current;
-    const trigger = triggerRef.current;
-    if (!card || !trigger) return;
-
-    function place() {
-      if (!card || !trigger) return;
-      const viewport = window.visualViewport;
-      const margin = 10;
-      const left = (viewport?.offsetLeft || 0) + margin;
-      const top = (viewport?.offsetTop || 0) + margin;
-      const width = (viewport?.width || window.innerWidth) - margin * 2;
-      const height = (viewport?.height || window.innerHeight) - margin * 2;
-      card.style.maxWidth = `${Math.max(0, width)}px`;
-      card.style.maxHeight = `${Math.max(0, height)}px`;
-      const target = trigger.getBoundingClientRect();
-      const bounds = card.getBoundingClientRect();
-      const below = target.bottom + 8;
-      const preferredTop =
-        below + bounds.height > top + height
-          ? target.top - bounds.height - 8
-          : below;
-      card.style.left = `${Math.max(left, Math.min(target.left, left + width - bounds.width))}px`;
-      card.style.top = `${Math.max(top, Math.min(preferredTop, top + height - bounds.height))}px`;
-      card.style.visibility = "visible";
-    }
-
-    function outside(event: PointerEvent | FocusEvent) {
+    // Keep the established dismissal on navigation/viewport changes. Base UI
+    // owns pointer intent, hover timing, outside clicks, and anchor positioning.
+    function scroll(event: Event) {
       if (
         event.target instanceof Node &&
-        !trigger?.contains(event.target) &&
-        !card?.contains(event.target)
+        cardRef.current?.contains(event.target)
       )
-        close();
+        return;
+      setOpen(false);
     }
-
-    function escape(event: globalThis.KeyboardEvent) {
-      if (event.key !== "Escape") return;
+    const resize = () => setOpen(false);
+    // Escape belongs to the visible preview, including when focus is still on
+    // the underlying call dialog. Prevent the enclosing modal closing as well.
+    function escape(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      if (card?.contains(document.activeElement)) {
-        skipFocus.current = true;
-        trigger?.focus({ preventScroll: true });
+      setOpen(false);
+      if (cardRef.current?.contains(document.activeElement)) {
+        restoringFocus.current = true;
+        triggerRef.current?.focus({ preventScroll: true });
+        restoringFocus.current = false;
       }
-      close();
     }
-
-    function scroll(event: Event) {
-      if (event.target instanceof Node && card?.contains(event.target)) return;
-      close();
-    }
-
-    place();
-    const observer = new ResizeObserver(place);
-    observer.observe(card);
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("focusin", outside);
-    document.addEventListener("keydown", escape, true);
     document.addEventListener("scroll", scroll, true);
-    window.addEventListener("resize", close);
-    window.visualViewport?.addEventListener("resize", close);
+    document.addEventListener("keydown", escape, true);
+    window.addEventListener("resize", resize);
+    window.visualViewport?.addEventListener("resize", resize);
     return () => {
-      observer.disconnect();
-      document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("focusin", outside);
-      document.removeEventListener("keydown", escape, true);
       document.removeEventListener("scroll", scroll, true);
-      window.removeEventListener("resize", close);
-      window.visualViewport?.removeEventListener("resize", close);
+      document.removeEventListener("keydown", escape, true);
+      window.removeEventListener("resize", resize);
+      window.visualViewport?.removeEventListener("resize", resize);
     };
   }, [open]);
 
+  // A preview opened inside a modal stays in its focus/aria scope. Floating UI
+  // accounts for the transformed containing block rather than using page coords.
+  const modal = triggerRef.current?.closest<HTMLElement>(
+    'dialog[open], [role="dialog"][aria-modal="true"]',
+  );
+
   return (
-    <>
-      <button
-        ref={triggerRef}
-        type="button"
+    <HoverCard
+      open={open}
+      triggerId={triggerId}
+      onOpenChange={(next, details) => {
+        if (next) {
+          window.dispatchEvent(
+            new CustomEvent("mola:profile-preview", { detail: cardId }),
+          );
+        } else if (
+          details.reason === "escape-key" &&
+          cardRef.current?.contains(document.activeElement)
+        ) {
+          triggerRef.current?.focus({ preventScroll: true });
+        }
+        setOpen(next);
+      }}
+    >
+      <HoverCardTrigger
+        id={triggerId}
+        ref={(element: HTMLElement | null) => {
+          triggerRef.current = element;
+        }}
+        delay={300}
+        closeDelay={160}
+        render={<Button variant="unstyled" size="unset" type="button" />}
         className={`profile-identity ${className}`}
         aria-label={`${user.name} profilini görüntüle`}
         aria-expanded={open}
         aria-controls={open ? cardId : undefined}
-        onPointerEnter={(event) => {
-          if (event.pointerType !== "touch") reveal();
+        onFocus={(event) => {
+          event.preventBaseUIHandler();
+          if (restoringFocus.current) return;
+          // Base UI previews open only for :focus-visible. Profile identities
+          // also support programmatic focus after returning from a profile,
+          // regardless of the last input modality, as they did before migration.
+          window.dispatchEvent(
+            new CustomEvent("mola:profile-preview", { detail: cardId }),
+          );
+          setOpen(true);
         }}
-        onPointerLeave={scheduleClose}
-        onFocus={() => {
-          if (skipFocus.current) skipFocus.current = false;
-          else reveal(true);
-        }}
-        onBlur={scheduleClose}
         onClick={(event) => {
           event.stopPropagation();
           viewProfile();
@@ -229,80 +176,73 @@ export function ProfileIdentity({
         }}
       >
         {children || <Avatar user={user} online={connected && online} />}
-      </button>
-      {open &&
-        createPortal(
-          <div
-            ref={cardRef}
-            id={cardId}
-            className="profile-hover-card"
-            role="dialog"
-            aria-label={`${user.name} profil kartı`}
-            onPointerEnter={clearTimers}
-            onPointerLeave={scheduleClose}
-            onFocus={clearTimers}
-            onBlur={scheduleClose}
-            onKeyDown={(event) => {
-              if (event.key !== "Tab") return;
-              if (event.shiftKey) {
-                event.preventDefault();
-                event.stopPropagation();
-                triggerRef.current?.focus({ preventScroll: true });
-                return;
-              }
-              const scope =
-                triggerRef.current?.closest(
-                  'dialog[open], [role="dialog"][aria-modal="true"]',
-                ) || document.body;
-              const focusable = Array.from(
-                scope.querySelectorAll<HTMLElement>(
-                  'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
-                ),
-              ).filter(
-                (element) =>
-                  !cardRef.current?.contains(element) &&
-                  !element.closest('[inert], [hidden], [aria-hidden="true"]') &&
-                  element.getClientRects().length > 0,
-              );
-              const index = focusable.indexOf(triggerRef.current!);
-              const next = focusable[index + 1];
-              if (index >= 0 && next) {
-                event.preventDefault();
-                event.stopPropagation();
-                close();
-                next.focus();
-              }
-            }}
-          >
-            <div className="profile-hover-heading">
-              <Avatar user={user} online={connected && online} />
-              <div>
-                <strong>
-                  {user.name}
-                  {user.id === selfId && <small>Sen</small>}
-                </strong>
-                <span>{user.jobTitle || profileRoleLabel(user)}</span>
-              </div>
-            </div>
-            <div className="profile-hover-presence">
-              <ProfilePresence online={online} connected={connected} />
-              {user.status && (
-                <span className="profile-hover-status">{user.status}</span>
-              )}
-            </div>
-            {user.bio && <p className="profile-hover-bio">{user.bio}</p>}
-            <button
-              type="button"
-              className="profile-hover-open"
-              onClick={viewProfile}
-            >
-              Profili görüntüle <ArrowUpRight size={15} aria-hidden="true" />
-            </button>
-          </div>,
-          triggerRef.current?.closest(
-            'dialog[open], [role="dialog"][aria-modal="true"]',
-          ) || document.body,
-        )}
-    </>
+      </HoverCardTrigger>
+      <HoverCardContent
+        ref={cardRef}
+        id={cardId}
+        portalContainer={modal}
+        collisionBoundary={modal || undefined}
+        align="start"
+        sideOffset={8}
+        className="profile-hover-card"
+        role="dialog"
+        aria-label={`${user.name} profil kartı`}
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          if (event.shiftKey) {
+            event.preventDefault();
+            event.stopPropagation();
+            triggerRef.current?.focus({ preventScroll: true });
+            return;
+          }
+          const scope = modal || document.body;
+          const focusable = Array.from(
+            scope.querySelectorAll<HTMLElement>(
+              'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+            ),
+          ).filter(
+            (element) =>
+              !cardRef.current?.contains(element) &&
+              !element.closest('[inert], [hidden], [aria-hidden="true"]') &&
+              element.getClientRects().length > 0,
+          );
+          const index = focusable.indexOf(triggerRef.current!);
+          const next = focusable[index + 1];
+          if (index >= 0 && next) {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+            next.focus();
+          }
+        }}
+      >
+        <div className="profile-hover-heading">
+          <Avatar user={user} online={connected && online} />
+          <div>
+            <strong>
+              {user.name}
+              {user.id === selfId && <small>Sen</small>}
+            </strong>
+            <span>{user.jobTitle || profileRoleLabel(user)}</span>
+          </div>
+        </div>
+        <div className="profile-hover-presence">
+          <ProfilePresence online={online} connected={connected} />
+          {user.status && (
+            <span className="profile-hover-status">{user.status}</span>
+          )}
+        </div>
+        {user.bio && <p className="profile-hover-bio">{user.bio}</p>}
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="button"
+          className="profile-hover-open"
+          onClick={viewProfile}
+        >
+          Profili görüntüle <ArrowUpRight size={15} aria-hidden="true" />
+        </Button>
+      </HoverCardContent>
+    </HoverCard>
   );
 }

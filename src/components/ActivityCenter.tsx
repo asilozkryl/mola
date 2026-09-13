@@ -1,3 +1,6 @@
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
 import {
@@ -516,7 +519,8 @@ export function ActivityCenter({
       <div className="activity-toolbar">
         <label className="activity-search">
           <Search size={16} aria-hidden="true" />
-          <input
+          <Input
+            unstyled
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -525,16 +529,20 @@ export function ActivityCenter({
             maxLength={100}
           />
           {query && (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               type="button"
               aria-label="Aramayı temizle"
               onClick={() => setQuery("")}
             >
               <X size={15} />
-            </button>
+            </Button>
           )}
         </label>
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
           type="button"
           className="activity-settings activity-icon-button"
           onClick={onSettings}
@@ -542,18 +550,22 @@ export function ActivityCenter({
           aria-label="Bildirim ayarları"
         >
           <Settings2 size={17} />
-        </button>
+        </Button>
       </div>
       <div className="activity-filters">
         <div className="activity-tabs" aria-label="Okunma durumu">
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             aria-pressed={!unreadOnly}
             onClick={() => setUnreadOnly(false)}
           >
             Tümü
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             aria-pressed={unreadOnly}
             onClick={() => setUnreadOnly(true)}
@@ -564,10 +576,11 @@ export function ActivityCenter({
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
-          </button>
+          </Button>
         </div>
         <label className="activity-kind">
-          <select
+          <NativeSelect
+            unstyled
             aria-label="Aktivite türü"
             value={kind}
             onChange={(event) => setKind(event.target.value as Kind)}
@@ -577,10 +590,12 @@ export function ActivityCenter({
             <option value="reply">Yanıtlar</option>
             <option value="dm">Özel mesajlar</option>
             <option value="channel">Kanal çağrıları</option>
-          </select>
+          </NativeSelect>
           <ChevronDown size={13} aria-hidden="true" />
         </label>
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
           type="button"
           className="activity-read-all"
           disabled={Boolean(reading) || unreadCount === 0}
@@ -590,7 +605,7 @@ export function ActivityCenter({
           <span>
             {reading === "all" ? "İşaretleniyor…" : "Tümünü okundu işaretle"}
           </span>
-        </button>
+        </Button>
       </div>
       {!connected && (
         <p className="activity-connection" role="status">
@@ -600,31 +615,37 @@ export function ActivityCenter({
       {updatedContext === context && (
         <div className="activity-update" role="status">
           <span>Aktivite güncellendi</span>
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             onClick={() => setRevision((value) => value + 1)}
           >
             <RefreshCw size={14} />
             Yenile
-          </button>
+          </Button>
         </div>
       )}
       {actionError?.scope === scope && (
         <div className="activity-error" role="alert">
           <span>{actionError.message}</span>
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             disabled={Boolean(reading)}
             onClick={() => void retryAction()}
           >
             Yenile
-          </button>
+          </Button>
         </div>
       )}
       {currentLoad.error && (
         <div className="activity-error" role="alert">
           <span>{currentLoad.error}</span>
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             onClick={() =>
               currentLoad.more
@@ -633,7 +654,7 @@ export function ActivityCenter({
             }
           >
             Yeniden dene
-          </button>
+          </Button>
         </div>
       )}
       <div
@@ -663,9 +684,14 @@ export function ActivityCenter({
                 : "Senden bahsedildiğinde, sana yazıldığında veya bir konuşmana yanıt geldiğinde burada göreceksin."}
             </p>
             {filtered && (
-              <button type="button" onClick={resetFilters}>
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="button"
+                onClick={resetFilters}
+              >
                 Filtreleri temizle
-              </button>
+              </Button>
             )}
           </div>
         ) : (
@@ -694,7 +720,9 @@ export function ActivityCenter({
                       data-notification-id={item.id}
                       aria-label={`${name}, ${kindLabels[item.kind]}, ${item.read ? "okundu" : "okunmamış"}`}
                     >
-                      <button
+                      <Button
+                        variant="unstyled"
+                        size="unset"
                         type="button"
                         className="activity-open"
                         disabled={Boolean(opening)}
@@ -760,9 +788,11 @@ export function ActivityCenter({
                             <ArrowUpRight size={15} />
                           )}
                         </span>
-                      </button>
+                      </Button>
                       {!item.read && (
-                        <button
+                        <Button
+                          variant="unstyled"
+                          size="unset"
                           type="button"
                           className="activity-read activity-icon-button"
                           aria-label="Okundu işaretle"
@@ -778,7 +808,7 @@ export function ActivityCenter({
                           ) : (
                             <Check size={15} />
                           )}
-                        </button>
+                        </Button>
                       )}
                     </article>
                   );
@@ -789,7 +819,9 @@ export function ActivityCenter({
         )}
         {current?.nextCursor && !currentLoad.error && (
           <div className="activity-pagination">
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               type="button"
               disabled={currentLoad.pending || currentLoad.more}
               onClick={() => void loadMore()}
@@ -800,7 +832,7 @@ export function ActivityCenter({
                 <ChevronDown size={15} />
               )}
               {currentLoad.more ? "Yükleniyor…" : "Daha fazlasını yükle"}
-            </button>
+            </Button>
           </div>
         )}
         {currentLoad.pending && current && (

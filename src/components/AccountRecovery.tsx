@@ -1,3 +1,5 @@
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   ArrowLeft,
@@ -111,7 +113,8 @@ export function ForgotPassword({
         <form onSubmit={submit}>
           <label>
             E-posta adresin
-            <input
+            <Input
+              unstyled
               name="email"
               type="email"
               autoComplete="email"
@@ -125,7 +128,13 @@ export function ForgotPassword({
               {error}
             </p>
           )}
-          <button className="primary-button full-width" disabled={busy}>
+          <Button
+            variant="default"
+            size="unset"
+            type="submit"
+            className="primary-button full-width"
+            disabled={busy}
+          >
             {busy ? (
               <Spinner label="Bağlantı hazırlanıyor" />
             ) : (
@@ -134,7 +143,7 @@ export function ForgotPassword({
                 <ArrowRight size={18} />
               </>
             )}
-          </button>
+          </Button>
         </form>
       )}
       {sent && (
@@ -143,9 +152,15 @@ export function ForgotPassword({
           isteyebilirsin.
         </p>
       )}
-      <button className="auth-text-button recovery-back" onClick={onBack}>
+      <Button
+        variant="unstyled"
+        size="unset"
+        type="submit"
+        className="auth-text-button recovery-back"
+        onClick={onBack}
+      >
         <ArrowLeft size={16} /> Girişe dön
-      </button>
+      </Button>
       {canSend && <LocalMailbox url={mailbox} />}
     </AuthLayout>
   );
@@ -221,13 +236,16 @@ export function AccountRecovery({
             : "En az 12 karakterden oluşan, bu hesaba özel bir parola seç."}
       </p>
       {done ? (
-        <button
+        <Button
+          variant="default"
+          size="unset"
+          type="submit"
           className="primary-button full-width"
           onClick={() => onDone(link.action)}
         >
           Devam et
           <ArrowRight size={18} />
-        </button>
+        </Button>
       ) : (
         <form onSubmit={submit}>
           {!verify && (
@@ -235,7 +253,8 @@ export function AccountRecovery({
               <label>
                 Yeni parola
                 <div className="password-field">
-                  <input
+                  <Input
+                    unstyled
                     name="password"
                     type={show ? "text" : "password"}
                     autoComplete="new-password"
@@ -254,7 +273,8 @@ export function AccountRecovery({
               </label>
               <label>
                 Yeni parola tekrar
-                <input
+                <Input
+                  unstyled
                   name="confirmation"
                   type={show ? "text" : "password"}
                   autoComplete="new-password"
@@ -276,7 +296,10 @@ export function AccountRecovery({
               Bağlantı eksik görünüyor. E-postandaki bağlantının tamamını aç.
             </p>
           )}
-          <button
+          <Button
+            variant="default"
+            size="unset"
+            type="submit"
             className="primary-button full-width"
             disabled={busy || !link.token}
           >
@@ -288,11 +311,14 @@ export function AccountRecovery({
                 <ArrowRight size={18} />
               </>
             )}
-          </button>
+          </Button>
         </form>
       )}
       {!done && (
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className="auth-text-button recovery-back"
           disabled={!verify && !canSend}
           aria-describedby={
@@ -301,7 +327,7 @@ export function AccountRecovery({
           onClick={() => (verify ? onDone(link.action) : setForgot(true))}
         >
           {verify ? "Hesabıma dön" : "Yeni bağlantı iste"}
-        </button>
+        </Button>
       )}
       {!done && !verify && !canSend && (
         <EmailUnavailableNotice id="email-unavailable">
@@ -414,7 +440,10 @@ export function VerificationGate({
           {message}
         </p>
       )}
-      <button
+      <Button
+        variant="default"
+        size="unset"
+        type="submit"
         className="primary-button full-width"
         disabled={busy}
         onClick={() => void perform("check")}
@@ -427,8 +456,11 @@ export function VerificationGate({
             <ArrowRight size={18} />
           </>
         )}
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="outline"
+        size="unset"
+        type="submit"
         className="secondary-button full-width recovery-secondary"
         disabled={busy || cooldown > 0 || !emailDeliveryAvailable}
         aria-describedby={
@@ -439,20 +471,23 @@ export function VerificationGate({
         {cooldown
           ? `Tekrar gönder (${cooldown} sn)`
           : "E-postayı tekrar gönder"}
-      </button>
+      </Button>
       {emailDeliveryAvailable && (
         <p className="recovery-detail">
           E-posta ulaşmadıysa istenmeyen posta klasörünü de kontrol et. Bağlantı
           24 saat geçerli.
         </p>
       )}
-      <button
+      <Button
+        variant="unstyled"
+        size="unset"
+        type="submit"
         className="auth-text-button recovery-back"
         disabled={busy}
         onClick={() => void perform("logout")}
       >
         <ArrowLeft size={16} /> Farklı bir hesapla giriş yap
-      </button>
+      </Button>
       {emailDeliveryAvailable && <LocalMailbox url={mailbox} />}
     </AuthLayout>
   );

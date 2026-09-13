@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { ArrowUpRight, Lock, MessageCircle } from "lucide-react";
 import type { User } from "../../shared/types";
 import { ProfileIdentity, ProfilePresence } from "./ProfileIdentity";
@@ -105,9 +106,15 @@ export function DirectConversationIntro({
         görebilirsiniz.
       </p>
       <div className="direct-intro-actions">
-        <button type="button" className="secondary-button" onClick={onCompose}>
+        <Button
+          variant="outline"
+          size="unset"
+          type="button"
+          className="secondary-button"
+          onClick={onCompose}
+        >
           <MessageCircle size={16} /> Mesaj yaz
-        </button>
+        </Button>
         {peer && !peer.suspended && (
           <ProfileIdentity
             user={peer}

@@ -3,9 +3,9 @@
 }
 
 .profile-settings {
-  --profile-border: #e5e8e7;
-  --profile-muted: #65706c;
-  color: #293730;
+  --profile-border: var(--border, #e5e8e7);
+  --profile-muted: var(--muted-foreground, #65706c);
+  color: var(--foreground, #293730);
 }
 
 .profile-photo-section {
@@ -93,14 +93,14 @@
   min-height: 34px;
   padding: 5px 3px;
   border-radius: 5px;
-  color: #53615b;
+  color: var(--muted-foreground, #53615b);
   font-size: 11px;
   font-weight: 700;
 }
 
 .profile-text-button:hover {
-  color: #153d36;
-  background: #f3f5f4;
+  color: var(--primary, #153d36);
+  background: var(--muted, #f3f5f4);
 }
 
 .profile-remove-photo:hover {
@@ -123,7 +123,7 @@
   padding: 12px;
   border: 1px solid var(--profile-border);
   border-radius: 8px;
-  background: #f8f9f8;
+  background: var(--muted, #f8f9f8);
 }
 
 .profile-photo-confirm p {
@@ -151,7 +151,7 @@
 
 .modal .profile-settings-form label {
   margin-bottom: 15px;
-  color: #46564e;
+  color: var(--foreground, #46564e);
   font-size: 11px;
 }
 
@@ -159,9 +159,9 @@
 .modal .profile-settings-form textarea {
   margin-top: 6px;
   padding: 10px 11px;
-  border-color: #dfe5e2;
+  border-color: var(--border, #dfe5e2);
   border-radius: 7px;
-  color: #293730;
+  color: var(--foreground, #293730);
   font-size: 12px;
 }
 
@@ -233,7 +233,7 @@
   align-items: center;
   gap: 6px;
   margin: 10px 0;
-  color: #2d6650;
+  color: var(--primary, #2d6650);
   font-size: 11px;
   line-height: 1.6;
 }
@@ -257,7 +257,7 @@
 }
 
 .profile-discard-confirm p {
-  color: #53615b;
+  color: var(--muted-foreground, #53615b);
   font-size: 13px;
   line-height: 1.7;
 }

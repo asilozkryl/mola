@@ -1,3 +1,8 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Tabs, TabsList, TabsTrigger } from "./components/ui/tabs";
 import {
   useCallback,
   useEffect,
@@ -2627,9 +2632,15 @@ export default function App() {
         <Logo />
         <h1>Çalışma alanına bağlanılamadı.</h1>
         <p>{fatal}</p>
-        <button className="primary-button" onClick={() => location.reload()}>
+        <Button
+          variant="default"
+          size="unset"
+          type="submit"
+          className="primary-button"
+          onClick={() => location.reload()}
+        >
           Tekrar dene
-        </button>
+        </Button>
       </main>
     );
   if (verificationPending && accountData)
@@ -2698,17 +2709,23 @@ export default function App() {
         Sohbete geç
       </a>
       <aside className="workspace-rail" aria-label="Çalışma alanları">
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className="rail-brand"
           aria-label="Mola hakkında"
           onClick={() => setDialog("help")}
         >
           <Logo small />
-        </button>
+        </Button>
         <div className="rail-divider" />
         <div className="rail-workspaces">
           {data.workspaces.map((workspace) => (
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
               key={workspace.id}
               className={`workspace-button ${workspace.id === data.workspace.id ? "active" : ""}`}
               title={workspace.name}
@@ -2736,17 +2753,20 @@ export default function App() {
               }}
             >
               <span>{workspaceInitials(workspace.name)}</span>
-            </button>
+            </Button>
           ))}
         </div>
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className="rail-add"
           title="Çalışma alanı ekle"
           aria-label="Çalışma alanı ekle"
           onClick={() => openWorkspaces()}
         >
           <Plus size={22} />
-        </button>
+        </Button>
         <div className="rail-bottom">
           <IconButton
             label="Ekip arkadaşlarını davet et"
@@ -2772,7 +2792,10 @@ export default function App() {
         </div>
       </aside>
       {mobileNav && (
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className="nav-scrim"
           aria-label="Gezinmeyi kapat"
           tabIndex={-1}
@@ -2860,7 +2883,9 @@ export default function App() {
       <div className="workspace-main" inert={isMobile && mobileNav}>
         <header className="topbar">
           <div className="topbar-breadcrumb">
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               ref={triggerRef}
               type="button"
               aria-label="Gezinmeyi aç"
@@ -2870,7 +2895,7 @@ export default function App() {
               className="icon-button mobile-menu"
             >
               <Menu size={21} />
-            </button>
+            </Button>
             <span className="workspace-breadcrumb">Çalışma alanı</span>
             <ChevronRight size={14} />
             <span>
@@ -2887,7 +2912,10 @@ export default function App() {
                         : "Kanallar"}
             </span>
           </div>
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="submit"
             className="global-search"
             aria-label="Tüm mesajlarda ara"
             onClick={() => setDialog("search")}
@@ -2897,7 +2925,7 @@ export default function App() {
             <kbd>
               {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"} K
             </kbd>
-          </button>
+          </Button>
           <div className="topbar-actions">
             <IconButton
               label={
@@ -2956,12 +2984,15 @@ export default function App() {
                 Diğer ekiplerine geçebilir, yeni bir alan oluşturabilir veya
                 davetle katılabilirsin.
               </p>
-              <button
+              <Button
+                variant="default"
+                size="unset"
+                type="submit"
                 className="primary-button"
                 onClick={() => openWorkspaces()}
               >
                 Çalışma alanlarımı aç <ArrowRight size={17} />
-              </button>
+              </Button>
             </section>
           ) : view === "profile" && profileId ? (
             <ProfilePage
@@ -2979,8 +3010,14 @@ export default function App() {
             />
           ) : (
             <>
-              <section
-                className={`conversation-panel${isDirectConversation ? " dm-conversation" : ""}`}
+              <Tabs
+                render={<section />}
+                value={tab}
+                onValueChange={(value) => {
+                  if (value === "chat" || value === "files" || value === "pins")
+                    selectTab(value);
+                }}
+                className={`conversation-panel gap-0${isDirectConversation ? " dm-conversation" : ""}`}
                 aria-label="Sohbet"
               >
                 <div
@@ -3061,16 +3098,22 @@ export default function App() {
                                 <Avatar user={u} size="tiny" />
                               </ProfileIdentity>
                             ))}
-                          <button
+                          <Button
+                            variant="unstyled"
+                            size="unset"
+                            type="submit"
                             className="member-stack-count"
                             aria-label="Kanal üyelerini gör"
                             onClick={() => openMembers("channel")}
                           >
                             {conversationMembers.length} üye
-                          </button>
+                          </Button>
                         </div>
                       )}
-                      <button
+                      <Button
+                        variant="unstyled"
+                        size="unset"
+                        type="submit"
                         className="huddle-button"
                         aria-label="Bir araya gel"
                         onClick={() => startCall()}
@@ -3078,8 +3121,10 @@ export default function App() {
                       >
                         <Headphones size={17} />
                         <span>Bir araya gel</span>
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="unstyled"
+                        size="unset"
                         type="button"
                         className="icon-button"
                         title={
@@ -3097,9 +3142,11 @@ export default function App() {
                         onClick={() => setDialog("info")}
                       >
                         <Info size={20} />
-                      </button>
+                      </Button>
                       {channel && channel.kind !== "dm" && (
-                        <button
+                        <Button
+                          variant="unstyled"
+                          size="unset"
                           type="button"
                           className="icon-button channel-actions-trigger"
                           aria-label="Kanal işlemleri"
@@ -3115,75 +3162,46 @@ export default function App() {
                           onKeyDown={(event) => channelMenuKey(event, channel)}
                         >
                           <MoreHorizontal size={19} />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   )}
                 </div>
                 {view === "channel" && (
                   <div className="channel-tabs-row">
-                    <div
-                      className="channel-tabs"
-                      role="tablist"
+                    <TabsList
+                      variant="line"
+                      className="channel-tabs items-stretch justify-start rounded-none"
                       aria-label="Kanal içeriği"
-                      onKeyDown={(event) => {
-                        const tabs = ["chat", "files", "pins"] as const;
-                        const index = tabs.indexOf(tab);
-                        const next =
-                          event.key === "ArrowRight"
-                            ? (index + 1) % tabs.length
-                            : event.key === "ArrowLeft"
-                              ? (index + tabs.length - 1) % tabs.length
-                              : event.key === "Home"
-                                ? 0
-                                : event.key === "End"
-                                  ? tabs.length - 1
-                                  : -1;
-                        if (next < 0) return;
-                        event.preventDefault();
-                        selectTab(tabs[next]);
-                        event.currentTarget
-                          .querySelectorAll<HTMLButtonElement>('[role="tab"]')
-                          [next]?.focus();
-                      }}
                     >
-                      <button
-                        role="tab"
+                      <TabsTrigger
+                        value="chat"
                         id="channel-tab-chat"
                         aria-controls="channel-content"
-                        tabIndex={tab === "chat" ? 0 : -1}
-                        aria-selected={tab === "chat"}
-                        className={tab === "chat" ? "active" : ""}
-                        onClick={() => selectTab("chat")}
+                        className={`h-full flex-none rounded-none border-0${tab === "chat" ? " active" : ""}`}
                       >
                         <MessageSquare size={16} />
                         Sohbet
-                      </button>
-                      <button
-                        role="tab"
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="files"
                         id="channel-tab-files"
                         aria-controls="channel-content"
-                        tabIndex={tab === "files" ? 0 : -1}
-                        aria-selected={tab === "files"}
-                        className={tab === "files" ? "active" : ""}
-                        onClick={() => selectTab("files")}
+                        className={`h-full flex-none rounded-none border-0${tab === "files" ? " active" : ""}`}
                       >
                         <FileText size={16} />
                         Dosyalar
-                      </button>
-                      <button
-                        role="tab"
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="pins"
                         id="channel-tab-pins"
                         aria-controls="channel-content"
-                        tabIndex={tab === "pins" ? 0 : -1}
-                        aria-selected={tab === "pins"}
-                        className={tab === "pins" ? "active" : ""}
-                        onClick={() => selectTab("pins")}
+                        className={`h-full flex-none rounded-none border-0${tab === "pins" ? " active" : ""}`}
                       >
                         <Pin size={15} />
                         Sabitlenenler
-                      </button>
-                    </div>
+                      </TabsTrigger>
+                    </TabsList>
                     {isDirectConversation ? (
                       <span className="direct-conversation-kind">
                         <Lock size={12} aria-hidden="true" /> Özel sohbet
@@ -3389,13 +3407,16 @@ export default function App() {
                       }
                     >
                       {hasMore ? (
-                        <button
+                        <Button
+                          variant="unstyled"
+                          size="unset"
+                          type="submit"
                           className="load-more"
                           disabled={historyBusy}
                           onClick={() => void loadMore()}
                         >
                           Önceki mesajları yükle
-                        </button>
+                        </Button>
                       ) : isDirectConversation ? (
                         <DirectConversationIntro
                           peer={directPeer}
@@ -3444,7 +3465,10 @@ export default function App() {
                       {historyError && (
                         <div className="history-error" role="alert">
                           <span>{historyError}</span>
-                          <button
+                          <Button
+                            variant="outline"
+                            size="unset"
+                            type="submit"
                             className="secondary-button"
                             disabled={historyBusy}
                             onClick={() =>
@@ -3454,7 +3478,7 @@ export default function App() {
                             }
                           >
                             Tekrar dene
-                          </button>
+                          </Button>
                         </div>
                       )}
                       {!messages.length &&
@@ -3502,7 +3526,10 @@ export default function App() {
                   (awayFromLatest || pendingCount > 0) &&
                   !messagesLoading && (
                     <div className="latest-message-bar">
-                      <button
+                      <Button
+                        variant="unstyled"
+                        size="unset"
+                        type="submit"
                         onClick={() =>
                           scrollRef.current?.scrollTo({
                             top: scrollRef.current.scrollHeight,
@@ -3517,7 +3544,7 @@ export default function App() {
                           </span>
                         )}
                         Son mesajlara git
-                      </button>
+                      </Button>
                     </div>
                   )}
                 {view === "channel" && (
@@ -3570,7 +3597,7 @@ export default function App() {
                     )}
                   </>
                 )}
-              </section>
+              </Tabs>
               {thread && threadChannel ? (
                 <aside className="thread-panel">
                   <div className="details-heading">
@@ -3600,18 +3627,24 @@ export default function App() {
                       {thread.replyCount} yanıt
                     </div>
                     {repliesHasMore && (
-                      <button
+                      <Button
+                        variant="unstyled"
+                        size="unset"
+                        type="submit"
                         className="load-more"
                         disabled={replyBusy}
                         onClick={() => void loadMoreReplies()}
                       >
                         Önceki yanıtları yükle
-                      </button>
+                      </Button>
                     )}
                     {replyError && (
                       <div className="history-error" role="alert">
                         <span>{replyError}</span>
-                        <button
+                        <Button
+                          variant="outline"
+                          size="unset"
+                          type="submit"
                           className="secondary-button"
                           disabled={replyBusy}
                           onClick={() =>
@@ -3621,7 +3654,7 @@ export default function App() {
                           }
                         >
                           Tekrar dene
-                        </button>
+                        </Button>
                       </div>
                     )}
                     {threadLoading ? (
@@ -3898,6 +3931,7 @@ export default function App() {
             notify("Profilin güncellendi.");
           }}
           onLogout={() => void logout()}
+          onNotifications={() => setDialog("notifications")}
           onManage={
             canManage
               ? () => {
@@ -3968,12 +4002,15 @@ export default function App() {
                 <h4>
                   {channel.kind === "dm" ? "Sohbettekiler" : "Kanal üyeleri"}
                 </h4>
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
+                  type="submit"
                   aria-label="Kanal üyelerini gör"
                   onClick={() => openMembers("channel")}
                 >
                   Tümünü gör
-                </button>
+                </Button>
               </div>
               <div className="detail-members">
                 {conversationMembers.slice(0, 5).map((user) => (
@@ -4018,7 +4055,10 @@ export default function App() {
             </div>
             <div className="channel-info-actions">
               {channel.kind !== "dm" && (
-                <button
+                <Button
+                  variant="outline"
+                  size="unset"
+                  type="submit"
                   className="secondary-button full-width"
                   onClick={() => {
                     setDialog(null);
@@ -4027,10 +4067,13 @@ export default function App() {
                 >
                   <ShieldCheck size={16} />
                   Kanal erişimi ve üyeler
-                </button>
+                </Button>
               )}
               {canManage && channel.kind !== "dm" && (
-                <button
+                <Button
+                  variant="outline"
+                  size="unset"
+                  type="submit"
                   className="secondary-button full-width"
                   onClick={() => {
                     setDialog(null);
@@ -4039,9 +4082,12 @@ export default function App() {
                 >
                   <Plus size={16} />
                   Kanala üye ekle
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                variant="default"
+                size="unset"
+                type="submit"
                 className="primary-button full-width"
                 disabled={channel.archived}
                 onClick={() => {
@@ -4051,7 +4097,7 @@ export default function App() {
               >
                 <Headphones size={17} />
                 Bir araya gel
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>
@@ -4071,7 +4117,10 @@ export default function App() {
                   key={c.id}
                   onContextMenu={(event) => channelContext(event, c)}
                 >
-                  <button
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
                     onClick={() => {
                       selectChannel(c.id);
                       setDialog(null);
@@ -4086,7 +4135,7 @@ export default function App() {
                           : "Yazılı kanal")}{" "}
                       · Geçmişi aç
                     </small>
-                  </button>
+                  </Button>
                   {canEditChannel(c) && (
                     <IconButton
                       label={`${c.name} arşivden çıkar`}
@@ -4095,7 +4144,9 @@ export default function App() {
                       <ArchiveRestore size={18} />
                     </IconButton>
                   )}
-                  <button
+                  <Button
+                    variant="unstyled"
+                    size="unset"
                     type="button"
                     className="icon-button"
                     aria-label={`${c.name} kanal işlemleri`}
@@ -4105,7 +4156,7 @@ export default function App() {
                     onClick={(event) => openChannelMenu(c, event.currentTarget)}
                   >
                     <MoreHorizontal size={18} />
-                  </button>
+                  </Button>
                 </div>
               ))}
             {!data.channels.some((c) => c.kind !== "dm" && c.archived) && (
@@ -4168,7 +4219,8 @@ export default function App() {
           </p>
           <div className="search-input-wrap member-search">
             <Search size={18} />
-            <input
+            <Input
+              unstyled
               aria-label="Ekip arkadaşını ara"
               data-autofocus
               placeholder="İsme göre ara…"
@@ -4188,7 +4240,9 @@ export default function App() {
           <div className="members-modal-list">
             {listedMembers.map((user) =>
               memberScope === "dm" ? (
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
                   key={user.id}
                   type="button"
                   disabled={directPending}
@@ -4214,7 +4268,7 @@ export default function App() {
                     </small>
                   </span>
                   <ChevronRight size={17} />
-                </button>
+                </Button>
               ) : (
                 <ProfileIdentity
                   key={user.id}
@@ -4249,7 +4303,10 @@ export default function App() {
               </p>
             )}
           </div>
-          <button
+          <Button
+            variant="default"
+            size="unset"
+            type="submit"
             className="primary-button full-width"
             disabled={!canManage}
             onClick={() => {
@@ -4267,7 +4324,7 @@ export default function App() {
             {memberScope === "channel" && channel?.kind !== "dm" && channel
               ? "Kanala üye ekle"
               : "Çalışma alanına davet et"}
-          </button>
+          </Button>
         </Modal>
       )}
       {dialog === "help" && (
@@ -4381,13 +4438,19 @@ export default function App() {
             </div>
           </div>
           <div className="voice-switch-actions">
-            <button
+            <Button
+              variant="outline"
+              size="unset"
+              type="submit"
               className="secondary-button"
               onClick={() => setCallSwitchTarget(null)}
             >
               Burada kal
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="default"
+              size="unset"
+              type="submit"
               className="primary-button"
               disabled={!connected}
               onClick={() => {
@@ -4405,7 +4468,7 @@ export default function App() {
               }}
             >
               Ayrıl ve devam et <ArrowRight size={16} aria-hidden="true" />
-            </button>
+            </Button>
           </div>
         </Modal>
       )}
@@ -4510,7 +4573,10 @@ export default function App() {
           {!toastError &&
             toast === (sidebarUndo?.notice || "Kanal sıralaman kaydedildi.") &&
             sidebarUndo?.scope === sidebarScope && (
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
                 className="sidebar-undo"
                 disabled={sidebar.saving}
                 onClick={() => {
@@ -4526,7 +4592,7 @@ export default function App() {
                 }}
               >
                 Geri al
-              </button>
+              </Button>
             )}
           <IconButton label="Bildirimi kapat" onClick={() => setToast("")}>
             <X size={15} />
@@ -4594,7 +4660,9 @@ function CreateChannel({
       </p>
       <form onSubmit={submit}>
         <div className="channel-type-picker">
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             className={kind === "text" ? "active" : ""}
             aria-pressed={kind === "text"}
@@ -4603,8 +4671,10 @@ function CreateChannel({
             <Hash size={22} />
             <strong>Yazılı kanal</strong>
             <small>Fikirleri ve dosyaları paylaş</small>
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             className={kind === "voice" ? "active" : ""}
             aria-pressed={kind === "voice"}
@@ -4613,11 +4683,12 @@ function CreateChannel({
             <Volume2 size={22} />
             <strong>Sesli oda</strong>
             <small>Birlikte konuş, ekranını paylaş</small>
-          </button>
+          </Button>
         </div>
         <label>
           Kanal adı
-          <input
+          <Input
+            unstyled
             name="name"
             placeholder={
               kind === "text" ? "Örn. yeni-fikirler" : "Örn. Tasarım odası"
@@ -4630,7 +4701,8 @@ function CreateChannel({
         </label>
         <label>
           Kanal açıklaması
-          <textarea
+          <Textarea
+            unstyled
             name="description"
             placeholder="Burada neler konuşacağız?"
             maxLength={240}
@@ -4639,12 +4711,12 @@ function CreateChannel({
         </label>
         <label>
           Görünürlük
-          <select name="visibility" defaultValue="public">
+          <NativeSelect unstyled name="visibility" defaultValue="public">
             <option value="public">Ekip kanalı — çalışma alanı üyeleri</option>
             <option value="private">
               Özel kanal — yalnızca eklenen kişiler
             </option>
-          </select>
+          </NativeSelect>
         </label>
         <p className="channel-private-label">
           Özel kanalı oluşturduktan sonra kanal erişiminden üyelerini
@@ -4656,10 +4728,22 @@ function CreateChannel({
           </p>
         )}
         <div className="modal-actions">
-          <button type="button" className="secondary-button" onClick={onClose}>
+          <Button
+            variant="outline"
+            size="unset"
+            type="button"
+            className="secondary-button"
+            onClick={onClose}
+          >
             Vazgeç
-          </button>
-          <button className="primary-button" disabled={busy}>
+          </Button>
+          <Button
+            variant="default"
+            size="unset"
+            type="submit"
+            className="primary-button"
+            disabled={busy}
+          >
             {busy ? (
               <Spinner label="Oluşturuluyor" />
             ) : (
@@ -4668,7 +4752,7 @@ function CreateChannel({
                 Kanal oluştur
               </>
             )}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
@@ -4730,7 +4814,8 @@ function InviteDialog({
           <label>
             Davet bağlantısı
             <div className="invite-link">
-              <input
+              <Input
+                unstyled
                 value={url}
                 readOnly
                 aria-label="Davet bağlantısı"
@@ -4758,7 +4843,10 @@ function InviteDialog({
           </p>
         </>
       ) : (
-        <button
+        <Button
+          variant="default"
+          size="unset"
+          type="submit"
           className="primary-button full-width"
           onClick={() => void create()}
           disabled={busy}
@@ -4771,7 +4859,7 @@ function InviteDialog({
               Davet bağlantısı oluştur
             </>
           )}
-        </button>
+        </Button>
       )}
       {error && (
         <p className="form-error" role="alert">

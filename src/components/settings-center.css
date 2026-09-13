@@ -1,0 +1,466 @@
+.modal:has(> .settings-center) {
+  width: 900px;
+  height: min(760px, calc(100dvh - 48px));
+  max-width: calc(100vw - 32px);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.modal:has(> .settings-center) > .modal-heading {
+  margin: 0;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border, var(--line));
+}
+
+.modal:has(> .settings-center) > .modal-heading h2 {
+  font-size: 16px;
+  letter-spacing: -0.45px;
+}
+
+.settings-center {
+  display: grid;
+  grid-template-columns: 195px minmax(0, 1fr);
+  height: calc(100% - 63px);
+  min-height: 0;
+  gap: 0;
+  color: var(--foreground, var(--ink));
+}
+
+.settings-center-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 20px 12px 14px;
+  border-right: 1px solid var(--border, var(--line));
+  background: var(--muted, var(--subtle));
+}
+
+.settings-center-account {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 7px 22px;
+}
+
+.settings-center-account > div {
+  min-width: 0;
+}
+.settings-center-account strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 750;
+}
+.settings-center-account > div > span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.settings-center .settings-center-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  height: auto;
+  gap: 4px;
+  padding: 0;
+  background: transparent;
+}
+
+.settings-center-nav [role="tab"] {
+  flex: none;
+  justify-content: flex-start;
+  height: 38px;
+  gap: 9px;
+  padding: 0 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 7px;
+  box-shadow: none;
+  transition: box-shadow 120ms ease;
+}
+
+.settings-center-nav [role="tab"][aria-selected="true"] {
+  color: var(--accent-foreground);
+  background: var(--accent, var(--secondary));
+  font-weight: 750;
+  box-shadow: none;
+}
+
+.settings-center-nav [role="tab"]:hover:not(:disabled) {
+  color: var(--foreground, var(--ink));
+  background: var(--accent, var(--secondary));
+}
+
+.settings-draft-dot {
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--primary, var(--brand-solid));
+}
+
+.settings-center .settings-center-logout {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 38px;
+  margin: auto 0 0;
+  padding: 0 10px;
+  gap: 9px;
+  border: none;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.settings-center .settings-center-logout:hover {
+  color: var(--destructive);
+}
+
+.settings-center-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.settings-center-panel {
+  padding: 26px 28px 30px;
+}
+.settings-center-panel[hidden] {
+  display: none;
+}
+.settings-section-heading {
+  margin-bottom: 26px;
+}
+.settings-section-heading h3 {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+}
+.settings-section-heading p,
+.settings-choice-group > p,
+.settings-linked-panel p {
+  max-width: 60ch;
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.settings-choice-group {
+  min-width: 0;
+  margin: 0 0 30px;
+  padding: 0;
+  border: 0;
+}
+.settings-choice-group legend {
+  font-size: 13px;
+  font-weight: 750;
+}
+.settings-theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 15px;
+}
+/* Theme previews apply the palette immediately so text and its surface never
+   interpolate through a low-contrast intermediate combination. */
+.settings-center
+  .settings-center-panel
+  :is(.settings-theme-option, .settings-density-option)[data-slot="button"] {
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+.settings-center .settings-theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  height: auto;
+  min-width: 0;
+  gap: 0;
+  padding: 5px;
+  border-radius: 9px;
+  color: var(--foreground, var(--ink));
+  background: var(--background, var(--card));
+}
+.settings-center
+  :is(.settings-theme-option, .settings-density-option)[aria-pressed="true"] {
+  border-color: var(--primary, var(--forest));
+  box-shadow: 0 0 0 1px var(--primary, var(--forest));
+}
+.settings-theme-preview {
+  display: grid;
+  grid-template-columns: 26% 1fr;
+  height: 78px;
+  gap: 9px;
+  overflow: hidden;
+  border: 1px solid #dfe5e2;
+  border-radius: 5px;
+  background: #fff;
+}
+.settings-theme-preview > i {
+  background: #e9eeeb;
+  border-right: 1px solid #dfe5e2;
+}
+.settings-theme-preview > span {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 10px 0 0;
+}
+.settings-theme-preview b {
+  display: block;
+  height: 5px;
+  border-radius: 2px;
+  background: #dce4df;
+}
+.settings-theme-preview b:nth-child(2) {
+  width: 65%;
+  background: #9ac1ab;
+}
+.settings-theme-preview b:nth-child(3) {
+  width: 80%;
+}
+.settings-theme-dark .settings-theme-preview {
+  background: #18221d;
+  border-color: #36463c;
+}
+.settings-theme-dark .settings-theme-preview > i {
+  background: #223028;
+  border-color: #36463c;
+}
+.settings-theme-dark .settings-theme-preview b {
+  background: #465b4f;
+}
+.settings-theme-dark .settings-theme-preview b:nth-child(2) {
+  background: #8aba9c;
+}
+.settings-theme-system .settings-theme-preview {
+  background: linear-gradient(120deg, #fff 50%, #18221d 50%);
+}
+.settings-choice-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 5px 5px;
+  font-size: 12px;
+}
+.settings-choice-label > svg:last-child:not(:first-child) {
+  margin-left: auto;
+}
+.settings-density-options {
+  display: grid;
+  gap: 10px;
+  margin-top: 15px;
+}
+.settings-center .settings-density-option {
+  justify-content: flex-start;
+  height: auto;
+  min-height: 70px;
+  gap: 15px;
+  padding: 12px 15px;
+  text-align: left;
+  white-space: normal;
+  border-radius: 8px;
+}
+.settings-density-option strong,
+.settings-density-option small {
+  display: block;
+}
+.settings-density-option strong {
+  font-size: 12px;
+  font-weight: 750;
+}
+.settings-density-option small {
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+}
+.settings-density-option > svg {
+  margin-left: auto;
+  color: var(--primary, var(--accent-foreground));
+}
+.settings-density-preview {
+  display: flex;
+  flex-direction: column;
+  width: 42px;
+  gap: 7px;
+}
+.settings-density-preview i {
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(
+    in srgb,
+    var(--primary, var(--brand-solid)) 35%,
+    transparent
+  );
+}
+.settings-density-preview i:nth-child(2) {
+  width: 70%;
+}
+.settings-density-compact {
+  gap: 3px;
+}
+
+.settings-preference-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 0 0 24px;
+  border-bottom: 1px solid var(--border, var(--line));
+}
+.settings-preference-row label {
+  cursor: pointer;
+}
+.settings-preference-row strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 750;
+}
+.settings-preference-row label > span {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.settings-linked-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 24px 0;
+}
+.settings-linked-panel > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--primary, var(--accent-foreground));
+}
+.settings-linked-panel > div {
+  min-width: 0;
+}
+.settings-linked-panel h4 {
+  font-size: 13px;
+  font-weight: 750;
+}
+.settings-linked-panel [data-slot="button"] {
+  height: auto;
+  min-height: 36px;
+  margin-top: 16px;
+  padding: 8px 12px;
+  white-space: normal;
+  font-size: 12px;
+}
+.settings-demo-note {
+  padding: 14px;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.settings-center-panel .settings-security:first-of-type {
+  margin-top: 0;
+}
+.settings-center-panel .settings-toggle {
+  color: var(--foreground, var(--ink));
+}
+.settings-center-panel .settings-toggle small {
+  color: var(--muted-foreground);
+}
+
+@media (max-width: 680px) {
+  .modal:has(> .settings-center) {
+    height: calc(100dvh - 24px);
+    max-height: calc(100dvh - 24px);
+    max-width: calc(100vw - 20px);
+  }
+  .modal:has(> .settings-center) > .modal-heading {
+    padding: 12px 15px;
+  }
+  .settings-center {
+    display: flex;
+    flex-direction: column;
+    height: calc(100% - 57px);
+  }
+  .settings-center-sidebar {
+    flex: none;
+    padding: 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--border, var(--line));
+  }
+  .settings-center-account {
+    display: none;
+  }
+  .settings-center .settings-center-nav {
+    flex-direction: row;
+    width: 100%;
+    gap: 3px;
+    overflow-x: auto;
+    padding: 2px;
+  }
+  .settings-center-nav [role="tab"] {
+    width: auto;
+    height: 38px;
+    padding: 0 10px;
+    gap: 6px;
+    font-size: 11px;
+  }
+  .settings-center .settings-center-logout {
+    position: absolute;
+    right: 56px;
+    top: 13px;
+    width: auto;
+    min-height: 30px;
+    height: 30px;
+    padding: 0 8px;
+    font-size: 0;
+  }
+  .settings-center-logout > svg {
+    width: 16px;
+    height: 16px;
+  }
+  .modal:has(> .settings-center) > .modal-heading h2 {
+    max-width: calc(100% - 72px);
+    font-size: 15px;
+  }
+  .settings-center-body {
+    flex: 1;
+  }
+  .settings-center-panel {
+    padding: 22px 18px;
+  }
+  .settings-section-heading {
+    margin-bottom: 23px;
+  }
+  .settings-section-heading h3 {
+    font-size: 18px;
+  }
+  .settings-theme-options {
+    gap: 7px;
+  }
+  .settings-theme-preview {
+    height: 62px;
+    gap: 6px;
+  }
+  .settings-choice-label {
+    gap: 4px;
+    padding-inline: 2px;
+    font-size: 11px;
+  }
+  .settings-choice-label > svg {
+    width: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-center [data-slot] {
+    transition: none;
+    animation: none;
+  }
+}

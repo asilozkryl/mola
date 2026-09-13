@@ -48,6 +48,7 @@ test("a member enables two-factor authentication, saves recovery codes and compl
   ).toBeVisible();
   await page.getByTitle("Profil ve ayarlar", { exact: true }).click();
   const settings = page.getByRole("dialog", { name: "Kendine ait bir köşe" });
+  await settings.getByRole("tab", { name: "Güvenlik", exact: true }).click();
   await settings
     .getByText("Hesap güvenliği ve cihazlar", { exact: true })
     .click();
@@ -93,7 +94,11 @@ test("a member enables two-factor authentication, saves recovery codes and compl
   await recovery
     .getByRole("button", { name: "Kodlarımı sakladım", exact: true })
     .click();
-  await expect(settings.getByText("Açık", { exact: true })).toBeVisible();
+  await expect(
+    settings
+      .getByRole("region", { name: "İki aşamalı doğrulama", exact: true })
+      .getByText("Açık", { exact: true }),
+  ).toBeVisible();
   const accessibility = await new AxeBuilder({ page })
     .include(".account-security")
     .withTags(["wcag2a", "wcag2aa"])

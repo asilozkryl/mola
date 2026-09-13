@@ -1,3 +1,6 @@
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { FileText, MessageCircle, Search } from "lucide-react";
 import type { Bootstrap, Message } from "../../shared/types";
@@ -183,7 +186,8 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
     <Modal title="Çalışma alanında ara" onClose={onClose} wide>
       <div className="search-input-wrap">
         <Search size={21} />
-        <input
+        <Input
+          unstyled
           aria-label="Mesajlarda ara"
           data-autofocus
           value={query}
@@ -200,7 +204,8 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
       <div className="search-filters">
         <label>
           Kanal
-          <select
+          <NativeSelect
+            unstyled
             aria-label="Kanal"
             value={filters.channelId}
             onChange={(e) =>
@@ -218,11 +223,12 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
                 {conversationIdentity(c, data.user.id, data.members).name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label>
           Gönderen
-          <select
+          <NativeSelect
+            unstyled
             aria-label="Gönderen"
             value={filters.userId}
             onChange={(e) =>
@@ -235,11 +241,12 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
                 {m.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label>
           Başlangıç tarihi
-          <input
+          <Input
+            unstyled
             type="date"
             value={filters.from}
             onChange={(e) =>
@@ -249,7 +256,8 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
         </label>
         <label>
           Bitiş tarihi
-          <input
+          <Input
+            unstyled
             type="date"
             value={filters.until}
             min={filters.from}
@@ -268,19 +276,25 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
           />
           Yalnızca dosya içerenler
         </label>
-        <button
+        <Button
+          variant="unstyled"
+          size="unset"
+          type="submit"
           className="text-button"
           onClick={() => changeFilters(emptyFilters)}
         >
           Filtreleri temizle
-        </button>
+        </Button>
       </div>
       <div className="search-results" aria-busy={loading}>
         {(range.error || error) && (
           <div className="search-load-error" role="alert">
             <p>{range.error || error}</p>
             {!range.error && (
-              <button
+              <Button
+                variant="outline"
+                size="unset"
+                type="submit"
                 className="secondary-button"
                 disabled={loading}
                 onClick={() => {
@@ -292,7 +306,7 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
                 }}
               >
                 Tekrar dene
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -324,7 +338,10 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
                 {result.page * 50 + result.messages.length}. sonuçlar
               </div>
               {result.messages.map((message) => (
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
+                  type="submit"
                   key={message.id}
                   data-message-id={message.id}
                   className="search-result"
@@ -361,7 +378,7 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
                   {opening === message.id && (
                     <span role="status">Mesaj açılıyor…</span>
                   )}
-                </button>
+                </Button>
               ))}
             </>
           )
@@ -369,14 +386,20 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
       </div>
       {result && (result.page > 0 || result.nextCursor || page > 0) && (
         <div className="modal-actions">
-          <button
+          <Button
+            variant="outline"
+            size="unset"
+            type="submit"
             className="secondary-button"
             disabled={!page || loading || Boolean(opening)}
             onClick={() => setPage((value) => value - 1)}
           >
             Önceki sayfa
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            size="unset"
+            type="submit"
             className="secondary-button"
             disabled={
               !result.nextCursor ||
@@ -393,7 +416,7 @@ function SearchContent({ data, onClose, onSelect, onAccessChanged }: Props) {
             }}
           >
             Sonraki sayfa
-          </button>
+          </Button>
         </div>
       )}
     </Modal>

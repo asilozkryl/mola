@@ -1,3 +1,6 @@
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   useEffect,
   useId,
@@ -527,12 +530,22 @@ export function Composer({
                 </ul>
               )}
             </details>
-            <button type="button" onClick={() => resolveDraft(true)}>
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="button"
+              onClick={() => resolveDraft(true)}
+            >
               Diğer taslağı kullan
-            </button>
-            <button type="button" onClick={() => resolveDraft(false)}>
+            </Button>
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="button"
+              onClick={() => resolveDraft(false)}
+            >
               Buradaki taslağı kullan
-            </button>
+            </Button>
           </div>
         )}
         {(files.length > 0 || unavailable.length > 0) && (
@@ -592,7 +605,11 @@ export function Composer({
           >
             <AlertCircle size={16} aria-hidden="true" />
             <span>
-              <strong>{submission.ambiguous ? "Gönderim onayı bekleniyor" : "Mesaj gönderilemedi"}</strong>
+              <strong>
+                {submission.ambiguous
+                  ? "Gönderim onayı bekleniyor"
+                  : "Mesaj gönderilemedi"}
+              </strong>
               {submission.error}
               {submission.ambiguous && (
                 <small>
@@ -602,13 +619,15 @@ export function Composer({
               )}
             </span>
             {submission.canRelease && (
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
                 type="button"
                 className="delivery-release"
                 onClick={() => void releaseSubmission()}
               >
                 Taslağa dön
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -634,7 +653,8 @@ export function Composer({
             )}
           </div>
         )}
-        <textarea
+        <Textarea
+          unstyled
           ref={input}
           aria-label={
             parentId
@@ -724,7 +744,9 @@ export function Composer({
               <AtSign size={19} />
             </IconButton>
           </div>
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             type="button"
             className={`send-button ${sendAcknowledged ? "is-sent" : ""}`}
             title={
@@ -764,7 +786,7 @@ export function Composer({
                 Gönderildi
               </span>
             </span>
-          </button>
+          </Button>
         </div>
         {picker && (
           <div
@@ -808,7 +830,9 @@ export function Composer({
                   "❤️",
                   "🎨",
                 ].map((emoji) => (
-                  <button
+                  <Button
+                    variant="unstyled"
+                    size="unset"
                     key={emoji}
                     type="button"
                     data-picker-option
@@ -816,12 +840,13 @@ export function Composer({
                     aria-label={`${emoji} ekle`}
                   >
                     {emoji}
-                  </button>
+                  </Button>
                 ))}
               </div>
             ) : (
               <>
-                <input
+                <Input
+                  unstyled
                   ref={mentionSearch}
                   type="search"
                   className="mention-search"
@@ -832,7 +857,9 @@ export function Composer({
                 />
                 <div className="mention-options">
                   {matchingMembers.map((member) => (
-                    <button
+                    <Button
+                      variant="unstyled"
+                      size="unset"
                       key={member.id}
                       type="button"
                       data-picker-option
@@ -847,7 +874,7 @@ export function Composer({
                           {member.email}
                         </small>
                       </span>
-                    </button>
+                    </Button>
                   ))}
                 </div>
                 {!matchingMembers.length && (
@@ -894,7 +921,14 @@ export function Composer({
           ) : draft.status === "offline" ? (
             <>
               Taslak bu cihazda ·{" "}
-              <button onClick={() => void draft.retry()}>Yeniden dene</button>
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
+                onClick={() => void draft.retry()}
+              >
+                Yeniden dene
+              </Button>
             </>
           ) : draft.status === "conflict" ? (
             "Taslak seçimi bekleniyor"

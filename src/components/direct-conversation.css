@@ -28,7 +28,7 @@
   max-width: 100%;
   border-radius: 3px;
   text-align: left;
-  color: #153d36;
+  color: var(--foreground);
 }
 .direct-person-title .direct-person-name > strong {
   overflow: hidden;
@@ -43,7 +43,7 @@
   min-width: 0;
   gap: 10px;
   margin-top: 4px;
-  color: #586568;
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 .direct-person-detail > [role="status"] {
@@ -56,16 +56,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border-left: 1px solid #dce5e0;
+  border-left: 1px solid var(--border);
   padding-left: 10px;
 }
 .dm-conversation .channel-heading-actions {
   gap: 8px;
 }
 .dm-conversation .huddle-button {
-  color: #153d36;
-  border-color: #dce5e0;
-  background: #f4f7f6;
+  color: var(--accent-foreground);
+  border-color: var(--border);
+  background: var(--muted);
 }
 .dm-conversation > .channel-tabs-row {
   width: 100%;
@@ -83,7 +83,7 @@
   align-items: center;
   gap: 5px;
   padding-bottom: 8px;
-  color: #586568;
+  color: var(--muted-foreground);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -108,14 +108,14 @@
   height: 22px;
 }
 .dm-timeline .date-divider::before {
-  background: #e5ece8;
+  background: var(--secondary);
 }
 .dm-timeline .date-divider > span {
-  border: 1px solid #e5ece8;
+  border: 1px solid var(--border);
   border-radius: 5px;
   padding: 3px 9px;
-  color: #586568;
-  background: #fff;
+  color: var(--muted-foreground);
+  background: var(--card);
   font-weight: 500;
 }
 .direct-history-start {
@@ -124,7 +124,7 @@
   justify-content: center;
   gap: 6px;
   padding-block: 10px 6px;
-  color: #586568;
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 .direct-history-start > svg {
@@ -149,12 +149,12 @@
 .direct-conversation-intro > h2 {
   font-size: 18px;
   letter-spacing: -0.4px;
-  color: #153d36;
+  color: var(--foreground);
   overflow-wrap: anywhere;
 }
 .direct-conversation-intro > p {
   margin: 8px 0 18px;
-  color: #586568;
+  color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.7;
 }
@@ -173,7 +173,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #237459;
+  color: var(--primary);
   font-size: 12px;
 }
 .dm-conversation > .typing-indicator,

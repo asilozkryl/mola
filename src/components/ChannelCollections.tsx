@@ -1,3 +1,6 @@
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowUpRight,
@@ -195,7 +198,8 @@ export function ChannelCollections({
       <div className="channel-collection-toolbar">
         <div className="channel-collection-search">
           <Search size={16} aria-hidden="true" />
-          <input
+          <Input
+            unstyled
             type="search"
             aria-label={
               isFiles ? "Dosyalarda ara" : "Sabitlenen mesajlarda ara"
@@ -220,7 +224,8 @@ export function ChannelCollections({
         </div>
         <label className="channel-collection-sender">
           <span>Gönderen</span>
-          <select
+          <NativeSelect
+            unstyled
             aria-label="Gönderen"
             value={state.senderId}
             onChange={(event) => state.setSenderId(event.target.value)}
@@ -231,11 +236,12 @@ export function ChannelCollections({
                 {member.name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="channel-collection-start">
           <span>Başlangıç</span>
-          <input
+          <Input
+            unstyled
             type="date"
             aria-label="Başlangıç tarihi"
             value={state.startDate}
@@ -245,7 +251,8 @@ export function ChannelCollections({
         </label>
         <label className="channel-collection-end">
           <span>Bitiş</span>
-          <input
+          <Input
+            unstyled
             type="date"
             aria-label="Bitiş tarihi"
             value={state.endDate}
@@ -275,9 +282,14 @@ export function ChannelCollections({
                 : `${state.total} ${state.filtered ? "sonuç" : isFiles ? "dosya" : "sabitlenen mesaj"}`}
         </p>
         {state.filtered && (
-          <button type="button" onClick={state.clearFilters}>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="button"
+            onClick={state.clearFilters}
+          >
             Filtreleri temizle
-          </button>
+          </Button>
         )}
       </div>
       {state.filterError && (
@@ -326,21 +338,25 @@ export function ChannelCollections({
                 : "Mesaj menüsünden “Kanala sabitle” seçeneğiyle önemli notları buraya ekle."}
           </p>
           {state.filtered ? null : isFiles && onShareFile ? (
-            <button
+            <Button
+              variant="outline"
+              size="unset"
               type="button"
               className="secondary-button"
               onClick={onShareFile}
             >
               <Plus size={15} /> Dosya paylaş
-            </button>
+            </Button>
           ) : !isFiles && onBackToChat ? (
-            <button
+            <Button
+              variant="outline"
+              size="unset"
               type="button"
               className="secondary-button"
               onClick={onBackToChat}
             >
               <MessageSquare size={15} /> Sohbete dön
-            </button>
+            </Button>
           ) : null}
         </div>
       )}
@@ -359,7 +375,9 @@ export function ChannelCollections({
                 data-collection-item={file.id}
                 tabIndex={-1}
               >
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
                   type="button"
                   className="channel-file-preview"
                   aria-label={`${file.name} dosyasını önizle`}
@@ -382,7 +400,7 @@ export function ChannelCollections({
                       </time>
                     </span>
                   </span>
-                </button>
+                </Button>
                 <a
                   className="channel-file-download"
                   href={file.url}
@@ -393,7 +411,9 @@ export function ChannelCollections({
                   <Download size={17} aria-hidden="true" />
                   <span className="sr-only">{file.name}</span>
                 </a>
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
                   type="button"
                   className="channel-file-source"
                   aria-label={`${file.name} dosyasının mesajına git`}
@@ -407,7 +427,7 @@ export function ChannelCollections({
                   ) : (
                     <ArrowUpRight size={17} aria-hidden="true" />
                   )}
-                </button>
+                </Button>
               </div>
             );
           })}
@@ -426,7 +446,9 @@ export function ChannelCollections({
               tabIndex={-1}
             >
               {renderMessage(message)}
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
                 className="channel-pin-source"
                 type="button"
                 disabled={activeOpening !== null}
@@ -439,14 +461,16 @@ export function ChannelCollections({
                   <ArrowUpRight size={14} aria-hidden="true" />
                 )}{" "}
                 Mesaja git
-              </button>
+              </Button>
             </div>
           ))}
         </div>
       )}
       {state.hasMore && (
         <div className="channel-collection-more">
-          <button
+          <Button
+            variant="outline"
+            size="unset"
             ref={moreButton}
             type="button"
             className="secondary-button"
@@ -455,7 +479,7 @@ export function ChannelCollections({
           >
             {state.loadingMore && <LoaderCircle size={15} className="spin" />}
             {state.loadingMore ? "Yükleniyor…" : "Daha fazla göster"}
-          </button>
+          </Button>
         </div>
       )}
     </section>

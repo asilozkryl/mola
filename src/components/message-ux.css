@@ -4,7 +4,7 @@
 
 .message[data-message-id]:hover,
 .message[data-message-id]:focus-within {
-  --message-surface: #f5f7f8;
+  --message-surface: var(--muted);
   background: var(--message-surface);
 }
 
@@ -14,7 +14,7 @@
 
 .message .message-meta > strong,
 .message .message-author-name > strong {
-  color: var(--ink, #20292b);
+  color: var(--ink, var(--foreground));
 }
 
 .message .message-author-name > strong {
@@ -28,44 +28,44 @@
 
 .message .message-meta > time,
 .message .message-meta > small {
-  color: var(--muted, #687176);
+  color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .message .self-label {
-  color: #46645c;
-  background: #edf3f0;
+  color: var(--muted-foreground);
+  background: var(--secondary);
 }
 
 .message .message-text {
-  color: #424e52;
+  color: var(--muted-foreground);
   line-height: 1.7;
 }
 
 .message .message-text strong {
-  color: var(--ink, #20292b);
+  color: var(--ink, var(--foreground));
 }
 
 .message .message-text code {
-  color: #40554e;
-  background: #f1f4f3;
-  border-color: #e2e8e5;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  border-color: var(--border);
 }
 
 .message .mention {
-  color: #237459;
-  background: #eaf4ef;
+  color: var(--primary);
+  background: var(--secondary);
 }
 
 .message.message-pinned {
-  --message-surface: #f3f8f5;
+  --message-surface: var(--accent);
   background: var(--message-surface);
   box-shadow: inset 2px 0 #a9c8b9;
 }
 
 .message.message-pinned[data-message-id]:hover,
 .message.message-pinned[data-message-id]:focus-within {
-  --message-surface: #edf4f0;
+  --message-surface: var(--secondary);
 }
 
 .message.message-pinned:focus-visible {
@@ -73,13 +73,13 @@
 }
 
 .message .message-pin-label {
-  color: #527064;
+  color: var(--primary);
   font-weight: 600;
 }
 
 .message .message-reactions > button {
-  border-color: #e2e6e8;
-  background: #f7f9f8;
+  border-color: var(--border);
+  background: var(--muted);
   border-radius: 5px;
   transition:
     background-color 120ms ease-out,
@@ -87,45 +87,45 @@
 }
 
 .message .message-reactions > button > span {
-  color: #687176;
+  color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 
 .message .message-reactions > button:hover:not(:disabled) {
-  background: #edf3f0;
-  border-color: #b9cfc3;
+  background: var(--secondary);
+  border-color: var(--border);
 }
 
 .message .message-reactions > button.reacted {
-  background: #eaf4ef;
-  border-color: #7fae98;
+  background: var(--secondary);
+  border-color: var(--ring);
 }
 
 .message .message-reactions > button.reacted > span {
-  color: #1c624a;
+  color: var(--primary);
   font-weight: 800;
 }
 
 .message .message-reactions > button.add-reaction {
-  color: #687176;
+  color: var(--muted-foreground);
   background: transparent;
   border-color: transparent;
 }
 
 .message .thread-preview {
-  color: #237459;
+  color: var(--primary);
 }
 
 .message .thread-preview > span {
-  color: #687176;
+  color: var(--muted-foreground);
 }
 
 .message .thread-preview:hover > span {
-  color: #237459;
+  color: var(--primary);
 }
 
 .message > .message-actions {
-  border-color: #dce3e0;
+  border-color: var(--border);
   border-radius: 6px;
   box-shadow:
     0 2px 4px #20292b08,
@@ -134,20 +134,20 @@
 }
 
 .message .message-actions .icon-button {
-  color: #687176;
+  color: var(--muted-foreground);
   border-radius: 4px;
 }
 
 .message .message-actions .icon-button:hover,
 .message .message-actions .icon-button[aria-expanded="true"],
 .message .message-actions .icon-button[aria-pressed="true"] {
-  color: #237459;
-  background: #eaf4ef;
+  color: var(--primary);
+  background: var(--secondary);
 }
 
 .message .message-menu,
 .message .reaction-popover {
-  border-color: #dce3e0;
+  border-color: var(--border);
   border-radius: 7px;
   box-shadow:
     0 2px 5px #20292b08,
@@ -176,7 +176,7 @@
   height: 40px;
   max-width: 40px;
   object-fit: cover;
-  background: #f1f4f3;
+  background: var(--muted);
 }
 
 .message .file-attachment strong {
@@ -189,14 +189,14 @@
 
 .message .message-edit-hint {
   margin: 5px 0 0;
-  color: var(--muted, #687176);
+  color: var(--muted-foreground);
   font-size: 11px;
   line-height: 1.5;
 }
 
 .message .message-edit-error {
   margin: 7px 0 0;
-  color: #a03a36;
+  color: var(--destructive);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -243,7 +243,7 @@
 
 @keyframes message-arrival {
   from {
-    background-color: #e4f2ea;
+    background-color: var(--secondary);
   }
   to {
     background-color: var(--message-surface);

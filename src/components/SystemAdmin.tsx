@@ -1,3 +1,7 @@
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Dialog, DialogContent } from "./ui/dialog";
 import {
   Fragment,
   useCallback,
@@ -153,75 +157,78 @@ function Confirmation({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const cancel = useRef<HTMLButtonElement>(null);
   const headingId = useId();
   const descriptionId = useId();
-  useEffect(() => {
-    const dialog = ref.current;
-    dialog?.showModal();
-    cancel.current?.focus();
-    return () => dialog?.close();
-  }, []);
   return (
-    <dialog
-      ref={ref}
-      className="system-admin-confirm"
-      aria-labelledby={headingId}
-      aria-describedby={descriptionId}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) onCancel();
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) onCancel();
       }}
     >
-      <div
-        className={`system-admin-confirm-icon ${change.suspended ? "system-admin-confirm-icon-pause" : ""}`}
+      <DialogContent
+        className="system-admin-confirm"
+        aria-labelledby={headingId}
+        aria-describedby={descriptionId}
+        showCloseButton={false}
+        initialFocus={cancel}
       >
-        {change.suspended ? <CirclePause size={25} /> : <Check size={25} />}
-      </div>
-      <h3 id={headingId}>
-        {change.suspended ? "Askıya almayı onaylayın" : "Yeniden etkinleştirin"}
-      </h3>
-      <p className="system-admin-confirm-target">{change.name}</p>
-      <p id={descriptionId}>
-        {change.suspended
-          ? change.kind === "workspace"
-            ? `Bu çalışma alanındaki ${number.format(change.memberCount ?? 0)} üyenin çalışma alanına erişimi durdurulur. İçerikler ve sistem yöneticilerinin yönetim erişimi korunur; alanı daha sonra yeniden etkinleştirebilirsiniz.`
-            : "Bu hesabın erişimi durdurulur ve açık oturumları kapatılır. Hesabın içerikleri korunur; daha sonra yeniden etkinleştirebilirsiniz."
-          : change.kind === "workspace"
-            ? "Çalışma alanı yeniden erişime açılır. Kendi hesabı askıda olan üyeler ayrıca etkinleştirilmelidir."
-            : "Hesap yeniden giriş yapabilir. Çalışma alanı askıdaysa bu alana erişim kısıtlaması devam eder."}
-      </p>
-      {error && (
-        <p className="system-admin-inline-error" role="alert">
-          {error}
+        <div
+          className={`system-admin-confirm-icon ${change.suspended ? "system-admin-confirm-icon-pause" : ""}`}
+        >
+          {change.suspended ? <CirclePause size={25} /> : <Check size={25} />}
+        </div>
+        <h3 id={headingId}>
+          {change.suspended
+            ? "Askıya almayı onaylayın"
+            : "Yeniden etkinleştirin"}
+        </h3>
+        <p className="system-admin-confirm-target">{change.name}</p>
+        <p id={descriptionId}>
+          {change.suspended
+            ? change.kind === "workspace"
+              ? `Bu çalışma alanındaki ${number.format(change.memberCount ?? 0)} üyenin çalışma alanına erişimi durdurulur. İçerikler ve sistem yöneticilerinin yönetim erişimi korunur; alanı daha sonra yeniden etkinleştirebilirsiniz.`
+              : "Bu hesabın erişimi durdurulur ve açık oturumları kapatılır. Hesabın içerikleri korunur; daha sonra yeniden etkinleştirebilirsiniz."
+            : change.kind === "workspace"
+              ? "Çalışma alanı yeniden erişime açılır. Kendi hesabı askıda olan üyeler ayrıca etkinleştirilmelidir."
+              : "Hesap yeniden giriş yapabilir. Çalışma alanı askıdaysa bu alana erişim kısıtlaması devam eder."}
         </p>
-      )}
-      <div className="system-admin-confirm-actions">
-        <button
-          type="button"
-          ref={cancel}
-          className="system-admin-button"
-          disabled={busy}
-          onClick={onCancel}
-        >
-          Vazgeç
-        </button>
-        <button
-          type="button"
-          className={`system-admin-button ${change.suspended ? "system-admin-button-danger" : "system-admin-button-primary"}`}
-          disabled={busy}
-          onClick={onConfirm}
-        >
-          {busy && <LoaderCircle size={16} className="system-admin-spin" />}
-          {busy
-            ? "Kaydediliyor…"
-            : change.suspended
-              ? "Askıya al"
-              : "Etkinleştir"}
-        </button>
-      </div>
-    </dialog>
+        {error && (
+          <p className="system-admin-inline-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="system-admin-confirm-actions">
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="button"
+            ref={cancel}
+            className="system-admin-button"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            Vazgeç
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unset"
+            type="button"
+            className={`system-admin-button ${change.suspended ? "system-admin-button-danger" : "system-admin-button-primary"}`}
+            disabled={busy}
+            onClick={onConfirm}
+          >
+            {busy && <LoaderCircle size={16} className="system-admin-spin" />}
+            {busy
+              ? "Kaydediliyor…"
+              : change.suspended
+                ? "Askıya al"
+                : "Etkinleştir"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -476,7 +483,9 @@ export default function SystemAdmin({
         aria-label="Sistem yönetimi bölümleri"
       >
         {tabs.map(({ id, label, Icon, count }) => (
-          <button
+          <Button
+            variant="unstyled"
+            size="unset"
             key={id}
             ref={(element) => {
               tabRefs.current[id] = element;
@@ -497,7 +506,7 @@ export default function SystemAdmin({
                 {number.format(count)}
               </span>
             )}
-          </button>
+          </Button>
         ))}
       </div>
       <div
@@ -519,7 +528,8 @@ export default function SystemAdmin({
                   ? "İşlem geçmişinde ara"
                   : "Çalışma alanı veya sahibi ara"}
             </span>
-            <input
+            <Input
+              unstyled
               type="search"
               aria-labelledby={`${sectionId}-search-label`}
               value={query}
@@ -536,7 +546,9 @@ export default function SystemAdmin({
               }}
             />
             {query && (
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
                 type="button"
                 aria-label="Aramayı temizle"
                 onClick={() => {
@@ -545,14 +557,15 @@ export default function SystemAdmin({
                 }}
               >
                 <X size={15} />
-              </button>
+              </Button>
             )}
           </label>
           <div className="system-admin-toolbar-actions">
             {tab !== "audit" && (
               <label className="system-admin-filter">
                 <span>Durum</span>
-                <select
+                <NativeSelect
+                  unstyled
                   aria-label="Duruma göre filtrele"
                   value={status}
                   onChange={(event) => {
@@ -563,10 +576,12 @@ export default function SystemAdmin({
                   <option value="all">Tümü</option>
                   <option value="active">Etkin</option>
                   <option value="suspended">Askıda</option>
-                </select>
+                </NativeSelect>
               </label>
             )}
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               type="button"
               className="system-admin-button system-admin-refresh"
               aria-label="Sistem bilgilerini yenile"
@@ -578,7 +593,7 @@ export default function SystemAdmin({
                 className={loading ? "system-admin-spin" : ""}
               />
               <span>Yenile</span>
-            </button>
+            </Button>
           </div>
         </div>
         {loadError && (
@@ -587,14 +602,16 @@ export default function SystemAdmin({
               {loadError}
               {snapshot && " Aşağıda son alınan bilgiler gösteriliyor."}
             </span>
-            <button
+            <Button
+              variant="unstyled"
+              size="unset"
               type="button"
               className="system-admin-button"
               disabled={loading}
               onClick={() => void refresh()}
             >
               Yeniden dene
-            </button>
+            </Button>
           </div>
         )}
         {loading && !snapshot ? (
@@ -630,7 +647,9 @@ export default function SystemAdmin({
                   : "Yeni kayıtlar oluşturulduğunda bu listede görünür."}
             </p>
             {(query || status !== "all") && (
-              <button
+              <Button
+                variant="unstyled"
+                size="unset"
                 type="button"
                 className="system-admin-button"
                 onClick={() => {
@@ -640,7 +659,7 @@ export default function SystemAdmin({
                 }}
               >
                 Filtreleri temizle
-              </button>
+              </Button>
             )}
           </div>
         ) : (
@@ -702,7 +721,9 @@ export default function SystemAdmin({
                           <Status suspended={item.suspended} />
                         </td>
                         <td className="system-admin-row-actions">
-                          <button
+                          <Button
+                            variant="unstyled"
+                            size="unset"
                             type="button"
                             className={`system-admin-row-action ${item.suspended ? "" : "system-admin-row-action-pause"}`}
                             disabled={saving || refreshing}
@@ -718,7 +739,7 @@ export default function SystemAdmin({
                             }
                           >
                             {item.suspended ? "Etkinleştir" : "Askıya al"}
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -801,7 +822,9 @@ export default function SystemAdmin({
                           <Status suspended={item.suspended} />
                         </td>
                         <td className="system-admin-row-actions">
-                          <button
+                          <Button
+                            variant="unstyled"
+                            size="unset"
                             type="button"
                             className={`system-admin-row-action ${item.suspended ? "" : "system-admin-row-action-pause"}`}
                             disabled={
@@ -831,7 +854,7 @@ export default function SystemAdmin({
                             }
                           >
                             {item.suspended ? "Etkinleştir" : "Askıya al"}
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -872,7 +895,9 @@ export default function SystemAdmin({
                             </time>
                           </td>
                           <td className="system-admin-row-actions">
-                            <button
+                            <Button
+                              variant="unstyled"
+                              size="unset"
                               type="button"
                               className="system-admin-row-action"
                               aria-expanded={expandedAudit === item.id}
@@ -894,7 +919,7 @@ export default function SystemAdmin({
                                     : ""
                                 }
                               />
-                            </button>
+                            </Button>
                           </td>
                         </tr>
                         {expandedAudit === item.id && (
@@ -939,25 +964,29 @@ export default function SystemAdmin({
                 {number.format(total)} kayıt
               </span>
               <div>
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
                   type="button"
                   aria-label="Önceki sayfa"
                   disabled={visiblePage === 1 || refreshing}
                   onClick={() => setPage(visiblePage - 1)}
                 >
                   <ChevronLeft size={18} />
-                </button>
+                </Button>
                 <span>
                   {visiblePage} / {pages}
                 </span>
-                <button
+                <Button
+                  variant="unstyled"
+                  size="unset"
                   type="button"
                   aria-label="Sonraki sayfa"
                   disabled={visiblePage >= pages || refreshing}
                   onClick={() => setPage(visiblePage + 1)}
                 >
                   <ChevronRight size={18} />
-                </button>
+                </Button>
               </div>
             </footer>
             {tab === "users" && (

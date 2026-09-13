@@ -1,0 +1,114 @@
+[data-slot="dialog-portal"] {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  pointer-events: none;
+}
+
+[data-slot="dialog-portal"] > [data-base-ui-inert],
+[data-slot="dialog-overlay"],
+[data-slot="dialog-content"] {
+  pointer-events: auto;
+}
+
+.adm-dialog[data-slot="dialog-content"],
+.system-admin-confirm[data-slot="dialog-content"] {
+  display: block;
+  margin: 0;
+}
+
+[data-slot="dialog-content"] {
+  z-index: 220;
+}
+
+.call-dialog[data-slot="dialog-content"] {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  margin: 0;
+  gap: 0;
+  padding: 0;
+  max-width: calc(100vw - 48px);
+  animation: none;
+  transition-property: opacity;
+}
+
+.call-dialog.call-panel-expanded[data-slot="dialog-content"] {
+  inset: 12px;
+  max-width: none;
+  translate: none;
+  transform: none;
+}
+
+@media (max-width: 560px), (max-height: 500px) {
+  .call-dialog[data-slot="dialog-content"] {
+    max-width: calc(100vw - 16px);
+  }
+  .call-dialog.call-panel-expanded[data-slot="dialog-content"] {
+    inset: 8px;
+    max-width: none;
+  }
+}
+
+[data-slot="dialog-overlay"] {
+  z-index: 219;
+}
+
+.system-admin-confirm[data-slot="dialog-content"] {
+  max-width: calc(100vw - 32px);
+  overflow: auto;
+}
+
+.modal.mola-dialog {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  z-index: 220;
+  display: block;
+  margin: 0;
+  background: var(--popover, #fff);
+  color: var(--popover-foreground, var(--ink));
+  overscroll-behavior: contain;
+  outline: none;
+}
+
+.mola-dialog-backdrop[data-slot="dialog-overlay"] {
+  z-index: 219;
+  background: #182a2c52;
+  backdrop-filter: blur(3px);
+}
+
+.modal.mola-dialog[data-nested-dialog-open] {
+  filter: brightness(0.92);
+}
+
+.mola-tooltip-positioner {
+  z-index: 260;
+}
+
+.mola-tooltip[data-slot="tooltip-content"] {
+  max-width: min(260px, calc(100vw - 24px));
+  padding: 6px 9px;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 6px;
+}
+
+.avatar[data-slot="avatar"]::after {
+  border-radius: inherit;
+}
+
+.avatar .mola-avatar-fallback {
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  border-radius: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mola-dialog,
+  .mola-dialog-backdrop,
+  .mola-tooltip,
+  .context-menu {
+    animation: none !important;
+    transition: none !important;
+  }
+}
