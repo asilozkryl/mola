@@ -12,6 +12,9 @@ playwright-report
 *.log
 .codex
 artifacts
+# Native clients and their SDK/build outputs are not part of the web server image.
+mobile/
+desktop/
 secrets
 *.sqlite
 *.sqlite-*

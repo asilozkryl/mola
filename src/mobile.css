@@ -1,0 +1,217 @@
+:root {
+  --mola-safe-top: env(safe-area-inset-top, 0px);
+  --mola-safe-right: env(safe-area-inset-right, 0px);
+  --mola-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mola-safe-left: env(safe-area-inset-left, 0px);
+  --mola-viewport-height: 100dvh;
+  --mola-viewport-top: 0px;
+}
+
+@media (max-width: 800px), (pointer: coarse) {
+  :root[data-mobile-viewport] .app-shell {
+    position: fixed;
+    inset: var(--mola-viewport-top) 0 auto;
+    box-sizing: border-box;
+    width: 100%;
+    height: var(--mola-viewport-height);
+    min-height: 0;
+    padding-top: var(--mola-safe-top);
+    padding-right: var(--mola-safe-right);
+    padding-bottom: var(--mola-safe-bottom);
+    padding-left: var(--mola-safe-left);
+  }
+
+  .workspace-main,
+  .main-content,
+  .conversation-panel,
+  .thread-panel {
+    min-height: 0;
+  }
+
+  .message-scroll,
+  .thread-messages,
+  .sidebar-content {
+    overscroll-behavior-y: contain;
+  }
+
+  .composer-ux.composer-wrap,
+  .thread-panel .composer-ux.composer-wrap {
+    padding-bottom: 10px;
+  }
+
+  :root[data-mobile-viewport][data-mobile-keyboard="true"] .app-shell,
+  :root[data-mobile-viewport][data-mobile-keyboard="true"] .thread-panel {
+    padding-bottom: 0;
+  }
+
+  :root[data-mobile-keyboard="true"] .composer-ux.composer-wrap {
+    padding-bottom: 6px;
+  }
+
+  :root[data-mobile-keyboard="true"] .composer-hint > span:first-child {
+    display: none;
+  }
+
+  :root[data-mobile-keyboard="true"] .composer-ux .composer > textarea {
+    max-height: min(160px, calc(var(--mola-viewport-height) * 0.3));
+  }
+
+  :root[data-mobile-viewport] .modal.mola-dialog,
+  :root[data-mobile-viewport] .call-dialog[data-slot="dialog-content"] {
+    top: calc(
+      var(--mola-viewport-top) +
+        (
+          var(--mola-viewport-height) + var(--mola-safe-top) -
+            var(--mola-safe-bottom)
+        ) /
+        2
+    );
+    left: calc((100% + var(--mola-safe-left) - var(--mola-safe-right)) / 2);
+    max-width: calc(
+      100vw - var(--mola-safe-left) - var(--mola-safe-right) - 24px
+    );
+    max-height: calc(
+      var(--mola-viewport-height) - var(--mola-safe-top) -
+        var(--mola-safe-bottom) - 24px
+    );
+  }
+
+  :root[data-mobile-viewport]
+    .call-dialog.call-panel-expanded[data-slot="dialog-content"] {
+    inset: calc(var(--mola-viewport-top) + var(--mola-safe-top) + 8px)
+      calc(var(--mola-safe-right) + 8px) auto calc(var(--mola-safe-left) + 8px);
+    height: calc(
+      var(--mola-viewport-height) - var(--mola-safe-top) -
+        var(--mola-safe-bottom) - 16px
+    );
+    max-width: none;
+    max-height: none;
+  }
+
+  .auth-page,
+  .auth-form-side {
+    min-height: var(--mola-viewport-height);
+  }
+
+  .auth-form-side {
+    padding-top: calc(24px + var(--mola-safe-top));
+    padding-right: calc(26px + var(--mola-safe-right));
+    padding-bottom: calc(52px + var(--mola-safe-bottom));
+    padding-left: calc(26px + var(--mola-safe-left));
+  }
+
+  .toast {
+    bottom: calc(12px + var(--mola-safe-bottom));
+    max-width: calc(
+      100vw - var(--mola-safe-left) - var(--mola-safe-right) - 24px
+    );
+  }
+}
+
+@media (max-width: 800px) {
+  :root[data-mobile-viewport] .sidebar {
+    top: var(--mola-viewport-top);
+    bottom: auto;
+    height: var(--mola-viewport-height);
+    box-sizing: border-box;
+    padding-top: var(--mola-safe-top);
+    padding-bottom: var(--mola-safe-bottom);
+    padding-left: var(--mola-safe-left);
+  }
+
+  :root[data-mobile-viewport] .thread-panel {
+    inset: var(--mola-viewport-top) 0 auto;
+    height: var(--mola-viewport-height);
+    box-sizing: border-box;
+    padding-top: var(--mola-safe-top);
+    padding-right: var(--mola-safe-right);
+    padding-bottom: var(--mola-safe-bottom);
+    padding-left: var(--mola-safe-left);
+  }
+}
+
+@media (pointer: coarse) {
+  .composer-ux .composer > textarea,
+  .composer-ux.composer-direct .composer > textarea,
+  .composer-ux .mention-search,
+  .message-edit > textarea {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 800px), (pointer: coarse) {
+  /* Leave room to write when a landscape keyboard uses most of the screen. */
+  :root[data-mobile-compact="true"] .topbar,
+  :root[data-mobile-compact="true"] .channel-tabs-row {
+    display: none;
+  }
+
+  :root[data-mobile-compact="true"] .channel-heading {
+    height: 44px;
+    min-height: 44px;
+  }
+
+  :root[data-mobile-compact="true"] .channel-title p,
+  :root[data-mobile-compact="true"] .typing-indicator:empty,
+  :root[data-mobile-compact="true"] .composer-hint > span:first-child {
+    display: none;
+  }
+
+  :root[data-mobile-compact="true"] .composer-ux .composer > textarea {
+    max-height: 56px;
+  }
+
+  /* A native landscape IME can leave little more than one row for the draft. */
+  :root[data-mobile-viewport][data-mobile-short="true"] .app-shell,
+  :root[data-mobile-viewport][data-mobile-short="true"] .thread-panel {
+    padding-bottom: var(--mola-safe-bottom);
+  }
+
+  :root[data-mobile-short="true"] .channel-heading,
+  :root[data-mobile-short="true"] .thread-panel > .details-heading,
+  :root[data-mobile-short="true"] .typing-indicator,
+  :root[data-mobile-short="true"] .composer-hint,
+  :root[data-mobile-short="true"] .latest-message-bar,
+  :root[data-mobile-short="true"] .composer-tools-left,
+  :root[data-mobile-short="true"] .send-button-label {
+    display: none;
+  }
+
+  :root[data-mobile-short="true"] .composer-ux.composer-wrap {
+    flex-shrink: 0;
+    padding-block: 4px;
+  }
+
+  :root[data-mobile-short="true"] .composer-ux .composer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 8px;
+    padding: 4px;
+  }
+
+  :root[data-mobile-short="true"]
+    .composer
+    > :not(textarea):not(.composer-tools) {
+    grid-column: 1 / -1;
+  }
+
+  :root[data-mobile-short="true"] .composer-ux .composer > textarea {
+    min-height: 44px;
+    max-height: 44px;
+    padding: 8px 10px;
+  }
+
+  :root[data-mobile-short="true"] .composer-ux .composer-tools {
+    min-height: 44px;
+    padding: 0;
+  }
+
+  :root[data-mobile-short="true"] .composer-ux .send-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+}

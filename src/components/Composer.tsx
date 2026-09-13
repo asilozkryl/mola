@@ -37,6 +37,7 @@ import { Avatar, fileSize, IconButton } from "./ui";
 import { useSyncedDraft } from "../lib/useSyncedDraft";
 import { useMessageSubmission } from "../lib/useMessageSubmission";
 import { useMentionHistory } from "../lib/useMentionHistory";
+import { shouldSendComposerKey } from "../lib/mobileInput";
 import type { TextSelection } from "../../shared/mention-history";
 import "./collaboration.css";
 import "./composer-ux.css";
@@ -95,6 +96,9 @@ export function Composer({
   const [feedback, setFeedback] = useState("");
   const [uploadLabel, setUploadLabel] = useState("");
   const [dragging, setDragging] = useState(false);
+  const [coarsePointer, setCoarsePointer] = useState(
+    () => window.matchMedia("(pointer: coarse)").matches,
+  );
   const hintId = useId();
   const feedbackId = useId();
   const deliveryId = useId();
@@ -134,6 +138,14 @@ export function Composer({
       alive.current = false;
       uploadController.current?.abort();
     };
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(pointer: coarse)");
+    const update = () => setCoarsePointer(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
   }, []);
 
   useEffect(() => {
@@ -447,7 +459,21 @@ export function Composer({
   }
   function keyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (history.onKeyDown(e)) return;
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+    if (
+      shouldSendComposerKey(
+        {
+          key: e.key,
+          ctrlKey: e.ctrlKey,
+          metaKey: e.metaKey,
+          shiftKey: e.shiftKey,
+          altKey: e.altKey,
+          repeat: e.repeat,
+          isComposing: e.nativeEvent.isComposing,
+          keyCode: e.nativeEvent.keyCode,
+        },
+        coarsePointer,
+      )
+    ) {
       e.preventDefault();
       void send();
     }
@@ -693,6 +719,7 @@ export function Composer({
             void upload(pasted);
           }}
           rows={1}
+          enterKeyHint={coarsePointer ? "enter" : "send"}
           disabled={locked}
         />
         <div className="composer-tools">
@@ -907,7 +934,14 @@ export function Composer({
       </span>
       <div className="composer-hint" id={hintId}>
         <span>
-          <kbd>Enter</kbd> ile gönder · <kbd>Shift + Enter</kbd> ile yeni satır
+          {coarsePointer ? (
+            "Yeni satır için klavyeyi, göndermek için gönder düğmesini kullan."
+          ) : (
+            <>
+              <kbd>Enter</kbd> ile gönder · <kbd>Shift + Enter</kbd> ile yeni
+              satır
+            </>
+          )}
         </span>
         <span className="draft-status" aria-live="polite">
           {snapshot ? (

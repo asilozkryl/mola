@@ -38,6 +38,20 @@ npm run desktop
 
 Yerel geliştirmede `npm run dev` açıkken ikinci terminalde `npm run desktop:dev` çalıştırın. Linux AppImage/deb, Windows kurulum dosyası ve Intel/Apple Silicon macOS paketlerini üretme, imzalama ve test adımları: [masaüstü rehberi](docs/DESKTOP.md).
 
+## iOS ve Android
+
+iOS için WKWebView, Android için WebView uygulama projeleri aynı HTTPS Mola sunucusuna bağlanır. Telefonda Enter yeni satır açar; mesaj gönder düğmesiyle gönderilir. Arayüz ekran çentiğine, yatay kullanıma ve açılan klavyeye uyum sağlar.
+
+```sh
+npx playwright install --with-deps chromium webkit
+npm run test:mobile
+npm run mobile:android:check
+# macOS + Xcode + XcodeGen:
+npm run mobile:ios:generate
+```
+
+Android APK kurulumu, iOS derlemesi ve mevcut sınırlar: [mobil rehber](docs/MOBILE.md). Mağaza imzalama/yayınlama, arka plan bildirimleri ve yerel ekran yayını ayrı kurulum gerektirir.
+
 ## Kullanım
 
 - **Görünüm:** Profil ve ayarlar → Görünüm bölümünden açık, koyu veya sistem temasını ve kompakt/rahat yoğunluğu seçin. Tercihler bu tarayıcıda saklanır; sistem teması işletim sistemiyle birlikte değişir. Arayüzün ortak bileşenleri shadcn/ui ve Base UI üzerine kuruludur. [Tasarım sistemi](docs/UI_DESIGN_SYSTEM.md).
@@ -51,7 +65,7 @@ Yerel geliştirmede `npm run dev` açıkken ikinci terminalde `npm run desktop:d
 - **Ekip:** sahip/üye rolleri, süreli davet, profil ve durum düzenleme, parola değiştirme ve diğer oturumları kapatma.
 - **Yönetim paneli:** üye erişimi, kanal düzenleme/arşivleme/silme, davet iptali, ekip adı, parolayla sahiplik devri ve işlem geçmişi. Ayrı yetkilendirilen uygulama yöneticileri tüm çalışma alanlarının ve hesapların erişimini yönetir. [İlk yönetici ataması ve kullanım](docs/ADMIN.md).
 - **Hesap güvenliği:** e-posta doğrulama, tek kullanımlık parola kurtarma bağlantıları, süreli ve şifreli e-posta kuyruğu. Parola kurtarma tüm açık oturumları kapatır.
-- **Klavye:** `Ctrl/⌘ K` arama; `Enter` gönder; `Shift Enter` yeni satır; `Ctrl/⌘ B` kalın yazı; kanal veya mesaj odaktayken `Shift F10` işlem menüsü; menü içinde yön tuşları ve `Home/End`; `Esc` menü/pencereyi kapat.
+- **Klavye:** `Ctrl/⌘ K` arama; masaüstünde `Enter` gönder ve `Shift Enter` yeni satır; dokunmatik cihazda `Enter` yeni satır, gönder düğmesi veya `Ctrl/⌘ Enter` gönder; `Ctrl/⌘ B` kalın yazı; kanal veya mesaj odaktayken `Shift F10` işlem menüsü; menü içinde yön tuşları ve `Home/End`; `Esc` menü/pencereyi kapat.
 - **Taslaklar ve tercihler:** metin taslakları sunucuya eşitlenir; eşzamanlı değişikliklerde hangi taslağın korunacağı seçilir. Dosya ekleri taslak eşitlemesine dahil değildir. Kaydedilen mesajlar ve odak modu bu tarayıcıda tutulur; Kaydedilenler cihazlar arası eşitlenmez.
 - **Canlı geri bildirim:** gönderim onayı, yeni mesaj sayacı, çevrimiçi üyeler ve yazıyor bilgisi gerçek olaylardan güncellenir. Geçmişi okurken yeni mesajlar konumunuzu değiştirmez. Sisteminizin hareket azaltma tercihi desteklenir. [Arayüz kararları ve doğrulama](docs/DYNAMIC_UI.md).
 

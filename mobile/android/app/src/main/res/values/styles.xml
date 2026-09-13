@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="BaseAppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#153d36</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#f5f7f2</item>
+        <item name="android:navigationBarColor">#153d36</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">#f5f7f2</item>
+    </style>
+    <style name="AppTheme" parent="BaseAppTheme" />
+    <color name="mola_green">#153d36</color>
+</resources>

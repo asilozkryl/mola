@@ -14,9 +14,13 @@ import "./design-system.css";
 import { initializePwa } from "./lib/pwa";
 import { initializeAppearance } from "./lib/appearance";
 import { TooltipProvider } from "./components/ui/tooltip";
+import { initializeMobileViewport } from "./lib/mobileViewport";
+import "./mobile.css";
 
 initializeAppearance();
 initializePwa();
+const disposeMobileViewport = initializeMobileViewport();
+if (import.meta.hot) import.meta.hot.dispose(disposeMobileViewport);
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },

@@ -1,0 +1,143 @@
+name: Build Mola Mobile
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "mobile/**"
+      - "src/**"
+      - "shared/**"
+      - "index.html"
+      - "package*.json"
+      - "playwright*.config.ts"
+      - "tests/mobile*"
+      - ".github/workflows/mobile.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+      - "src/**"
+      - "shared/**"
+      - "index.html"
+      - "package*.json"
+      - "playwright*.config.ts"
+      - "tests/mobile*"
+      - ".github/workflows/mobile.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.20.0
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node --import tsx --test tests/mobile-input.test.ts tests/mobile-viewport.test.ts
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:mobile
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: mobile-browser-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mobile/android
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            mobile/android/**/*.gradle.kts
+            mobile/android/gradle/wrapper/gradle-wrapper.properties
+      - name: Verify the checked-in Gradle wrapper
+        run: echo '81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f  gradle/wrapper/gradle-wrapper.jar' | sha256sum --check
+      - name: Install Android SDK packages
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'platform-tools'
+      - name: Test, lint and build the installable debug APK
+        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleRelease
+      - name: Record APK integrity
+        run: sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mola-android-debug
+          path: |
+            mobile/android/app/build/outputs/apk/debug/*.apk
+            mobile/android/app/build/outputs/apk/debug/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-check-reports
+          path: mobile/android/app/build/reports/
+          retention-days: 7
+
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate --spec mobile/ios/project.yml
+      - name: Select an available iPhone simulator
+        run: |
+          python3 <<'PY'
+          import json, os, subprocess
+          devices = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '--json']))['devices']
+          phones = [device for runtime, items in devices.items() if '.iOS-' in runtime for device in items if device['name'].startswith('iPhone')]
+          if not phones:
+              raise SystemExit('No available iPhone simulator in this runner image.')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('MOLA_SIMULATOR_ID=' + phones[0]['udid'] + '\n')
+          PY
+      - name: Build and test without device signing
+        run: |
+          mkdir -p mobile/ios/build
+          xcodebuild test -project mobile/ios/Mola.xcodeproj -scheme Mola \
+            -destination "platform=iOS Simulator,id=$MOLA_SIMULATOR_ID" \
+            -derivedDataPath mobile/ios/DerivedData \
+            -resultBundlePath mobile/ios/build/MolaTests.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Package the simulator application
+        run: ditto -c -k --keepParent mobile/ios/DerivedData/Build/Products/Debug-iphonesimulator/Mola.app mobile/ios/build/Mola-simulator.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mola-ios-simulator
+          path: mobile/ios/build/Mola-simulator.zip
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: ios-test-results
+          path: mobile/ios/build/*.xcresult
+          retention-days: 7
