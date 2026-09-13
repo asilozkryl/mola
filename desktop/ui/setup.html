@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Mola — Sunucuya bağlan</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="setup.js" defer></script>
+  </head>
+  <body class="setup-page">
+    <main class="setup-shell">
+      <div class="brand" aria-label="Mola">mola.</div>
+      <div class="setup-content">
+        <h1>Ekibinle aynı yerde.</h1>
+        <p class="intro">
+          Mola sunucuna bağlan, mevcut hesabınla giriş yap.
+          Sohbetlerin kaldığın yerden devam etsin.
+        </p>
+        <form id="connect-form" aria-busy="true">
+          <label for="server-url">Sunucu adresi</label>
+          <input
+            id="server-url"
+            name="serverUrl"
+            type="url"
+            placeholder="https://mola.example.com"
+            autocomplete="url"
+            autocapitalize="none"
+            spellcheck="false"
+            aria-describedby="server-help connection-error"
+            required
+            disabled
+          />
+          <p id="server-help" class="field-help">
+            Tarayıcıda Mola'yı açtığın adresi gir. HTTP yalnızca
+            yerel bilgisayarında (localhost) kullanılabilir.
+          </p>
+          <button id="connect" class="button button-primary" type="submit" disabled>
+            Bağlan
+          </button>
+          <p id="connection-status" class="status" role="status">Hazırlanıyor…</p>
+          <p id="connection-error" class="error" role="alert" hidden></p>
+        </form>
+      </div>
+      <footer class="setup-footer">
+        <span>Mola masaüstü</span>
+        <span>Linux · macOS · Windows</span>
+      </footer>
+    </main>
+  </body>
+</html>

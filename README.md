@@ -27,6 +27,17 @@ npm run test:admin
 npm run test:load
 ```
 
+## Masaüstü uygulaması
+
+Linux, macOS ve Windows için Electron istemcisi mevcut Mola sunucunuza bağlanır. İlk açılışta sunucunuzun HTTPS adresini girin; bu bilgisayarda saklanır. Masaüstü paketi ayrı bir Mola sunucusu veya veritabanı çalıştırmaz.
+
+```sh
+npm --prefix desktop ci
+npm run desktop
+```
+
+Yerel geliştirmede `npm run dev` açıkken ikinci terminalde `npm run desktop:dev` çalıştırın. Linux AppImage/deb, Windows kurulum dosyası ve Intel/Apple Silicon macOS paketlerini üretme, imzalama ve test adımları: [masaüstü rehberi](docs/DESKTOP.md).
+
 ## Kullanım
 
 - **Görünüm:** Profil ve ayarlar → Görünüm bölümünden açık, koyu veya sistem temasını ve kompakt/rahat yoğunluğu seçin. Tercihler bu tarayıcıda saklanır; sistem teması işletim sistemiyle birlikte değişir. Arayüzün ortak bileşenleri shadcn/ui ve Base UI üzerine kuruludur. [Tasarım sistemi](docs/UI_DESIGN_SYSTEM.md).

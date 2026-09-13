@@ -17,7 +17,15 @@
     "test:auth": "playwright test --config playwright.auth.config.ts",
     "test:admin": "playwright test --config playwright.admin.config.ts",
     "check:coolify": "node scripts/check-coolify.mjs",
-    "test:load": "node --import tsx scripts/load-test.mjs"
+    "test:load": "node --import tsx scripts/load-test.mjs",
+    "desktop": "npm --prefix desktop start",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:test": "npm --prefix desktop test",
+    "desktop:test:app": "node --import tsx --test desktop/tests/mola.integration.mjs",
+    "desktop:pack": "npm --prefix desktop run pack",
+    "desktop:linux": "npm --prefix desktop run dist -- --linux --x64",
+    "desktop:mac": "npm --prefix desktop run dist -- --mac --x64 --arm64",
+    "desktop:win": "npm --prefix desktop run dist -- --win --x64"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

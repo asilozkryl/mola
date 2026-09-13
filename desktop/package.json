@@ -1,0 +1,33 @@
+{
+  "name": "mola-desktop",
+  "desktopName": "app.mola.desktop.desktop",
+  "version": "1.0.0",
+  "description": "Mevcut Mola sunucunuza bağlanan masaüstü istemcisi",
+  "private": true,
+  "author": "Mola",
+  "homepage": "https://github.com/asilozkryl/mola",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asilozkryl/mola.git",
+    "directory": "desktop"
+  },
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "main": "main.cjs",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "node scripts/dev.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "test:smoke": "node --test tests/*.smoke.cjs",
+    "pack": "electron-builder --dir --publish never",
+    "dist": "electron-builder --publish never"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3"
+  }
+}

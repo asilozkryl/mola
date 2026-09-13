@@ -1,0 +1,124 @@
+name: Build Mola Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'desktop-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Check tag matches desktop version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          node <<'NODE'
+          const expected = `desktop-v${require('./package.json').version}`;
+          if (process.env.GITHUB_REF_NAME !== expected) {
+            throw new Error(`Tag must be ${expected}; update desktop/package.json and its lockfile first.`);
+          }
+          NODE
+      - run: npm ci
+      - run: npm test
+      - name: Install Electron test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libnss3 libgtk-3-0 libgbm1 libasound2t64
+      - name: Enable Chromium sandbox namespaces on the ephemeral runner
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Smoke test Electron with a virtual display
+        run: xvfb-run --auto-servernum npm run test:smoke
+      - name: Install Mola app test dependencies
+        working-directory: .
+        run: npm ci
+      - name: Build the real Mola web app
+        working-directory: .
+        run: npm run build
+      - name: Verify the real Mola app inside Electron
+        working-directory: .
+        run: xvfb-run --auto-servernum npm run desktop:test:app
+
+  package:
+    needs: test
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: linux-x64
+            args: --linux --x64
+          - os: windows-2025
+            name: windows-x64
+            args: --win --x64
+          - os: macos-15-intel
+            name: macos-x64
+            args: --mac --x64 -c.mac.identity=null -c.mac.hardenedRuntime=false
+          - os: macos-15
+            name: macos-arm64
+            args: --mac --arm64 -c.mac.identity=null -c.mac.hardenedRuntime=false
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - name: Create unsigned installers for review
+        run: npm run dist -- ${{ matrix.args }}
+      - name: Create installer integrity checksums
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const extensions = new Set(['.AppImage', '.deb', '.exe', '.dmg', '.zip']);
+          const files = fs.readdirSync('release').filter(file => extensions.has(path.extname(file))).sort();
+          if (!files.length) throw new Error('No installers found to checksum.');
+          const lines = files.map(file => crypto.createHash('sha256').update(fs.readFileSync(path.join('release', file))).digest('hex') + '  ' + file);
+          fs.writeFileSync('release/SHA256SUMS', lines.join('\n') + '\n');
+          NODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mola-desktop-${{ matrix.name }}
+          path: |
+            desktop/release/*.AppImage
+            desktop/release/*.deb
+            desktop/release/*.exe
+            desktop/release/*.dmg
+            desktop/release/*.zip
+            desktop/release/SHA256SUMS
+          retention-days: 14
+          if-no-files-found: error

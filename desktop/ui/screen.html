@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Mola — Ekran paylaş</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="screen.js" defer></script>
+  </head>
+  <body class="screen-page">
+    <main class="screen-shell">
+      <header class="screen-header">
+        <div class="brand brand-small" aria-label="Mola">mola.</div>
+        <h1>Ne paylaşmak istersin?</h1>
+        <p class="intro">
+          Bir ekran veya pencere seç. Seçtiğin görüntü görüşmedeki kişilerle paylaşılır.
+        </p>
+      </header>
+      <section class="source-area" aria-label="Paylaşılabilir ekranlar ve pencereler" aria-busy="true">
+        <p id="sources-status" class="status" role="status">Ekranlar ve pencereler hazırlanıyor…</p>
+        <p id="sources-error" class="error" role="alert" hidden></p>
+        <div id="sources" class="source-grid"></div>
+      </section>
+      <footer class="screen-footer">
+        <span>Paylaşımı görüşmeden durdurabilirsin.</span>
+        <button id="cancel" class="button button-secondary" type="button">Vazgeç</button>
+      </footer>
+    </main>
+  </body>
+</html>

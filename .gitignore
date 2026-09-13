@@ -21,3 +21,4 @@ secrets/
 .ops-token
 .mail-key
 .account-security-key
+desktop/release/

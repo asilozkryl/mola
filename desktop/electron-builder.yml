@@ -1,0 +1,51 @@
+appId: app.mola.desktop
+productName: Mola
+artifactName: Mola-${version}-${os}-${arch}.${ext}
+asar: true
+npmRebuild: false
+publish: null
+directories:
+  output: release
+  buildResources: assets
+files:
+  - '*.cjs'
+  - package.json
+  - ui/**/*
+  - assets/icon.png
+linux:
+  syncDesktopName: true
+  executableName: mola
+  icon: assets/icon.png
+  category: Network;InstantMessaging
+  maintainer: Mola
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+mac:
+  category: public.app-category.social-networking
+  minimumSystemVersion: '13.0'
+  icon: assets/icon.png
+  hardenedRuntime: true
+  entitlements: assets/entitlements.mac.plist
+  entitlementsInherit: assets/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: Mola sesli görüşmelere katılmak için mikrofonunuzu kullanır.
+    NSCameraUsageDescription: Mola görüntülü görüşmeler için kameranızı kullanır.
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+win:
+  icon: assets/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
