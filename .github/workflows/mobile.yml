@@ -77,7 +77,8 @@ jobs:
       - name: Verify the checked-in Gradle wrapper
         run: echo '81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f  gradle/wrapper/gradle-wrapper.jar' | sha256sum --check
       - name: Install Android SDK packages
-        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'platform-tools'
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;35.0.0' 'platform-tools'
       - name: Test, lint and build the installable debug APK
         run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug assembleRelease
       - name: Record APK integrity
