@@ -72,7 +72,7 @@
 
 .mola-dialog-backdrop[data-slot="dialog-overlay"] {
   z-index: 219;
-  background: #182a2c52;
+  background: var(--overlay);
   backdrop-filter: blur(3px);
 }
 

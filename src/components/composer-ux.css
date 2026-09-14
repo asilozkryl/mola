@@ -10,7 +10,7 @@
 
 .composer-ux .composer:focus-within {
   border-color: var(--ring);
-  box-shadow: 0 0 0 3px #2374590d;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 8%, transparent);
 }
 
 .composer-ux.composer-channel .composer {
@@ -84,7 +84,7 @@
 
 .composer-ux .send-button:hover:not(:disabled) {
   background: var(--brand-solid);
-  box-shadow: 0 2px 5px #153d3624;
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--brand-solid) 14%, transparent);
 }
 
 .composer-ux .send-button:active:not(:disabled) {
@@ -431,7 +431,7 @@
 
 .composer-ux.composer-direct .composer:focus-within {
   border-color: var(--ring);
-  box-shadow: 0 0 0 2px #153d3610;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 8%, transparent);
 }
 
 .composer-ux.composer-direct .composer > textarea {

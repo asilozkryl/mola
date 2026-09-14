@@ -231,7 +231,7 @@ function useShareWindow(stream: MediaStream | null, title: string) {
       target.document.title = title;
       const style = target.document.createElement("style");
       style.textContent =
-        "body{margin:0;background:#153d36;color:white;font:14px system-ui;display:flex;flex-direction:column;height:100vh}p{padding:14px 18px;margin:0}video{width:100%;height:0;flex:1;min-height:0;object-fit:contain;background:#092118}button{align-self:flex-end;margin:10px 16px;padding:8px 12px;border:0;border-radius:8px;background:#c0e1ad;color:#153d36;cursor:pointer}";
+        "body{margin:0;background:#17171c;color:white;font:14px system-ui;display:flex;flex-direction:column;height:100vh}p{padding:14px 18px;margin:0}video{width:100%;height:0;flex:1;min-height:0;object-fit:contain;background:#121217}button{align-self:flex-end;margin:10px 16px;padding:8px 12px;border:0;border-radius:8px;background:#a78bfa;color:#1f1730;cursor:pointer}";
       const heading = target.document.createElement("p");
       heading.textContent = title;
       const video = target.document.createElement("video");

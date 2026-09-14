@@ -27,7 +27,6 @@ import {
   ArchiveRestore,
   AudioLines,
   Bell,
-  BellOff,
   Bookmark,
   Check,
   ChevronDown,
@@ -55,6 +54,7 @@ import {
   Trash2,
   Video,
   Volume2,
+  VolumeX,
   X,
   Pin,
   Lock,
@@ -2589,6 +2589,10 @@ export default function App() {
     .filter((id) => typing[id])
     .map((id) => userMap.get(id)?.name.split(" ")[0])
     .filter(Boolean);
+  const unreadActivityCount =
+    notificationState?.workspaceId === data?.workspace.id
+      ? notificationState?.unreadNotifications || 0
+      : 0;
   async function finishRecovery(action: AuthLink["action"]) {
     clearAuthLink();
     sessionStorage.setItem("mola:logged-out", "true");
@@ -2831,11 +2835,7 @@ export default function App() {
           currentId={channelId}
           view={view}
           savedCount={savedState.ids.size}
-          activityCount={
-            notificationState?.workspaceId === data.workspace.id
-              ? notificationState.unreadNotifications
-              : 0
-          }
+          activityCount={unreadActivityCount}
           canManage={canManage}
           canCreate={canCreate}
           voiceChannels={voiceChannels}
@@ -2882,7 +2882,7 @@ export default function App() {
       </div>
 
       <div className="workspace-main" inert={isMobile && mobileNav}>
-        <header className="topbar">
+        <header className="topbar workspace-topbar">
           <div className="topbar-breadcrumb">
             <Button
               variant="unstyled"
@@ -2897,9 +2897,26 @@ export default function App() {
             >
               <Menu size={21} />
             </Button>
-            <span className="workspace-breadcrumb">Çalışma alanı</span>
-            <ChevronRight size={14} />
-            <span>
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="button"
+              className="topbar-workspace"
+              aria-label={`Çalışma alanını değiştir: ${data.workspace.name}`}
+              aria-haspopup="dialog"
+              aria-expanded={dialog === "workspaces"}
+              title={data.workspace.name}
+              onClick={() => openWorkspaces()}
+            >
+              <span className="topbar-workspace-mark" aria-hidden="true">
+                {workspaceInitials(data.workspace.name)}
+              </span>
+              <span className="topbar-workspace-name">
+                {data.workspace.name}
+              </span>
+              <ChevronDown size={13} aria-hidden="true" />
+            </Button>
+            <span className="topbar-location">
               {view === "saved"
                 ? "Kaydedilenler"
                 : view === "inbox"
@@ -2916,24 +2933,44 @@ export default function App() {
           <Button
             variant="unstyled"
             size="unset"
-            type="submit"
+            type="button"
             className="global-search"
             aria-label="Tüm mesajlarda ara"
+            aria-haspopup="dialog"
+            aria-expanded={dialog === "search"}
             onClick={() => setDialog("search")}
           >
-            <Search size={16} />
+            <Search size={17} aria-hidden="true" />
             <span>{data.workspace.name} içinde ara</span>
-            <kbd>
+            <kbd aria-hidden="true">
               {/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl"} K
             </kbd>
           </Button>
           <div className="topbar-actions">
             <IconButton
               label={
+                unreadActivityCount
+                  ? `Aktiviteyi aç, ${unreadActivityCount} okunmamış bildirim`
+                  : "Aktiviteyi aç"
+              }
+              className="topbar-activity"
+              pressed={view === "inbox"}
+              onClick={() => selectView("inbox")}
+            >
+              <Bell size={18} aria-hidden="true" />
+              {unreadActivityCount > 0 && (
+                <span className="topbar-unread" aria-hidden="true">
+                  {unreadActivityCount > 99 ? "99+" : unreadActivityCount}
+                </span>
+              )}
+            </IconButton>
+            <IconButton
+              label={
                 quiet
                   ? "Uygulama içi uyarıları aç"
                   : "Uygulama içi uyarıları sustur"
               }
+              className="topbar-quiet"
               pressed={quiet}
               onClick={() => {
                 localStorage.setItem("mola:quiet", String(!quiet));
@@ -2945,9 +2982,16 @@ export default function App() {
                 );
               }}
             >
-              {quiet ? <BellOff size={18} /> : <Bell size={18} />}
+              {quiet ? <VolumeX size={18} /> : <Volume2 size={18} />}
             </IconButton>
-            <span className="topbar-divider" />
+            <IconButton
+              label="Profil ayarları"
+              className="profile-settings-trigger"
+              onClick={() => setDialog("settings")}
+            >
+              <Settings2 size={18} />
+            </IconButton>
+            <span className="topbar-divider" aria-hidden="true" />
             <ProfileIdentity
               className="topbar-avatar"
               user={data.user}
@@ -2957,14 +3001,10 @@ export default function App() {
               onOpen={openProfile}
             >
               <Avatar user={data.user} size="small" online={connected} />
+              <span className="topbar-profile-name">
+                {data.user.name.trim().split(/\s+/)[0]}
+              </span>
             </ProfileIdentity>
-            <IconButton
-              label="Profil ayarları"
-              className="profile-settings-trigger"
-              onClick={() => setDialog("settings")}
-            >
-              <Settings2 size={18} />
-            </IconButton>
           </div>
         </header>
         {!connected && !data.user.suspended && !data.workspace.suspended && (

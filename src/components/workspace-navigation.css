@@ -485,7 +485,7 @@
 }
 .sidebar-resizer:hover,
 .sidebar-resizer:focus-visible {
-  background: #23745940;
+  background: color-mix(in srgb, var(--primary) 25%, transparent);
   outline: none;
 }
 .sidebar-resizer:focus-visible::after {

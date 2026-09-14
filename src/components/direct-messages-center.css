@@ -22,7 +22,7 @@
 }
 .dm-center-search:focus-within {
   border-color: var(--ring);
-  box-shadow: 0 0 0 2px #23745918;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 10%, transparent);
 }
 .dm-center-search input {
   border: 0;

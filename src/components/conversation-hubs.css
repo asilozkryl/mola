@@ -25,7 +25,7 @@
 }
 .activity-search:focus-within {
   border-color: var(--ring);
-  box-shadow: 0 0 0 2px #23745912;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 8%, transparent);
 }
 .activity-search input {
   width: 100%;

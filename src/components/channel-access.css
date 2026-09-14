@@ -102,7 +102,7 @@
 }
 .modal .channel-access .channel-member-search:focus-within {
   border-color: var(--ring);
-  outline: 2px solid #23745926;
+  outline: 2px solid color-mix(in srgb, var(--ring) 15%, transparent);
   outline-offset: 1px;
 }
 .modal .channel-access .channel-member-search input {

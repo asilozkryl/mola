@@ -1,0 +1,288 @@
+.workspace-topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 2fr) minmax(0, 1fr);
+  height: 54px;
+  min-height: 54px;
+  gap: 18px;
+  background: var(--background);
+  border-color: var(--border);
+}
+
+.workspace-topbar .topbar-breadcrumb {
+  min-width: 0;
+  gap: 10px;
+}
+
+.topbar-workspace {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 4px 6px 4px 0;
+  border-radius: 6px;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.topbar-workspace:hover,
+.topbar-workspace[aria-expanded="true"] {
+  background: var(--muted);
+}
+
+.topbar-workspace-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 27px;
+  height: 27px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+
+.topbar-workspace-name,
+.topbar-profile-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-workspace > svg {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.workspace-topbar .topbar-location {
+  flex-shrink: 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.workspace-topbar .global-search {
+  width: 100%;
+  max-width: 640px;
+  justify-self: center;
+  min-width: 0;
+  height: 34px;
+  gap: 10px;
+  padding: 0 11px;
+  border: 1px solid var(--input);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  transition:
+    border-color 120ms,
+    background-color 120ms;
+}
+
+.workspace-topbar .global-search:hover,
+.workspace-topbar .global-search[aria-expanded="true"] {
+  background: var(--muted);
+  border-color: var(--ring);
+  color: var(--foreground);
+}
+
+.workspace-topbar .global-search > svg {
+  flex-shrink: 0;
+}
+
+.workspace-topbar .global-search kbd {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-color: var(--border);
+  border-radius: 4px;
+  background: var(--background);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.workspace-topbar .topbar-actions {
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.workspace-topbar .topbar-actions > .icon-button {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  color: var(--muted-foreground);
+}
+
+.workspace-topbar .topbar-actions > .icon-button:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.workspace-topbar .topbar-actions > .icon-button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--primary);
+}
+
+.topbar-unread {
+  position: absolute;
+  top: 0;
+  right: -1px;
+  min-width: 15px;
+  height: 15px;
+  padding-inline: 3px;
+  border: 1px solid var(--background);
+  border-radius: 5px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-topbar .topbar-divider {
+  margin-inline: 7px;
+  height: 22px;
+}
+
+.workspace-topbar .topbar-avatar {
+  min-height: 36px;
+  gap: 8px;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.workspace-topbar .topbar-avatar:hover {
+  background: var(--muted);
+}
+
+.workspace-topbar .topbar-avatar .avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.topbar-profile-name {
+  max-width: 70px;
+  padding-right: 3px;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.topbar-workspace:focus-visible,
+.workspace-topbar .global-search:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1599px) {
+  .workspace-topbar .topbar-location,
+  .topbar-profile-name {
+    display: none;
+  }
+}
+
+@media (min-width: 801px) and (max-width: 1199px) {
+  .workspace-topbar {
+    grid-template-columns: minmax(0, 1fr) minmax(144px, 1.8fr) auto;
+    gap: 12px;
+    padding-inline: 16px;
+  }
+
+  .topbar-workspace-mark {
+    display: none;
+  }
+}
+
+@media (max-width: 800px) {
+  .workspace-topbar {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    height: 52px;
+    min-height: 52px;
+    gap: 4px;
+    padding-inline: 8px;
+  }
+
+  .workspace-topbar .topbar-breadcrumb {
+    gap: 3px;
+  }
+
+  .workspace-topbar .mobile-menu {
+    flex-shrink: 0;
+    width: 40px;
+    min-height: 40px;
+  }
+
+  .topbar-workspace {
+    min-height: 40px;
+    gap: 4px;
+    padding-inline: 3px;
+    font-size: 12px;
+  }
+
+  .topbar-workspace-mark {
+    display: none;
+  }
+
+  .workspace-topbar .global-search {
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .workspace-topbar .topbar-actions {
+    gap: 0;
+  }
+
+  .workspace-topbar .topbar-actions > .icon-button.topbar-activity,
+  .workspace-topbar .topbar-actions > .icon-button.profile-settings-trigger {
+    display: inline-flex;
+    width: 36px;
+    height: 40px;
+  }
+
+  .workspace-topbar .topbar-actions > .topbar-quiet,
+  .workspace-topbar .topbar-divider {
+    display: none;
+  }
+
+  .workspace-topbar .topbar-avatar {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 3px;
+  }
+
+  .topbar-unread {
+    top: 2px;
+    right: 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .workspace-topbar .global-search,
+  .workspace-topbar .topbar-actions > .icon-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-topbar .global-search {
+    transition: none;
+  }
+}

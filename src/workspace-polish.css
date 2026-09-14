@@ -496,7 +496,7 @@
 }
 .composer:focus-within {
   border-color: var(--ring);
-  box-shadow: 0 0 0 2px #23745910;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 8%, transparent);
 }
 .composer-hint {
   color: var(--muted-foreground);

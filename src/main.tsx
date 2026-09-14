@@ -12,6 +12,7 @@ import "./styles.css";
 import "./workspace-polish.css";
 import "./design-system.css";
 import "./components/channel-conversation.css";
+import "./components/workspace-topbar.css";
 import { initializePwa } from "./lib/pwa";
 import { initializeAppearance } from "./lib/appearance";
 import { TooltipProvider } from "./components/ui/tooltip";

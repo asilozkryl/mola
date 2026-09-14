@@ -198,13 +198,13 @@
   height: 78px;
   gap: 9px;
   overflow: hidden;
-  border: 1px solid #dfe5e2;
+  border: 1px solid #dedee6;
   border-radius: 5px;
-  background: #fff;
+  background: #fafafc;
 }
 .settings-theme-preview > i {
-  background: #e9eeeb;
-  border-right: 1px solid #dfe5e2;
+  background: #f0f0f4;
+  border-right: 1px solid #dedee6;
 }
 .settings-theme-preview > span {
   display: flex;
@@ -216,31 +216,31 @@
   display: block;
   height: 5px;
   border-radius: 2px;
-  background: #dce4df;
+  background: #d9d9e2;
 }
 .settings-theme-preview b:nth-child(2) {
   width: 65%;
-  background: #9ac1ab;
+  background: #6d46ad;
 }
 .settings-theme-preview b:nth-child(3) {
   width: 80%;
 }
 .settings-theme-dark .settings-theme-preview {
-  background: #18221d;
-  border-color: #36463c;
+  background: #17171c;
+  border-color: #393943;
 }
 .settings-theme-dark .settings-theme-preview > i {
-  background: #223028;
-  border-color: #36463c;
+  background: #202028;
+  border-color: #393943;
 }
 .settings-theme-dark .settings-theme-preview b {
-  background: #465b4f;
+  background: #626272;
 }
 .settings-theme-dark .settings-theme-preview b:nth-child(2) {
-  background: #8aba9c;
+  background: #a78bfa;
 }
 .settings-theme-system .settings-theme-preview {
-  background: linear-gradient(120deg, #fff 50%, #18221d 50%);
+  background: linear-gradient(120deg, #fafafc 50%, #17171c 50%);
 }
 .settings-choice-label {
   display: flex;

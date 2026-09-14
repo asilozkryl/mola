@@ -7,8 +7,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f7f9f4",
-  "theme_color": "#153d36",
+  "background_color": "#fafafc",
+  "theme_color": "#fafafc",
   "categories": ["productivity", "social"],
   "icons": [
     {

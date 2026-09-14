@@ -56,7 +56,7 @@ function applyAppearance() {
   root.style.colorScheme = dark ? "dark" : "light";
   document
     .querySelector('meta[name="theme-color"]')
-    ?.setAttribute("content", dark ? "#111b18" : "#153d36");
+    ?.setAttribute("content", dark ? "#17171c" : "#fafafc");
   if (paletteChanged) {
     // Commit every descendant's new colors together before restoring ordinary
     // interactions. A rapid second choice cancels the previous frame cleanup.

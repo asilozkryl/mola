@@ -1,44 +1,48 @@
-/* Mola's shared appearance layer: forest identity, quiet surfaces, compact rhythm. */
+/* Mola's shared appearance layer: charcoal surfaces, soft violet, compact rhythm. */
 :root {
-  --background: #ffffff;
-  --foreground: #20292b;
+  --background: #fafafc;
+  --foreground: #292832;
   --card: #ffffff;
-  --card-foreground: #20292b;
+  --card-foreground: #292832;
   --popover: #ffffff;
-  --popover-foreground: #20292b;
-  --primary: #21684e;
+  --popover-foreground: #292832;
+  --primary: #6d46ad;
   --primary-foreground: #ffffff;
-  --secondary: #edf2ef;
-  --secondary-foreground: #344d40;
-  --muted: #f4f7f6;
-  --muted-foreground: #5c6963;
-  --accent: #e8f2ec;
-  --accent-foreground: #215e46;
+  --secondary: #f0f0f4;
+  --secondary-foreground: #44414f;
+  --muted: #f5f5f8;
+  --muted-foreground: #656271;
+  --accent: #efe9fb;
+  --accent-foreground: #623c9f;
   --destructive: #a73737;
   --destructive-foreground: #ffffff;
-  --border: #dfe6e2;
-  --input: #ccd8d0;
-  --ring: #398464;
+  --border: #e1e0e7;
+  --input: #c9c7d3;
+  --ring: #825bbf;
   --danger-surface: #fff1ee;
   --danger-border: #efccc5;
   --warning: #805a24;
   --warning-surface: #fff7e6;
   --warning-border: #e5d1a6;
-  --success: #26734f;
-  --brand-solid: #21684e;
-  --brand-solid-hover: #19563f;
+  --success: #237148;
+  --success-surface: #f0f7f2;
+  --success-border: #bbd9c5;
+  /* Legacy solid controls pair this deeper violet with white text. */
+  --brand-solid: #6542ab;
+  --brand-solid-hover: #54338f;
   --brand-foreground: #ffffff;
-  --rail-background: #153d36;
-  --rail-foreground: #c0e1ad;
-  --rail-muted: #a4c3b6;
-  --overlay: rgb(8 25 18 / 48%);
+  --rail-background: #121217;
+  --rail-foreground: #d5c8ff;
+  --rail-muted: #b5b1c4;
+  --overlay: rgb(17 16 24 / 48%);
   --shadow-popover:
-    0 8px 30px rgb(21 45 31 / 14%), 0 1px 3px rgb(21 45 31 / 8%);
-  --shadow-dialog: 0 24px 80px rgb(11 31 21 / 22%);
+    0 8px 30px rgb(28 23 42 / 14%), 0 1px 3px rgb(28 23 42 / 8%);
+  --shadow-dialog: 0 24px 80px rgb(22 18 33 / 22%);
   --radius: 0.5714rem;
-  --forest: #153d36;
+  /* Keep existing feature aliases tied to roles as the palette changes. */
+  --forest: var(--accent-foreground);
   --green: var(--primary);
-  --leaf: #c0e1ad;
+  --leaf: var(--rail-foreground);
   --ink: var(--foreground);
   --line: var(--border);
   --subtle: var(--muted);
@@ -56,37 +60,34 @@
 }
 
 :root.dark {
-  --background: #111b18;
-  --foreground: #e6eeea;
-  --card: #18241f;
-  --card-foreground: #e6eeea;
-  --popover: #1c2a24;
-  --popover-foreground: #e6eeea;
-  --primary: #98d1b3;
-  --primary-foreground: #10271c;
-  --secondary: #26372e;
-  --secondary-foreground: #d6e7dd;
-  --muted: #1b2922;
-  --muted-foreground: #a3b5ab;
-  --accent: #243e31;
-  --accent-foreground: #a8ddbc;
+  --background: #17171c;
+  --foreground: #f2f2f5;
+  --card: #202028;
+  --card-foreground: #f2f2f5;
+  --popover: #25252f;
+  --popover-foreground: #f2f2f5;
+  --primary: #a78bfa;
+  --primary-foreground: #1f1730;
+  --secondary: #2a2a35;
+  --secondary-foreground: #e2dfeb;
+  --muted: #23232c;
+  --muted-foreground: #b0afbd;
+  --accent: #332b46;
+  --accent-foreground: #c8b3ff;
   --destructive: #ffaaa3;
   --destructive-foreground: #381817;
-  --border: #33463b;
-  --input: #475f50;
-  --ring: #8fc9a8;
+  --border: #3a3946;
+  --input: #565362;
+  --ring: #a78bfa;
   --danger-surface: #38231f;
   --danger-border: #74473f;
   --warning: #e4c38b;
   --warning-surface: #342d20;
   --warning-border: #6b5838;
-  --success: #99d3b0;
-  --brand-solid: #226c50;
-  --brand-solid-hover: #2b7b5d;
-  --rail-background: #0d231b;
-  --rail-foreground: #c0e1ad;
-  --rail-muted: #a4c3b6;
-  --overlay: rgb(3 12 8 / 68%);
+  --success: #86cea5;
+  --success-surface: #1f3029;
+  --success-border: #3e6651;
+  --overlay: rgb(8 8 12 / 68%);
   --shadow-popover: 0 10px 36px rgb(0 0 0 / 32%), 0 1px 3px rgb(0 0 0 / 20%);
   --shadow-dialog: 0 24px 80px rgb(0 0 0 / 42%);
   color-scheme: dark;
@@ -380,7 +381,7 @@ select option {
   color: var(--rail-foreground);
 }
 .workspace-rail .workspace-button.active {
-  color: var(--forest);
+  color: var(--rail-background);
 }
 .workspace-rail .rail-bottom .icon-button,
 .workspace-rail .rail-add {
@@ -454,9 +455,11 @@ select option {
 .call-panel {
   box-shadow: var(--shadow-dialog);
 }
+.avatar,
+.call-person-avatar,
 .dark .avatar,
 .dark .call-person-avatar {
-  color: #203a2b;
+  color: #292734;
 }
 .dark .call-person-camera .call-person-caption {
   color: #fff;
@@ -466,30 +469,148 @@ select option {
 }
 .auth-story {
   background: var(--rail-background);
-  color: #e8f1ec;
+  color: #f2f2f5;
 }
 .auth-story
   :is(.logo, .auth-pill, .auth-story-body > p, .auth-benefits, small) {
-  color: #c0d7c9;
+  color: var(--rail-muted);
 }
 .auth-story .auth-pill > span {
-  background: #a8cc8f;
+  background: var(--rail-foreground);
 }
 .call-panel .call-person-camera .call-quality {
   background: var(--card);
 }
 .call-share-heading .call-icon-button {
-  color: #d5e5dc;
+  color: var(--rail-foreground);
 }
 .call-dock .call-dock-main:hover {
   color: #fff;
 }
 .call-dock .call-dock-main small {
-  color: #d3eadb;
+  color: #e8defa;
 }
 .sidebar .sidebar-drag-preview {
   color: var(--brand-foreground);
   background: var(--brand-solid);
+}
+
+/* Presence and successful outcomes stay green independently of the brand. */
+.small-status-dot:not(.disconnected),
+.presence-dot,
+.call-live-dot,
+.call-panel .call-live-dot,
+.call-level-meter span,
+.call-preflight-polished .call-level-meter span {
+  background: var(--success);
+}
+.profile-presence[data-online="true"] > i {
+  background: var(--success);
+  border-color: var(--success);
+}
+.form-success,
+.notification-success,
+.integration-status.enabled,
+.system-admin-status:not(.system-admin-status-paused) {
+  color: var(--success);
+  background: var(--success-surface);
+}
+.notification-installed,
+.call-test-status-detected,
+.channel-tab-end[data-connected="true"] {
+  color: var(--success);
+}
+.call-person.call-person-speaking {
+  box-shadow: inset 0 0 0 3px var(--success);
+}
+.call-panel .call-person.call-person-speaking {
+  border-color: var(--success);
+  box-shadow: inset 3px 0 var(--success);
+}
+.call-panel .call-person-camera.call-person-speaking::before {
+  border-color: var(--success);
+}
+.call-panel .call-person-speaking:not(.call-person-camera) .call-person-status {
+  color: var(--success);
+}
+
+/* Finish the palette on older illustrations, focus states, and floating UI. */
+.workspace-rail .workspace-button {
+  box-shadow: 0 3px 0 rgb(0 0 0 / 18%);
+}
+.selected-dot,
+.channel-tabs > button.active::after,
+.auth-tabs > button.active::after,
+.activity-item.is-unread::before,
+.dm-center-row.is-unread::before,
+.notification-dot,
+.adm-audit-dot {
+  background: var(--primary);
+}
+.composer:focus-within {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 12%, transparent);
+}
+.sidebar-resizer:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--primary) 25%, transparent);
+}
+.voice-channel-entry .voice-nav.voice-active {
+  box-shadow: inset 2px 0 var(--primary);
+}
+.channel-type-picker > button.active {
+  box-shadow: 0 0 0 1px var(--ring);
+}
+.huddle-art-center {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow: 0 3px 0 var(--border);
+}
+.huddle-art-avatar .avatar {
+  border-color: var(--muted);
+}
+.art-spark {
+  color: var(--input);
+}
+.floating-chat {
+  background: #f1edf8;
+  color: #3a304c;
+  box-shadow: var(--shadow-popover);
+}
+.floating-chat strong {
+  color: #4a365f;
+}
+.floating-chat p,
+.floating-chat > span:last-child {
+  color: #6e617e;
+}
+.floating-call {
+  background: #ddd0f7;
+  color: #4b326e;
+  box-shadow: var(--shadow-popover);
+}
+.floating-call > div > span {
+  color: #5e467f;
+}
+.call-share-stage {
+  background: var(--rail-background);
+}
+.call-dock .call-dock-icon {
+  color: var(--brand-foreground);
+}
+.call-dialog {
+  box-shadow: var(--shadow-dialog);
+}
+.call-dock,
+.call-dock-polished,
+.toast,
+.reaction-popover,
+.message-menu,
+.composer-picker,
+.profile-hover-card {
+  box-shadow: var(--shadow-popover);
+}
+.modal::backdrop,
+.nav-scrim {
+  background: var(--overlay);
 }
 
 @media (pointer: coarse) {
