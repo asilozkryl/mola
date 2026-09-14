@@ -303,8 +303,43 @@ test("copy stays readable while composer and message-edit undo restore both iden
     await expect(edit).toHaveValue("@Deniz Kaya @Deniz Kaya");
     await edit.press("ControlOrMeta+y");
     await expect(edit).toHaveValue("@Deniz Kaya");
-    await edit.press("ControlOrMeta+z");
-    await edit.press("End");
+    // A delayed paint must not let undo overwrite a later caret movement.
+    const deferredFrames = await page.evaluateHandle(() => {
+      const requestFrame = window.requestAnimationFrame;
+      const cancelFrame = window.cancelAnimationFrame;
+      const callbacks = new Map<number, FrameRequestCallback>();
+      let nextId = 0;
+      window.requestAnimationFrame = (callback) => {
+        const id = --nextId;
+        callbacks.set(id, callback);
+        return id;
+      };
+      window.cancelAnimationFrame = (id) => {
+        if (callbacks.has(id)) callbacks.delete(id);
+        else cancelFrame.call(window, id);
+      };
+      return () => {
+        window.requestAnimationFrame = requestFrame;
+        window.cancelAnimationFrame = cancelFrame;
+        const pending = [...callbacks.values()];
+        callbacks.clear();
+        pending.forEach((callback) => callback(performance.now()));
+      };
+    });
+    try {
+      await edit.press("ControlOrMeta+z");
+      await expect(edit).toHaveValue("@Deniz Kaya @Deniz Kaya");
+      await edit.press("End");
+    } finally {
+      await deferredFrames.evaluate((flush) => flush());
+      await deferredFrames.dispose();
+    }
+    expect(
+      await edit.evaluate((element: HTMLTextAreaElement) => [
+        element.selectionStart,
+        element.selectionEnd,
+      ]),
+    ).toEqual([23, 23]);
     await edit.pressSequentially(" kontrol");
     await article.getByRole("button", { name: "Kaydet", exact: true }).click();
     await expect(article.locator(".message-text")).toHaveText(

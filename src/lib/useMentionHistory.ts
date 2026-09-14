@@ -1,4 +1,9 @@
-import { useRef, type ChangeEvent, type KeyboardEvent } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 import {
   MentionHistory,
   type TextSelection,
@@ -17,23 +22,35 @@ export function useMentionHistory(
   disabled = false,
 ) {
   const state = useRef({ scope, history: new MentionHistory(content) });
+  const pendingRestore = useRef<
+    (TextSelection & { input: HTMLTextAreaElement }) | null
+  >(null);
   const { history } = state.current;
   // Remote drafts, completed sends and a new editing session begin a new history.
   if (state.current.scope !== scope || history.current.content !== content) {
     state.current.scope = scope;
     history.reset(content);
+    pendingRestore.current = null;
   }
+
+  useLayoutEffect(() => {
+    const pending = pendingRestore.current;
+    pendingRestore.current = null;
+    if (!pending) return;
+    const { input, start, end } = pending;
+    if (!input.isConnected || input.ownerDocument.activeElement !== input)
+      return;
+    // Restore with the controlled text commit, before another key moves the caret.
+    input.setSelectionRange(start, end);
+  });
 
   function restore(input: HTMLTextAreaElement, redo: boolean) {
     if (disabled) return;
     const entry = history.restore(redo);
     if (!entry) return;
     const { start, end } = entry;
+    pendingRestore.current = { input, start, end };
     onRestore(entry.content);
-    requestAnimationFrame(() => {
-      if (!input.isConnected) return;
-      input.setSelectionRange(start, end);
-    });
   }
 
   return {
