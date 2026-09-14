@@ -39,7 +39,7 @@ test('v4 to v5 preserves memberships, sessions and history while adding role, pr
   try {
     const fixture = legacy(path); const previousMembers = fixture.db.prepare('SELECT workspace_id,user_id,role,joined_at,suspended_at,removed_at FROM workspace_members ORDER BY workspace_id,user_id').all(); const session = fixture.db.prepare('SELECT * FROM sessions').get(); fixture.db.close();
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get('PRAGMA user_version')!.user_version, 10);
+    assert.equal(repo.get('PRAGMA user_version')!.user_version, 11);
     assert.deepEqual(repo.all('SELECT workspace_id,user_id,role,joined_at,suspended_at,removed_at FROM workspace_members ORDER BY workspace_id,user_id'), previousMembers);
     assert.deepEqual(repo.get('SELECT * FROM sessions'), session);
     assert.equal(repo.get('SELECT content FROM messages WHERE id=?', fixture.message)!.content, 'History survives permissions migration.');

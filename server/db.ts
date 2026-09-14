@@ -10,6 +10,7 @@ import { migrateSidebarPreferences } from './sidebar-preferences.js';
 import { migrateSavedMessages } from './saved-messages.js';
 import { migrateMessageReliability } from './message-reliability.js';
 import { migrateNotificationControls } from './notification-controls.js';
+import { migrateWorkspacePresentation, normalizeWorkspaceOrder, readWorkspaceOrder } from './workspace-presentation.js';
 
 export type Row = Record<string, any>;
 
@@ -17,7 +18,7 @@ export function openDatabase(path: string) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   const version = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
-  if (version > 10) { db.close(); throw new Error('This database was created by a newer Mola release. Restore the matching application version.'); }
+  if (version > 11) { db.close(); throw new Error('This database was created by a newer Mola release. Restore the matching application version.'); }
   db.function('fold_text', { deterministic: true }, value => String(value ?? '').normalize('NFKC').toLocaleLowerCase('tr-TR'));
   db.exec(`PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, is_demo INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
@@ -174,6 +175,14 @@ export function openDatabase(path: string) {
       db.exec('PRAGMA user_version=10; COMMIT;');
     } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
   }
+  if (version < 11) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      migrateWorkspacePresentation(db);
+      if (db.prepare('PRAGMA foreign_key_check').all().length > 0) throw new Error('Workspace presentation migration found invalid references. Restore a consistent database backup.');
+      db.exec('PRAGMA user_version=11; COMMIT;');
+    } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
+  }
   return db;
 }
 
@@ -231,8 +240,16 @@ export class Repository {
   fallbackWorkspace(userId: string, excludedId: string | null = null): string | null {
     return this.get('SELECT wm.workspace_id FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=? AND (? IS NULL OR wm.workspace_id!=?) AND wm.removed_at IS NULL AND wm.suspended_at IS NULL AND w.suspended_at IS NULL ORDER BY wm.joined_at,wm.workspace_id LIMIT 1', userId, excludedId, excludedId)?.workspace_id ?? null;
   }
-  workspaces(userId: string) { return this.all('SELECT w.*,wm.role,wm.suspended_at AS membership_suspended_at FROM workspaces w JOIN workspace_members wm ON wm.workspace_id=w.id WHERE wm.user_id=? AND wm.removed_at IS NULL ORDER BY wm.joined_at,w.id', userId).map(row => ({ ...this.workspace(row.id), role: row.role as WorkspaceRole, membershipSuspended: Boolean(row.membership_suspended_at) })); }
-  workspace(id: string): Workspace { const row = this.get('SELECT * FROM workspaces WHERE id=?', id)!; return { id: row.id, name: row.name, isDemo: Boolean(row.is_demo), suspended: Boolean(row.suspended_at) }; }
+  workspaces(userId: string) {
+    const rows = this.all('SELECT w.*,wm.role,wm.suspended_at AS membership_suspended_at FROM workspaces w JOIN workspace_members wm ON wm.workspace_id=w.id WHERE wm.user_id=? AND wm.removed_at IS NULL ORDER BY wm.joined_at,w.id', userId);
+    const stored = this.get('SELECT workspace_ids_json FROM workspace_order_preferences WHERE user_id=?', userId);
+    const available = new Map(rows.map(row => [row.id, row]));
+    return normalizeWorkspaceOrder(rows.map(row => row.id), readWorkspaceOrder(stored?.workspace_ids_json)).map(id => {
+      const row = available.get(id)!;
+      return { ...this.workspace(row.id), role: row.role as WorkspaceRole, membershipSuspended: Boolean(row.membership_suspended_at) };
+    });
+  }
+  workspace(id: string): Workspace { const row = this.get('SELECT * FROM workspaces WHERE id=?', id)!; return { id: row.id, name: row.name, isDemo: Boolean(row.is_demo), suspended: Boolean(row.suspended_at), ...(row.avatar_version ? { avatarUrl: `/api/workspaces/${row.id}/avatar/${row.avatar_version}` } : {}) }; }
   canAccessChannel(userId: string, channelId: string, workspaceId?: string): boolean {
     return Boolean(this.get(`SELECT c.id FROM channels c JOIN workspace_members wm ON wm.workspace_id=c.workspace_id JOIN users u ON u.id=wm.user_id JOIN workspaces w ON w.id=c.workspace_id WHERE c.id=? AND u.id=? AND (? IS NULL OR c.workspace_id=?) AND u.suspended_at IS NULL AND wm.suspended_at IS NULL AND wm.removed_at IS NULL AND w.suspended_at IS NULL AND ((c.kind!='dm' AND c.visibility='public' AND wm.role!='guest') OR EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id=c.id AND cm.user_id=u.id))`, channelId, userId, workspaceId ?? null, workspaceId ?? null));
   }

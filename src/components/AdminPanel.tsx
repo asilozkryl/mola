@@ -28,6 +28,7 @@ import {
 import type {
   Bootstrap,
   Channel,
+  Workspace,
   WorkspaceAdminData,
 } from "../../shared/types";
 import { api, post, ApiError } from "../lib/api";
@@ -35,6 +36,8 @@ import { Avatar, Logo, Modal, Spinner, fileSize } from "./ui";
 import SystemAdmin from "./SystemAdmin";
 import ChannelAccessDialog, { roleNames } from "./ChannelAccessDialog";
 import ChannelActionsDialog from "./ChannelActionsDialog";
+import { WorkspaceAvatar } from "./WorkspaceAvatar";
+import { WorkspacePhotoSettings } from "./WorkspacePhotoSettings";
 import "./admin.css";
 
 type Section =
@@ -90,12 +93,14 @@ export default function AdminPanel({
   onChanged,
   initialSection,
   onDeleteWorkspace,
+  onWorkspaceUpdated,
 }: {
   data: Bootstrap;
   onClose: () => void;
   onChanged: () => void;
   initialSection?: "settings";
   onDeleteWorkspace?: () => void;
+  onWorkspaceUpdated?: (workspace: Workspace) => void;
 }) {
   const opener = useRef(document.activeElement as HTMLElement | null);
   const [section, setSection] = useState<Section>(
@@ -301,9 +306,7 @@ export default function AdminPanel({
               <ArrowLeft size={17} /> Sohbete dön
             </Button>
             <div className="adm-workspace">
-              <span>
-                {data.workspace.name.slice(0, 1).toLocaleUpperCase("tr")}
-              </span>
+              <WorkspaceAvatar workspace={data.workspace} />
               <strong>
                 {data.workspace.name}
                 <small>Yönetim paneli</small>
@@ -858,6 +861,23 @@ export default function AdminPanel({
                       )}
                       {section === "settings" && (
                         <div className="adm-settings">
+                          <WorkspacePhotoSettings
+                            key={`${data.workspace.id}:${data.user.id}`}
+                            workspace={data.workspace}
+                            userId={data.user.id}
+                            canEdit={
+                              !data.workspace.suspended &&
+                              (data.user.role === "owner" ||
+                                data.user.role === "admin")
+                            }
+                            onUpdated={(workspace) => {
+                              setSnapshot((current) =>
+                                current ? { ...current, workspace } : current,
+                              );
+                              onWorkspaceUpdated?.(workspace);
+                              onChanged();
+                            }}
+                          />
                           <form
                             onSubmit={saveWorkspace}
                             className="adm-settings-section"

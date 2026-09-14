@@ -74,7 +74,7 @@ test("v8 migration preserves text drafts and saved history, persists request tom
   try {
     const old = legacy(path);
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get("PRAGMA user_version")!.user_version, 10);
+    assert.equal(repo.get("PRAGMA user_version")!.user_version, 11);
     for (const [table, rows] of Object.entries(old.snapshot))
       assert.deepEqual(repo.all(`SELECT * FROM ${table}`), rows, table);
     assert.equal(repo.get("SELECT COUNT(*) n FROM message_requests")!.n, 0);

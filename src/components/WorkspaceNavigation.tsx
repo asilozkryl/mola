@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type DragEvent,
@@ -49,6 +50,16 @@ import {
   type ContextMenuPosition,
 } from "./ContextMenu";
 import { ProfileIdentity } from "./ProfileIdentity";
+import { WorkspaceAvatar } from "./WorkspaceAvatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import type { WorkspaceMode } from "./WorkspaceSwitcher";
 import "./workspace-navigation.css";
 
@@ -107,6 +118,236 @@ type Props = {
   onCreate: (kind: "text" | "voice") => void;
   onVoicePreview: (id: string) => void;
 };
+
+function WorkspaceHeadingMenu(p: Props & { onOpen: () => void }) {
+  const { data } = p;
+  const [open, setOpen] = useState(false);
+  const [popup, setPopup] = useState<HTMLDivElement | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const restoreFocus = useRef(true);
+  const summaryId = useId();
+  const memberCount = data.members.filter((member) => !member.suspended).length;
+  const onlineCount = data.members.filter(
+    (member) => !member.suspended && data.onlineIds.includes(member.id),
+  ).length;
+  const presence = `${memberCount} üye${p.connected ? ` · ${onlineCount} çevrimiçi` : " · Bağlanılıyor"}`;
+  const role = {
+    owner: "Çalışma alanı sahibi",
+    admin: "Yönetici",
+    moderator: "Moderatör",
+    member: "Üye",
+    guest: "Misafir",
+  }[data.user.role];
+  const workspaceActions: ContextMenuItem[] = [
+    {
+      label: "Çalışma alanlarını değiştir",
+      icon: <Users size={16} />,
+      onSelect: () => p.onWorkspaces(),
+    },
+    {
+      label: "Çalışma alanı oluştur",
+      icon: <Plus size={16} />,
+      onSelect: () => p.onWorkspaces("create"),
+      disabled: data.workspace.isDemo,
+    },
+    {
+      label: "Davet ile katıl",
+      icon: <Plus size={16} />,
+      onSelect: () => p.onWorkspaces("join"),
+      disabled: data.workspace.isDemo,
+    },
+  ];
+  const teamActions: ContextMenuItem[] = [
+    { label: "Üyeler", icon: <Users size={16} />, onSelect: p.onMembers },
+    ...(p.canManage
+      ? [
+          {
+            label: "Çalışma alanına davet et",
+            icon: <Plus size={16} />,
+            onSelect: p.onInvite,
+          },
+          {
+            label: "Çalışma alanı ayarları",
+            icon: <Settings2 size={16} />,
+            onSelect: p.onWorkspaceSettings,
+          },
+          {
+            label: "Entegrasyonlar",
+            icon: <Plug size={16} />,
+            onSelect: p.onIntegrations,
+          },
+        ]
+      : []),
+  ];
+  const membershipAction: ContextMenuItem =
+    data.user.role === "owner"
+      ? {
+          label: "Sahipliği devret",
+          icon: <ShieldCheck size={16} />,
+          onSelect: p.onWorkspaceSettings,
+          disabled: data.workspace.isDemo,
+        }
+      : {
+          label: "Çalışma alanından ayrıl",
+          icon: <LogOut size={16} />,
+          onSelect: p.onLeave,
+          disabled: data.workspace.isDemo,
+          danger: true,
+        };
+
+  useLayoutEffect(() => {
+    if (!open || !popup) return;
+    const anchorBounds = trigger.current?.getBoundingClientRect();
+    const frame = requestAnimationFrame(() => {
+      popup
+        .querySelector<HTMLElement>('[role="menuitem"]:not([data-disabled])')
+        ?.focus({ preventScroll: true });
+    });
+    function onScroll(event: Event) {
+      if (event.target instanceof Node && popup?.contains(event.target)) return;
+      const current = trigger.current?.getBoundingClientRect();
+      if (
+        anchorBounds &&
+        current &&
+        Math.abs(anchorBounds.left - current.left) < 1 &&
+        Math.abs(anchorBounds.top - current.top) < 1
+      )
+        return;
+      restoreFocus.current = false;
+      setOpen(false);
+    }
+    document.addEventListener("scroll", onScroll, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open, popup]);
+
+  function action(item: ContextMenuItem) {
+    return (
+      <DropdownMenuItem
+        key={item.label}
+        render={<button type="button" />}
+        nativeButton
+        label={item.label}
+        variant={item.danger ? "destructive" : "default"}
+        disabled={item.disabled}
+        closeOnClick={false}
+        onClick={(event) => {
+          event.stopPropagation();
+          event.preventBaseUIHandler();
+          restoreFocus.current = false;
+          trigger.current?.focus({ preventScroll: true });
+          setOpen(false);
+          item.onSelect();
+        }}
+      >
+        <span className="workspace-menu-action-icon" aria-hidden="true">
+          {item.icon}
+        </span>
+        <span>{item.label}</span>
+      </DropdownMenuItem>
+    );
+  }
+
+  return (
+    <DropdownMenu
+      open={open}
+      modal={false}
+      loopFocus
+      onOpenChange={(next, details) => {
+        if (next) {
+          restoreFocus.current = true;
+          p.onOpen();
+        } else {
+          restoreFocus.current = !["outside-press", "focus-out"].includes(
+            details.reason,
+          );
+          if (details.reason === "escape-key") details.event.stopPropagation();
+        }
+        setOpen(next);
+      }}
+    >
+      <DropdownMenuTrigger
+        ref={trigger}
+        render={<Button variant="unstyled" size="unset" type="button" />}
+        className="workspace-heading"
+        aria-label="Çalışma alanı menüsü"
+      >
+        <WorkspaceAvatar workspace={data.workspace} size="small" />
+        <span className="workspace-heading-copy">
+          <strong title={data.workspace.name}>{data.workspace.name}</strong>
+          <small>
+            <span
+              className={`small-status-dot ${p.connected ? "" : "disconnected"}`}
+            />
+            {data.workspace.isDemo ? "Sana özel örnek alan" : presence}
+          </small>
+        </span>
+        <ChevronDown size={16} aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        ref={setPopup}
+        className="workspace-menu"
+        aria-label="Çalışma alanı menüsü"
+        aria-describedby={summaryId}
+        side="bottom"
+        align="start"
+        sideOffset={4}
+        alignOffset={10}
+        portalContainer={
+          trigger.current?.closest<HTMLElement>(
+            'dialog[open], [role="dialog"][aria-modal="true"]',
+          ) || undefined
+        }
+        positionerProps={{
+          positionMethod: "fixed",
+          sticky: true,
+          collisionPadding: 8,
+          collisionAvoidance: { side: "shift", align: "shift" },
+          className: "workspace-menu-positioner",
+        }}
+        finalFocus={() =>
+          restoreFocus.current && trigger.current?.isConnected
+            ? trigger.current
+            : false
+        }
+        onKeyDown={(event) => {
+          if (event.key === "Escape") event.stopPropagation();
+          if (event.key === "Tab") {
+            event.stopPropagation();
+            trigger.current?.focus({ preventScroll: true });
+            setOpen(false);
+          }
+        }}
+      >
+        <div className="workspace-menu-identity" id={summaryId}>
+          <WorkspaceAvatar workspace={data.workspace} size="medium" />
+          <div>
+            <strong>{data.workspace.name}</strong>
+            <span className="workspace-menu-presence">{presence}</span>
+            <span className="workspace-menu-role">{role}</span>
+          </div>
+        </div>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="workspace-menu-section-label">
+            Çalışma alanları
+          </DropdownMenuLabel>
+          {workspaceActions.map(action)}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator className="workspace-menu-separator" />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="workspace-menu-section-label">
+            Bu çalışma alanı
+          </DropdownMenuLabel>
+          {teamActions.map(action)}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator className="workspace-menu-separator" />
+        {action(membershipAction)}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 function Section({
   title,
@@ -228,9 +469,6 @@ export function WorkspaceNavigation(p: Props) {
     setDrop(null);
     setDropGroup(null);
   }, [scope]);
-  const onlineCount = data.members.filter(
-    (u) => !u.suspended && data.onlineIds.includes(u.id),
-  ).length;
   const matches = (name: string, id: string) =>
     name
       .toLocaleLowerCase("tr-TR")
@@ -806,96 +1044,7 @@ export function WorkspaceNavigation(p: Props) {
   }
   return (
     <>
-      <Button
-        variant="unstyled"
-        size="unset"
-        type="submit"
-        className="workspace-heading"
-        aria-label="Çalışma alanı menüsü"
-        aria-haspopup="menu"
-        onClick={(e) =>
-          showMenu(
-            e.currentTarget,
-            [
-              {
-                label: "Çalışma alanlarını değiştir",
-                icon: <Users size={16} />,
-                onSelect: () => p.onWorkspaces(),
-              },
-              {
-                label: "Çalışma alanı oluştur",
-                icon: <Plus size={16} />,
-                onSelect: () => p.onWorkspaces("create"),
-                disabled: data.workspace.isDemo,
-              },
-              {
-                label: "Davet ile katıl",
-                icon: <Plus size={16} />,
-                onSelect: () => p.onWorkspaces("join"),
-                disabled: data.workspace.isDemo,
-              },
-              {
-                label: "Üyeler",
-                icon: <Users size={16} />,
-                onSelect: p.onMembers,
-                separatorBefore: true,
-              },
-              ...(p.canManage
-                ? [
-                    {
-                      label: "Çalışma alanına davet et",
-                      icon: <Plus size={16} />,
-                      onSelect: p.onInvite,
-                    },
-                    {
-                      label: "Çalışma alanı ayarları",
-                      icon: <Settings2 size={16} />,
-                      onSelect: p.onWorkspaceSettings,
-                    },
-                    {
-                      label: "Entegrasyonlar",
-                      icon: <Plug size={16} />,
-                      onSelect: p.onIntegrations,
-                    },
-                  ]
-                : []),
-              ...(data.user.role === "owner"
-                ? [
-                    {
-                      label: "Sahipliği devret",
-                      icon: <ShieldCheck size={16} />,
-                      onSelect: p.onWorkspaceSettings,
-                      disabled: data.workspace.isDemo,
-                    },
-                  ]
-                : [
-                    {
-                      label: "Çalışma alanından ayrıl",
-                      icon: <LogOut size={16} />,
-                      onSelect: p.onLeave,
-                      disabled: data.workspace.isDemo,
-                      danger: true,
-                      separatorBefore: true,
-                    },
-                  ]),
-            ],
-            "Çalışma alanı menüsü",
-          )
-        }
-      >
-        <span>
-          <strong title={data.workspace.name}>{data.workspace.name}</strong>
-          <small>
-            <span
-              className={`small-status-dot ${p.connected ? "" : "disconnected"}`}
-            />
-            {data.workspace.isDemo
-              ? "Sana özel örnek alan"
-              : `${data.members.filter((u) => !u.suspended).length} üye${p.connected ? ` · ${onlineCount} çevrimiçi` : " · Bağlanılıyor"}`}
-          </small>
-        </span>
-        <ChevronDown size={16} />
-      </Button>
+      <WorkspaceHeadingMenu {...p} onOpen={() => setMenu(null)} />
       <div
         className={`sidebar-content live-sidebar-content ${editing ? "sidebar-editing" : ""}`}
       >

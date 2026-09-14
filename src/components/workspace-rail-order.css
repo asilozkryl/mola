@@ -1,0 +1,135 @@
+.rail-workspaces .workspace-button {
+  position: relative;
+  overflow: visible;
+}
+.rail-workspaces .workspace-button .workspace-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+.rail-workspaces .workspace-button[draggable="true"] {
+  cursor: grab;
+}
+.rail-workspaces .workspace-button[draggable="true"]:active {
+  cursor: grabbing;
+}
+.rail-workspaces .workspace-dragging {
+  opacity: 0.45;
+}
+.rail-workspaces .workspace-drop-before::after,
+.rail-workspaces .workspace-drop-after::after {
+  content: "";
+  position: absolute;
+  height: 3px;
+  left: 0;
+  right: 0;
+  border-radius: 3px;
+  background: var(--primary);
+  pointer-events: none;
+}
+.rail-workspaces .workspace-drop-before::after {
+  top: -8px;
+}
+.rail-workspaces .workspace-drop-after::after {
+  bottom: -8px;
+}
+.rail-order-error {
+  padding: 6px;
+  color: var(--destructive);
+}
+.workspace-order-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.workspace-order-toolbar .workspace-switcher-intro {
+  margin: 0;
+  font-size: 12px;
+}
+.workspace-order-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--foreground);
+}
+.workspace-order-toggle:hover,
+.workspace-order-toggle[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--primary);
+}
+.workspace-choice-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 10px;
+}
+.workspace-choice-row .workspace-choice {
+  flex: 1;
+  min-width: 0;
+}
+.workspace-order-controls {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.workspace-order-controls button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 38px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+.workspace-order-controls button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--primary);
+}
+.workspace-order-controls button:disabled {
+  opacity: 0.35;
+}
+.workspace-order-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+  font-size: 12px;
+  color: var(--destructive);
+}
+.workspace-order-error button {
+  text-decoration: underline;
+}
+@media (max-width: 560px) {
+  .workspace-order-toolbar {
+    align-items: flex-start;
+  }
+  .workspace-order-toolbar .workspace-switcher-intro {
+    max-width: 170px;
+  }
+  .workspace-choice-row .workspace-choice {
+    gap: 9px;
+    padding: 11px 7px;
+  }
+  .workspace-choice-row .workspace-current span {
+    display: none;
+  }
+  .workspace-order-controls {
+    flex-direction: column;
+  }
+  .workspace-order-controls button {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+.workspace-choice-row[data-editing] .workspace-choice:disabled {
+  opacity: 1;
+  cursor: default;
+}

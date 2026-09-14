@@ -211,7 +211,7 @@ test("v5 profile migration preserves identities, memberships and history and sur
     );
     repo.close();
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get("PRAGMA user_version")!.user_version, 10);
+    assert.equal(repo.get("PRAGMA user_version")!.user_version, 11);
     assert.equal(repo.member(seed.userId, seed.workspaceId)!.role, "owner");
     assert.equal(
       repo.get("SELECT password_hash FROM users WHERE id=?", seed.userId)!

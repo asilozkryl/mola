@@ -51,7 +51,7 @@ test("v7 to v8 preserves accounts, sessions and history, then persists personal 
   try {
     const previous = legacy(path);
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get("PRAGMA user_version")!.user_version, 10);
+    assert.equal(repo.get("PRAGMA user_version")!.user_version, 11);
     assert.deepEqual(repo.all("SELECT * FROM messages"), previous.history);
     assert.deepEqual(repo.all("SELECT * FROM sessions"), previous.sessions);
     assert.deepEqual(

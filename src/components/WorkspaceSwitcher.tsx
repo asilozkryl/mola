@@ -1,7 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
+  ListOrdered,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -13,6 +16,8 @@ import {
 import type { WorkspaceMembership } from "../../shared/types";
 import { api } from "../lib/api";
 import { Modal, Spinner } from "./ui";
+import { WorkspaceAvatar } from "./WorkspaceAvatar";
+import "./workspace-rail-order.css";
 import { roleNames } from "./ChannelAccessDialog";
 import "./workspace-switcher.css";
 
@@ -51,6 +56,9 @@ export function WorkspaceSwitcher({
   initialMode = "list",
   initialInvite = "",
   initialTarget,
+  initialOrderEditing = false,
+  order,
+  onRefresh,
   busy,
   onAction,
   onClose,
@@ -62,12 +70,26 @@ export function WorkspaceSwitcher({
   initialMode?: WorkspaceMode;
   initialInvite?: string;
   initialTarget?: string;
+  initialOrderEditing?: boolean;
+  onRefresh?: () => void;
+  order?: {
+    canReorder: boolean;
+    saving: boolean;
+    error: string;
+    onReorder: (ids: string[]) => Promise<boolean>;
+    onRetry: () => void;
+  };
   busy: boolean;
   onAction: (action: WorkspaceAction) => Promise<void>;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<WorkspaceMode>(initialMode);
   const [items, setItems] = useState(workspaces);
+  const [orderEditing, setOrderEditing] = useState(initialOrderEditing);
+  const listRef = useRef<HTMLDivElement>(null);
+  const pendingFocus = useRef<string | null>(null);
+  const displayed = order ? workspaces : items;
+  const managedOrder = Boolean(order);
   const [query, setQuery] = useState("");
   const [name, setName] = useState("");
   const [invite, setInvite] = useState(initialInvite);
@@ -76,6 +98,10 @@ export function WorkspaceSwitcher({
     initialTarget && inCall ? { kind: "switch", id: initialTarget } : null,
   );
   useEffect(() => {
+    if (managedOrder) {
+      onRefresh?.();
+      return;
+    }
     let cancelled = false;
     api<{ workspaces: WorkspaceMembership[] }>("/workspaces")
       .then((result) => {
@@ -90,7 +116,31 @@ export function WorkspaceSwitcher({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [managedOrder]);
+  useEffect(() => {
+    if (!orderEditing || mode !== "list") {
+      pendingFocus.current = null;
+      return;
+    }
+    if (order?.saving || !pendingFocus.current) return;
+    const control = listRef.current?.querySelector<HTMLElement>(
+      `[data-workspace-choice-id="${CSS.escape(pendingFocus.current)}"] .workspace-order-controls button:not(:disabled)`,
+    );
+    if (control) {
+      control.focus({ preventScroll: true });
+      pendingFocus.current = null;
+    }
+  }, [order?.saving, orderEditing, mode, workspaces]);
+  async function move(id: string, direction: number) {
+    if (!order?.canReorder || busy || query) return;
+    const ids = displayed.map((item) => item.id),
+      from = ids.indexOf(id),
+      to = from + direction;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    pendingFocus.current = id;
+    await order.onReorder(ids);
+  }
   async function run(action: WorkspaceAction, confirmed = false) {
     setError("");
     if (inCall && !confirmed) {
@@ -166,10 +216,48 @@ export function WorkspaceSwitcher({
           </div>
         ) : mode === "list" ? (
           <>
-            <p className="workspace-switcher-intro">
-              Farklı ekiplerin, tek hesabında. Kaldığın yerden devam et.
-            </p>
-            {items.length > 4 && (
+            <div className="workspace-order-toolbar">
+              <p className="workspace-switcher-intro">
+                {orderEditing
+                  ? "Sıralaman hesabına özel; tüm cihazlarında aynı kalır."
+                  : "Farklı ekiplerin, tek hesabında. Kaldığın yerden devam et."}
+              </p>
+              {order && displayed.length > 1 && (
+                <Button
+                  variant="unstyled"
+                  size="unset"
+                  type="button"
+                  className="workspace-order-toggle"
+                  aria-pressed={orderEditing}
+                  disabled={busy || order.saving}
+                  onClick={() => {
+                    setOrderEditing((value) => !value);
+                    setQuery("");
+                  }}
+                >
+                  {orderEditing ? (
+                    <Check size={15} />
+                  ) : (
+                    <ListOrdered size={15} />
+                  )}
+                  {orderEditing ? "Tamam" : "Sırayı düzenle"}
+                </Button>
+              )}
+            </div>
+            {order?.error && (
+              <div className="workspace-order-error" role="alert">
+                <span>{order.error}</span>
+                <Button
+                  variant="unstyled"
+                  size="unset"
+                  type="button"
+                  onClick={order.onRetry}
+                >
+                  Tekrar dene
+                </Button>
+              </div>
+            )}
+            {displayed.length > 4 && !orderEditing && (
               <label className="workspace-filter">
                 <Search size={17} />
                 <Input
@@ -183,60 +271,103 @@ export function WorkspaceSwitcher({
             )}
             <div
               className="workspace-list"
+              ref={listRef}
+              aria-busy={order?.saving}
               aria-label="Üye olduğun çalışma alanları"
             >
-              {items
+              {displayed
                 .filter((item) =>
                   item.name
                     .toLocaleLowerCase("tr-TR")
                     .includes(query.toLocaleLowerCase("tr-TR")),
                 )
-                .map((item) => {
+                .map((item, index) => {
                   const selected = item.id === currentId;
                   const blocked = Boolean(
                     item.membershipSuspended || item.suspended,
                   );
                   return (
-                    <Button
-                      variant="unstyled"
-                      size="unset"
-                      type="submit"
+                    <div
                       key={item.id}
-                      className={`workspace-choice ${selected ? "is-current" : ""}`}
-                      aria-label={`${item.name} alanına geç`}
-                      aria-current={selected ? "true" : undefined}
-                      disabled={busy || blocked}
-                      onClick={() =>
-                        selected
-                          ? onClose()
-                          : void run({ kind: "switch", id: item.id })
-                      }
+                      className="workspace-choice-row"
+                      data-workspace-choice-id={item.id}
+                      data-editing={orderEditing || undefined}
                     >
-                      <span className="workspace-monogram" aria-hidden="true">
-                        {workspaceInitials(item.name)}
-                      </span>
-                      <span className="workspace-choice-copy">
-                        <strong>{item.name}</strong>
-                        <small>
-                          {blocked
-                            ? "Erişim askıya alındı"
-                            : item.isDemo
-                              ? "Örnek çalışma alanı"
-                              : roleNames[item.role]}
-                        </small>
-                      </span>
-                      {selected ? (
-                        <span className="workspace-current">
-                          <Check size={15} />
-                          <span>Buradasın</span>
+                      <Button
+                        variant="unstyled"
+                        size="unset"
+                        type="submit"
+                        key={item.id}
+                        className={`workspace-choice ${selected ? "is-current" : ""}`}
+                        aria-label={
+                          orderEditing
+                            ? `${item.name}, ${index + 1}. sırada`
+                            : `${item.name} alanına geç`
+                        }
+                        aria-current={selected ? "true" : undefined}
+                        disabled={busy || blocked || orderEditing}
+                        onClick={() =>
+                          selected
+                            ? onClose()
+                            : void run({ kind: "switch", id: item.id })
+                        }
+                      >
+                        <WorkspaceAvatar
+                          workspace={item}
+                          size="medium"
+                          className="workspace-monogram"
+                        />
+                        <span className="workspace-choice-copy">
+                          <strong>{item.name}</strong>
+                          <small>
+                            {blocked
+                              ? "Erişim askıya alındı"
+                              : item.isDemo
+                                ? "Örnek çalışma alanı"
+                                : roleNames[item.role]}
+                          </small>
                         </span>
-                      ) : (
-                        <ArrowRight size={17} />
+                        {selected ? (
+                          <span className="workspace-current">
+                            <Check size={15} />
+                            <span>Buradasın</span>
+                          </span>
+                        ) : !orderEditing ? (
+                          <ArrowRight size={17} />
+                        ) : null}
+                      </Button>
+                      {orderEditing && order && (
+                        <div className="workspace-order-controls">
+                          <Button
+                            variant="unstyled"
+                            size="unset"
+                            type="button"
+                            aria-label={`${item.name} alanını yukarı taşı`}
+                            disabled={busy || !order.canReorder || index === 0}
+                            onClick={() => void move(item.id, -1)}
+                          >
+                            <ArrowUp size={16} />
+                          </Button>
+                          <Button
+                            variant="unstyled"
+                            size="unset"
+                            type="button"
+                            aria-label={`${item.name} alanını aşağı taşı`}
+                            disabled={
+                              busy ||
+                              !order.canReorder ||
+                              index === displayed.length - 1
+                            }
+                            onClick={() => void move(item.id, 1)}
+                          >
+                            <ArrowDown size={16} />
+                          </Button>
+                        </div>
                       )}
-                    </Button>
+                    </div>
                   );
                 })}
-              {!items.some((item) =>
+              {!displayed.some((item) =>
                 item.name
                   .toLocaleLowerCase("tr-TR")
                   .includes(query.toLocaleLowerCase("tr-TR")),

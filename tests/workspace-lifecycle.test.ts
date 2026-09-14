@@ -883,7 +883,7 @@ test("v7 migration preserves device and push foreign keys, keeps explicit accoun
       ALTER TABLE workspace_members DROP COLUMN left_at; DROP TABLE sidebar_preferences; DROP TABLE message_requests; DROP TABLE draft_attachments; DROP TRIGGER deleted_thread_drafts; DROP TABLE saved_messages; PRAGMA user_version=6; COMMIT; PRAGMA foreign_keys=ON;`);
     repo.close();
     repo = new Repository(openDatabase(path));
-    assert.equal(repo.get("PRAGMA user_version")!.user_version, 10);
+    assert.equal(repo.get("PRAGMA user_version")!.user_version, 11);
     assert.equal(repo.session(token)!.workspace_id, alpha.workspaceId);
     assert.equal(
       repo.get("SELECT device FROM session_devices WHERE token_hash=?", token)!

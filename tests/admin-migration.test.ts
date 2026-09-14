@@ -42,7 +42,7 @@ test('v3 workspace migration keeps identity, content, session expiry and ownersh
       PRAGMA user_version=3; COMMIT; PRAGMA foreign_keys=ON;`);
     assert.equal(repo.all('PRAGMA foreign_key_list(users)')[0].on_delete, 'CASCADE');
     repo.close(); repo = new Repository(openDatabase(filename));
-    assert.equal(repo.get('PRAGMA user_version')!.user_version, 10);
+    assert.equal(repo.get('PRAGMA user_version')!.user_version, 11);
     assert.equal(repo.session(sessionHash)!.workspace_id, seed.workspaceId);
     assert.equal(repo.session(sessionHash)!.expires_at, expiresAt);
     assert.equal(repo.session(sessionHash)!.role, 'owner');
@@ -103,7 +103,7 @@ test('v2 administrative migration preserves verified accounts, sessions, invitat
     legacy.close();
     // The fixture above deliberately resembles v2 on disk; migration must add only administrative fields.
     repo = new Repository(openDatabase(filename));
-    assert.equal(repo.get('PRAGMA user_version')!.user_version, 10);
+    assert.equal(repo.get('PRAGMA user_version')!.user_version, 11);
     const user = repo.get('SELECT * FROM users WHERE id=?', userId)!;
     assert.equal(user.password_hash, 'preserved-password-hash'); assert.equal(user.email_verified, 1);
     assert.equal(user.site_admin, 0, 'migration must never promote the first existing account');
@@ -126,11 +126,11 @@ test('a future database version is rejected before any schema or data changes', 
   const directory = mkdtempSync(join(tmpdir(), 'mola-future-schema-'));
   const filename = join(directory, 'mola.sqlite');
   try {
-    const future = new DatabaseSync(filename); future.exec("CREATE TABLE future_record (value TEXT); INSERT INTO future_record VALUES ('untouched'); PRAGMA user_version=11;"); future.close();
+    const future = new DatabaseSync(filename); future.exec("CREATE TABLE future_record (value TEXT); INSERT INTO future_record VALUES ('untouched'); PRAGMA user_version=12;"); future.close();
     assert.throws(() => openDatabase(filename), /newer Mola release/);
     const unchanged = new DatabaseSync(filename);
     try {
-      assert.equal(unchanged.prepare('PRAGMA user_version').get()!.user_version, 11);
+      assert.equal(unchanged.prepare('PRAGMA user_version').get()!.user_version, 12);
       assert.equal(unchanged.prepare('SELECT value FROM future_record').get()!.value, 'untouched');
       assert.equal(unchanged.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table'").get()!.n, 1);
     } finally { unchanged.close(); }

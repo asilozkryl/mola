@@ -21,6 +21,7 @@ export function installWorkspaceLifecycle(
       stored: string | null,
     ) => Promise<boolean>;
     bootstrap: (user: Row) => SessionBootstrap;
+    removeWorkspaceAvatar?: (version: unknown) => void;
   },
 ) {
   const { repo, io } = options;
@@ -200,8 +201,16 @@ export function installWorkspaceLifecycle(
         JSON.stringify({ name: workspace.name, counts: counts(workspace.id) }),
       );
       repo.run("DELETE FROM workspaces WHERE id=?", workspace.id);
-      return { id: workspace.id as string, users, channels, files, sessions };
+      return {
+        id: workspace.id as string,
+        users,
+        channels,
+        files,
+        sessions,
+        avatarVersion: workspace.avatar_version,
+      };
     });
+    options.removeWorkspaceAvatar?.(deleted.avatarVersion);
     for (const channel of deleted.channels) {
       closeCallRoom(
         io,

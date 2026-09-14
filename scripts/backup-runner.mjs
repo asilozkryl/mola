@@ -12,8 +12,10 @@ export async function syncDirectory(path) {
   const handle = await open(path, 'r'); try { await handle.sync(); } finally { await handle.close(); }
 }
 export async function syncUploadDirectories(path) {
-  try { await syncDirectory(join(path, 'avatars')); }
-  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  for (const directory of ['avatars', 'workspace-avatars']) {
+    try { await syncDirectory(join(path, directory)); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
   await syncDirectory(path);
 }
 export async function verifyBackup(directory, { requireChecksums = false } = {}) {
@@ -26,12 +28,12 @@ export async function verifyBackup(directory, { requireChecksums = false } = {})
   const uploadEntries = [];
   for (const entry of await readdir(join(directory, 'uploads'))) {
     const info = await lstat(join(directory, 'uploads', entry));
-    if (entry === 'avatars') {
+    if (entry === 'avatars' || entry === 'workspace-avatars') {
       if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Invalid backup avatar directory.');
-      for (const avatar of await readdir(join(directory, 'uploads', 'avatars'))) {
-        const file = await lstat(join(directory, 'uploads', 'avatars', avatar));
+      for (const avatar of await readdir(join(directory, 'uploads', entry))) {
+        const file = await lstat(join(directory, 'uploads', entry, avatar));
         if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.webp$/.test(avatar) || !file.isFile() || file.isSymbolicLink()) throw new Error('Invalid backup avatar entry.');
-        uploadEntries.push(`avatars/${avatar}`);
+        uploadEntries.push(`${entry}/${avatar}`);
       }
       continue;
     }
@@ -45,7 +47,9 @@ export async function verifyBackup(directory, { requireChecksums = false } = {})
     if (db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('SQLite foreign key check failed.');
     rows = db.prepare('SELECT storage_name,size FROM attachments').all();
     // Old backups remain restorable without migrating or writing their database.
-    if (db.prepare('PRAGMA table_info(users)').all().some(column => column.name === 'avatar_version')) avatars = db.prepare('SELECT DISTINCT avatar_version FROM users WHERE avatar_version IS NOT NULL').all();
+    for (const [table, avatarDirectory] of [['users', 'avatars'], ['workspaces', 'workspace-avatars']]) {
+      if (db.prepare(`PRAGMA table_info(${table})`).all().some(column => column.name === 'avatar_version')) avatars.push(...db.prepare(`SELECT DISTINCT avatar_version FROM ${table} WHERE avatar_version IS NOT NULL`).all().map(avatar => ({ ...avatar, directory: avatarDirectory })));
+    }
   } finally { db.close(); }
   const paths = ['mola.sqlite', 'manifest.json'];
   for (const row of rows) {
@@ -56,7 +60,7 @@ export async function verifyBackup(directory, { requireChecksums = false } = {})
   }
   for (const avatar of avatars) {
     if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(avatar.avatar_version)) throw new Error('Unsafe avatar storage name.');
-    const path = join('uploads', 'avatars', `${avatar.avatar_version}.webp`);
+    const path = join('uploads', avatar.directory, `${avatar.avatar_version}.webp`);
     if ((await stat(join(directory, path))).size === 0) throw new Error('Empty avatar storage file.');
     paths.push(path);
   }

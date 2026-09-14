@@ -69,6 +69,7 @@ import type {
   Message,
   PublicConfig,
   User,
+  Workspace,
 } from "../shared/types";
 import { api, bootstrap, post, ApiError, setApiWorkspace } from "./lib/api";
 import {
@@ -92,6 +93,9 @@ import { SavedMessages } from "./components/SavedMessages";
 import { useSavedMessages } from "./lib/useSavedMessages";
 import { WorkspaceNavigation } from "./components/WorkspaceNavigation";
 import { useSidebarPreferences } from "./lib/useSidebarPreferences";
+import { useWorkspaceOrder } from "./lib/useWorkspaceOrder";
+import { WorkspaceRailList } from "./components/WorkspaceRailList";
+import { WorkspaceAvatar } from "./components/WorkspaceAvatar";
 import type { SidebarOrder, SidebarChannelGroup } from "../shared/sidebar";
 import { ChannelGroupMove } from "./components/ChannelGroupMove";
 import {
@@ -151,7 +155,6 @@ import { shouldGroupMessage } from "./lib/messageGrouping";
 import AdminPanel from "./components/AdminPanel";
 import {
   WorkspaceSwitcher,
-  workspaceInitials,
   type WorkspaceAction,
   type WorkspaceMode,
 } from "./components/WorkspaceSwitcher";
@@ -239,6 +242,7 @@ export default function App() {
   const [channelToMove, setChannelToMove] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("list");
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
+  const [workspaceOrderEditing, setWorkspaceOrderEditing] = useState(false);
   const [workspaceTarget, setWorkspaceTarget] = useState<string>();
   const [workspaceInvite, setWorkspaceInvite] = useState("");
   const [voicePreviewId, setVoicePreviewId] = useState<string | null>(null);
@@ -665,6 +669,8 @@ export default function App() {
     const update = () => void refreshAccess();
     client.on("connect", update);
     client.on("workspace:changed", update);
+    client.on("workspace:updated", update);
+    client.on("workspace-order:updated", update);
     client.on("admin:refresh", update);
     client.on("connect_error", update);
     client.on("disconnect", (reason) => {
@@ -1521,6 +1527,64 @@ export default function App() {
     authLink,
   ]);
 
+  const workspaceOrder = useWorkspaceOrder(
+    !verificationPending && !authLink
+      ? data?.user.id || accountData?.user.id
+      : undefined,
+    data?.workspaces || accountData?.workspaces || [],
+    socket,
+  );
+  function workspaceUpdated(workspace: Workspace) {
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            workspace:
+              current.workspace.id === workspace.id
+                ? workspace
+                : current.workspace,
+            workspaces: current.workspaces.map((item) =>
+              item.id === workspace.id
+                ? { ...item, ...workspace, avatarUrl: workspace.avatarUrl }
+                : item,
+            ),
+          }
+        : current,
+    );
+    setAccountData((current) =>
+      current
+        ? {
+            ...current,
+            workspaces: current.workspaces.map((item) =>
+              item.id === workspace.id
+                ? { ...item, ...workspace, avatarUrl: workspace.avatarUrl }
+                : item,
+            ),
+          }
+        : current,
+    );
+  }
+  useEffect(() => {
+    if (!socket) return;
+    const userId = data?.user.id;
+    const update = (workspace: Workspace) => {
+      if (dataRef.current?.user.id === userId) workspaceUpdated(workspace);
+    };
+    socket.on("workspace:updated", update);
+    return () => {
+      socket.off("workspace:updated", update);
+    };
+  }, [socket, data?.user.id]);
+  async function reorderWorkspaces(ids: string[]) {
+    const actorId = dataRef.current?.user.id;
+    const saved = await workspaceOrder.reorder(ids);
+    if (actorId === dataRef.current?.user.id) {
+      if (saved) notify("Çalışma alanı sıralaman kaydedildi.");
+      else
+        fail("Sıralama kaydedilemedi. Güncel sırayı kontrol edip tekrar dene.");
+    }
+    return saved;
+  }
   const sidebar = useSidebarPreferences({
     userId: data?.user.id,
     workspaceId: data?.workspace.id,
@@ -1913,6 +1977,7 @@ export default function App() {
   );
   function openWorkspaces(mode: WorkspaceMode = "list", target?: string) {
     setWorkspaceMode(mode);
+    setWorkspaceOrderEditing(false);
     setWorkspaceTarget(target);
     setWorkspaceInvite("");
     setDialog("workspaces");
@@ -2725,42 +2790,31 @@ export default function App() {
           <Logo small />
         </Button>
         <div className="rail-divider" />
-        <div className="rail-workspaces">
-          {data.workspaces.map((workspace) => (
-            <Button
-              variant="unstyled"
-              size="unset"
-              type="submit"
-              key={workspace.id}
-              className={`workspace-button ${workspace.id === data.workspace.id ? "active" : ""}`}
-              title={workspace.name}
-              aria-label={`${workspace.name} alanına geç`}
-              aria-current={
-                workspace.id === data.workspace.id ? "true" : undefined
-              }
-              disabled={
-                workspaceBusy ||
-                Boolean(workspace.membershipSuspended || workspace.suspended)
-              }
-              onClick={() => {
-                if (workspace.id === data.workspace.id)
-                  selectChannel(
-                    data.channels.find((c) => c.kind === "text" && !c.archived)
-                      ?.id || channelId,
-                  );
-                else if (call.joined || call.joining)
-                  openWorkspaces("list", workspace.id);
-                else
-                  void changeWorkspace({
-                    kind: "switch",
-                    id: workspace.id,
-                  }).catch((error) => fail(error.message));
-              }}
-            >
-              <span>{workspaceInitials(workspace.name)}</span>
-            </Button>
-          ))}
-        </div>
+        <WorkspaceRailList
+          userId={data.user.id}
+          workspaces={workspaceOrder.items}
+          currentId={data.workspace.id}
+          busy={workspaceBusy}
+          canReorder={workspaceOrder.canReorder}
+          error={workspaceOrder.error}
+          onReorder={reorderWorkspaces}
+          onManage={() => {
+            openWorkspaces();
+            setWorkspaceOrderEditing(true);
+          }}
+          onSelect={(id) => {
+            if (id === data.workspace.id)
+              selectChannel(
+                data.channels.find((c) => c.kind === "text" && !c.archived)
+                  ?.id || channelId,
+              );
+            else if (call.joined || call.joining) openWorkspaces("list", id);
+            else
+              void changeWorkspace({ kind: "switch", id }).catch((error) =>
+                fail(error.message),
+              );
+          }}
+        />
         <Button
           variant="unstyled"
           size="unset"
@@ -2908,9 +2962,11 @@ export default function App() {
               title={data.workspace.name}
               onClick={() => openWorkspaces()}
             >
-              <span className="topbar-workspace-mark" aria-hidden="true">
-                {workspaceInitials(data.workspace.name)}
-              </span>
+              <WorkspaceAvatar
+                workspace={data.workspace}
+                size="small"
+                className="topbar-workspace-mark"
+              />
               <span className="topbar-workspace-name">
                 {data.workspace.name}
               </span>
@@ -3757,7 +3813,16 @@ export default function App() {
       )}
       {dialog === "workspaces" && (
         <WorkspaceSwitcher
-          workspaces={data.workspaces}
+          workspaces={workspaceOrder.items}
+          order={{
+            canReorder: workspaceOrder.canReorder,
+            saving: workspaceOrder.saving,
+            error: workspaceOrder.error,
+            onReorder: reorderWorkspaces,
+            onRetry: workspaceOrder.refresh,
+          }}
+          initialOrderEditing={workspaceOrderEditing}
+          onRefresh={() => void refreshAccess()}
           currentId={data.workspace.id}
           isDemo={data.workspace.isDemo}
           inCall={call.joined || call.joining}
@@ -4600,6 +4665,13 @@ export default function App() {
         (["owner", "admin"].includes(data.user.role) ||
           data.user.siteAdmin) && (
           <AdminPanel
+            onWorkspaceUpdated={(workspace) => {
+              if (
+                dataRef.current?.user.id === data.user.id &&
+                dataRef.current.workspace.id === data.workspace.id
+              )
+                workspaceUpdated(workspace);
+            }}
             data={data}
             onClose={() => setAdminOpen(false)}
             onChanged={() => void refreshAccess()}

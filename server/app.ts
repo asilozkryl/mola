@@ -19,6 +19,7 @@ import { readListenerConfig } from './listeners.js';
 import { HttpError } from './errors.js';
 import { installAdminRoutes, recordAudit } from './admin.js';
 import { installProfileRoutes } from './profiles.js';
+import { installWorkspacePresentation } from './workspace-presentation.js';
 import { installChannelPermissionRoutes, canCreateChannel, canInviteMembers, canModerateMessages } from './permissions.js';
 import { installAccountSecurity } from './account-security.js';
 import { loadAccountSecurityKey } from './security-key.js';
@@ -375,7 +376,8 @@ export function createApp(options: AppOptions = {}) {
     respondWorkspace(req, res, user);
   });
   installAdminRoutes(app, { repo, io, verifyPassword, uploadDir });
-  installWorkspaceLifecycle(app, { repo, io, uploadDir, verifyPassword, bootstrap });
+  const workspacePresentation = installWorkspacePresentation(app, { repo, io, uploadDir, requiresVerification });
+  installWorkspaceLifecycle(app, { repo, io, uploadDir, verifyPassword, bootstrap, removeWorkspaceAvatar: workspacePresentation.removeAvatar });
   const profiles = installProfileRoutes(app, { repo, io, uploadDir, requiresVerification });
   const passwordLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Çok fazla parola değiştirme denemesi. 15 dakika sonra tekrar deneyin.' } });
   app.patch('/api/auth/password', passwordLimiter, async (req, res) => {
@@ -634,6 +636,7 @@ export function createApp(options: AppOptions = {}) {
     });
     // Clear files left behind after expired demo data was removed or a process crash.
     profiles.cleanup();
+    workspacePresentation.cleanup();
     for (const fileName of readdirSync(uploadDir)) if (/^[a-f0-9-]{36}\.bin$/.test(fileName) && !repo.get('SELECT id FROM attachments WHERE storage_name=?', fileName)) { try { if (Date.now() - statSync(join(uploadDir, fileName)).mtimeMs > 60_000) unlinkSync(join(uploadDir, fileName)); } catch {} }
   };
   maintenance();

@@ -26,6 +26,12 @@ export interface Workspace {
   name: string;
   isDemo: boolean;
   suspended?: boolean;
+  avatarUrl?: string;
+}
+export interface WorkspaceOrderState {
+  userId: string;
+  revision: number;
+  workspaceIds: string[];
 }
 export interface WorkspaceMembership extends Workspace {
   role: WorkspaceRole;

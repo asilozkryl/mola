@@ -1,0 +1,42 @@
+.workspace-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.workspace-avatar.workspace-avatar-small {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+
+.workspace-avatar.workspace-avatar-medium {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.workspace-avatar.workspace-avatar-large {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  font-size: 25px;
+}
+
+.workspace-avatar > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
