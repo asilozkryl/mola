@@ -33,7 +33,13 @@
 }
 
 .call-dialog.call-panel-expanded[data-slot="dialog-content"] {
+  /* CSS minification can fold translate:none into transform:none. Reset the
+     centering utility's inputs too, so expanded panels stay inside their inset. */
+  --tw-translate-x: 0px;
+  --tw-translate-y: 0px;
   inset: 12px;
+  width: auto;
+  height: auto;
   max-width: none;
   translate: none;
   transform: none;

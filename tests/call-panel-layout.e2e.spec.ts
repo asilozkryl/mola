@@ -1,5 +1,7 @@
 import { test, expect, type Page, type Locator } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { readFileSync } from "node:fs";
+import { transform } from "lightningcss";
 
 declare global {
   interface Window {
@@ -281,4 +283,80 @@ test("touch and short landscape calls keep footer controls reachable and modal f
   } finally {
     await context.close();
   }
+});
+
+test("minified call overlays keep expanded calls within desktop and narrow viewports", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await prepare(page);
+  const room = panel(page);
+  const originalMedia = await mediaState(page);
+  const normal = await bounds(room);
+  const minifiedOverlay = transform({
+    filename: "overlays.css",
+    code: readFileSync(
+      new URL("../src/components/overlays.css", import.meta.url),
+    ),
+    minify: true,
+  }).code.toString();
+  // Replace the dev stylesheet: its unminified translate reset masks the
+  // production optimizer folding translate:none into transform:none.
+  await page.evaluate(() => {
+    document
+      .querySelector('style[data-vite-dev-id$="/src/components/overlays.css"]')
+      ?.remove();
+  });
+  await page.addStyleTag({ content: minifiedOverlay });
+  await room.getByRole("button", { name: "Görüşmeyi genişlet" }).click();
+  await expect(room).toHaveClass(/call-panel-expanded/);
+  expect(
+    await room.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return ["--tw-translate-x", "--tw-translate-y"].map((name) =>
+        style.getPropertyValue(name).trim(),
+      );
+    }),
+  ).toEqual(["0px", "0px"]);
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 844, height: 390 },
+    { width: 320, height: 720 },
+  ]) {
+    await page.setViewportSize(viewport);
+    if (viewport.width <= 560) {
+      // Calls return to the mobile layout when desktop expansion is unavailable.
+      await expect(room).not.toHaveClass(/call-panel-expanded/);
+      await expect(room.locator(".call-room-expand")).toBeHidden();
+    } else {
+      await expect(room).toHaveClass(/call-panel-expanded/);
+    }
+    await expect
+      .poll(async () => {
+        const rect = await bounds(room);
+        return (
+          rect.x >= 0 &&
+          rect.y >= 0 &&
+          rect.x + rect.width <= viewport.width + 1 &&
+          rect.y + rect.height <= viewport.height + 1
+        );
+      })
+      .toBe(true);
+    await controlsInsideViewport(page, viewport.width, viewport.height);
+    expect(await mediaState(page)).toEqual(originalMedia);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(room).not.toHaveClass(/call-panel-expanded/);
+  await room.getByRole("button", { name: "Görüşmeyi genişlet" }).click();
+  await expect(room).toHaveClass(/call-panel-expanded/);
+  await room.getByRole("button", { name: "Normal görünüme dön" }).click();
+  await expect(room).not.toHaveClass(/call-panel-expanded/);
+  const restored = await bounds(room);
+  for (const dimension of ["x", "y", "width", "height"] as const)
+    expect(
+      Math.abs(restored[dimension] - normal[dimension]),
+    ).toBeLessThanOrEqual(1);
+  expect(await mediaState(page)).toEqual(originalMedia);
+  await room.getByRole("button", { name: "Görüşmeden ayrıl" }).click();
+  await expectReleased(page);
 });

@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   Headphones,
+  GripVertical,
   LoaderCircle,
   Maximize2,
   Minimize2,
@@ -29,8 +30,10 @@ import type { ConnectionQuality } from "../../shared/call-types";
 import { MediaSettings } from "./CallSetup";
 import { Avatar } from "./ui";
 import { ProfileIdentity } from "./ProfileIdentity";
+import { useFloatingCallDock } from "../lib/useFloatingCallDock";
 import "./call.css";
 import "./call-panel-polish.css";
+import "./call-dock-position.css";
 
 function MediaVideo({
   stream,
@@ -361,6 +364,7 @@ export function CallPanel({
   onExpand?: () => void;
   onOpenProfile?: (id: string) => void;
 }) {
+  const dockPosition = useFloatingCallDock(call.channelId, minimized);
   const dialog = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   const screenStage = useRef<HTMLDivElement>(null);
@@ -530,123 +534,144 @@ export function CallPanel({
         />
       ))}
       {minimized && (
-        <div
-          className="call-dock call-dock-polished"
-          role="region"
-          aria-label="Devam eden görüşme"
-        >
-          <Button
-            variant="unstyled"
-            size="unset"
-            type="submit"
-            className="call-dock-main"
-            onClick={onExpand}
-            title="Görüşmeyi aç"
+        <div className="call-dock-boundary" ref={dockPosition.boundaryRef}>
+          <div
+            className="call-dock call-dock-polished call-dock-floating"
+            ref={dockPosition.dockRef}
+            role="region"
+            aria-label="Devam eden görüşme"
           >
-            <span className="call-dock-icon">
-              {call.sharing ? (
-                <MonitorUp size={19} />
-              ) : (
-                <Headphones size={19} />
-              )}
-            </span>
-            <span>
-              <strong>{call.channelName || "Görüşme"}</strong>
-              <small>
-                {call.joining
-                  ? "Katılınıyor…"
-                  : call.sharing
-                    ? `Ekran paylaşılıyor · ${time}`
-                    : call.joined
-                      ? `${participants.length} kişi · ${time}`
-                      : "Görüşme bildirimi"}
-              </small>
-              {deafened && (
-                <small className="call-dock-listening-off">
-                  Hoparlör kapalı
-                </small>
-              )}
-            </span>
-            <ArrowUpRight size={18} />
-          </Button>
-          {call.joined && (
+            <p className="visually-hidden" id={dockPosition.instructionsId}>
+              Sürükleyerek taşı. Ok tuşlarıyla hareket ettir; Shift ile daha
+              hızlı taşı. Home tuşuyla başlangıç konumuna dön.
+            </p>
             <Button
               variant="unstyled"
               size="unset"
-              type="submit"
-              className={`call-dock-button ${!call.mic ? "call-dock-muted" : ""}`}
-              aria-label={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
-              title={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
-              aria-pressed={call.mic}
-              onClick={call.toggleMic}
+              type="button"
+              className="call-dock-handle"
+              aria-label="Görüşme çubuğunu taşı"
+              aria-describedby={dockPosition.instructionsId}
+              aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home"
+              title="Görüşme çubuğunu taşı · Ok tuşlarıyla hareket ettir · Home ile sıfırla"
+              {...dockPosition.handleProps}
             >
-              {call.mic ? <Mic size={18} /> : <MicOff size={18} />}
+              <GripVertical size={17} aria-hidden="true" />
             </Button>
-          )}
-          {call.joined && (
             <Button
               variant="unstyled"
               size="unset"
               type="submit"
-              className={`call-dock-button ${deafened ? "call-dock-muted" : ""}`}
-              aria-label={
-                deafened
-                  ? "Katılımcıların sesini aç"
-                  : "Katılımcıların sesini kapat"
-              }
-              title={
-                deafened
-                  ? "Katılımcıların sesini aç"
-                  : "Katılımcıların sesini kapat"
-              }
-              aria-pressed={!deafened}
-              onClick={() => setDeafened((value) => !value)}
-            >
-              {deafened ? <VolumeX size={18} /> : <Volume2 size={18} />}
-            </Button>
-          )}
-          <Button
-            variant="unstyled"
-            size="unset"
-            type="submit"
-            className="call-dock-button call-dock-leave"
-            aria-label="Görüşmeden ayrıl"
-            title="Görüşmeden ayrıl"
-            onClick={leaveCall}
-          >
-            <PhoneOff size={18} />
-          </Button>
-          {call.sharing && (
-            <Button
-              variant="unstyled"
-              size="unset"
-              type="submit"
-              className="call-dock-sharing"
-              onClick={() => void call.toggleScreen()}
-              disabled={call.mediaBusy}
-              aria-label="Ekran paylaşımını durdur"
-            >
-              <MonitorUp size={14} /> Paylaşımı bitir
-            </Button>
-          )}
-          {call.camera && (
-            <span className="call-dock-camera">
-              <Video size={13} /> Kamera açık
-            </span>
-          )}
-          {dockNotice && (
-            <Button
-              variant="unstyled"
-              size="unset"
-              type="submit"
-              className="call-dock-notice"
+              className="call-dock-main"
               onClick={onExpand}
+              title="Görüşmeyi aç"
+              aria-label="Görüşmeyi aç"
             >
-              <AlertCircle size={14} />
-              <span>{dockNotice}</span>
-              <ArrowUpRight size={14} />
+              <span className="call-dock-icon">
+                {call.sharing ? (
+                  <MonitorUp size={19} />
+                ) : (
+                  <Headphones size={19} />
+                )}
+              </span>
+              <span>
+                <strong>{call.channelName || "Görüşme"}</strong>
+                <small>
+                  {call.joining
+                    ? "Katılınıyor…"
+                    : call.sharing
+                      ? `Ekran paylaşılıyor · ${time}`
+                      : call.joined
+                        ? `${participants.length} kişi · ${time}`
+                        : "Görüşme bildirimi"}
+                </small>
+                {deafened && (
+                  <small className="call-dock-listening-off">
+                    Hoparlör kapalı
+                  </small>
+                )}
+              </span>
+              <ArrowUpRight size={18} />
             </Button>
-          )}
+            {call.joined && (
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
+                className={`call-dock-button ${!call.mic ? "call-dock-muted" : ""}`}
+                aria-label={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
+                title={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
+                aria-pressed={call.mic}
+                onClick={call.toggleMic}
+              >
+                {call.mic ? <Mic size={18} /> : <MicOff size={18} />}
+              </Button>
+            )}
+            {call.joined && (
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
+                className={`call-dock-button ${deafened ? "call-dock-muted" : ""}`}
+                aria-label={
+                  deafened
+                    ? "Katılımcıların sesini aç"
+                    : "Katılımcıların sesini kapat"
+                }
+                title={
+                  deafened
+                    ? "Katılımcıların sesini aç"
+                    : "Katılımcıların sesini kapat"
+                }
+                aria-pressed={!deafened}
+                onClick={() => setDeafened((value) => !value)}
+              >
+                {deafened ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              </Button>
+            )}
+            <Button
+              variant="unstyled"
+              size="unset"
+              type="submit"
+              className="call-dock-button call-dock-leave"
+              aria-label="Görüşmeden ayrıl"
+              title="Görüşmeden ayrıl"
+              onClick={leaveCall}
+            >
+              <PhoneOff size={18} />
+            </Button>
+            {call.sharing && (
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
+                className="call-dock-sharing"
+                onClick={() => void call.toggleScreen()}
+                disabled={call.mediaBusy}
+                aria-label="Ekran paylaşımını durdur"
+              >
+                <MonitorUp size={14} /> Paylaşımı bitir
+              </Button>
+            )}
+            {call.camera && (
+              <span className="call-dock-camera">
+                <Video size={13} /> Kamera açık
+              </span>
+            )}
+            {dockNotice && (
+              <Button
+                variant="unstyled"
+                size="unset"
+                type="submit"
+                className="call-dock-notice"
+                onClick={onExpand}
+              >
+                <AlertCircle size={14} />
+                <span>{dockNotice}</span>
+                <ArrowUpRight size={14} />
+              </Button>
+            )}
+          </div>
         </div>
       )}
       {/* Keep the dialog controller mounted while its dock appears. Base UI

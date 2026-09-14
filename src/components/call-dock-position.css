@@ -1,0 +1,130 @@
+.call-dock-boundary {
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: 100vw;
+  height: 100dvh;
+  box-sizing: border-box;
+  padding: max(12px, env(safe-area-inset-top, 0px))
+    max(12px, env(safe-area-inset-right, 0px))
+    max(12px, env(safe-area-inset-bottom, 0px))
+    max(12px, env(safe-area-inset-left, 0px));
+  z-index: 115;
+  pointer-events: none;
+}
+
+.call-dock.call-dock-floating {
+  position: absolute;
+  inset: 0 auto auto 0;
+  transform: none;
+  width: 348px;
+  max-width: calc(100% - 24px);
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) repeat(3, 34px);
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--input);
+  border-radius: 10px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-popover);
+  overflow: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  visibility: hidden;
+}
+
+.call-dock.call-dock-floating[data-positioned="true"] {
+  visibility: visible;
+}
+
+.call-dock-floating .call-dock-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 5px;
+  color: var(--muted-foreground);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.call-dock-floating .call-dock-handle:hover,
+.call-dock-floating[data-dragging="true"] .call-dock-handle {
+  background: var(--accent);
+  color: var(--primary);
+}
+
+.call-dock-floating[data-dragging="true"] .call-dock-handle {
+  cursor: grabbing;
+}
+
+.call-dock.call-dock-floating .call-dock-main {
+  grid-column: auto;
+  gap: 6px;
+  padding: 2px;
+  min-width: 0;
+  color: var(--foreground);
+}
+
+.call-dock.call-dock-floating .call-dock-main:hover {
+  color: var(--primary);
+}
+
+.call-dock.call-dock-floating .call-dock-main small {
+  color: var(--muted-foreground);
+}
+
+.call-dock.call-dock-floating .call-dock-main .call-dock-listening-off {
+  color: var(--destructive);
+}
+
+.call-dock-floating .call-dock-main > span:nth-child(2) {
+  flex: 1;
+}
+
+.call-dock.call-dock-floating .call-dock-icon {
+  display: none;
+}
+
+.call-dock.call-dock-floating .call-dock-button {
+  align-self: center;
+}
+
+.call-dock.call-dock-floating
+  .call-dock-button:not(.call-dock-muted):not(.call-dock-leave) {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.call-dock.call-dock-floating :is(.call-dock-sharing, .call-dock-camera) {
+  color: var(--primary);
+}
+
+.call-dock.call-dock-floating .call-dock-sharing {
+  background: var(--accent);
+  border-color: var(--border);
+}
+
+.call-dock.call-dock-floating button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+@media (pointer: coarse) {
+  .call-dock.call-dock-floating {
+    grid-template-columns: 36px minmax(0, 1fr) repeat(3, 40px);
+  }
+
+  .call-dock-floating .call-dock-handle {
+    min-height: 44px;
+  }
+
+  .call-dock.call-dock-floating .call-dock-button {
+    width: 40px;
+    height: 44px;
+  }
+}
