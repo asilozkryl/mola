@@ -75,7 +75,17 @@ Mac'te imzalama sertifikası olmayan yerel denemeler için imzalamayı ve imzal�
 npm run desktop:mac -- -c.mac.identity=null -c.mac.hardenedRuntime=false
 ```
 
-Linux AppImage dosyasını çalıştırılabilir yaparak açabilirsiniz; Debian/Ubuntu için `.deb` paketi sistem paket yöneticisiyle kurulabilir. AppImage çalıştırmak için dağıtımınızın FUSE desteği gerekir. Linux'ta Chromium sandbox'ını kapatan bayraklar kullanmayın; sandbox veya AppImage desteğiyle ilgili sorun varsa dağıtımınızın kurulumunu düzeltin veya `.deb` paketini kullanın.
+Ubuntu 24.04 ve üzeri için `.deb` paketini paket yöneticisiyle kurun. Paketin bulunduğu dizinde, dosya adını indirdiğiniz sürüme göre değiştirerek:
+
+```sh
+sudo apt install ./Mola-1.0.0-linux-amd64.deb
+```
+
+Kurulum uygulamayı `/opt/Mola/mola` konumuna yerleştirir ve Chromium sandbox'ının kullanıcı namespace erişimi için Mola'ya özel AppArmor profilini yükler. `linux-unpacked` klasörünü veya `.deb` içeriğini `~/.local/opt` gibi başka bir konuma kopyalamak bu kurulumu gerçekleştirmez; Ubuntu'da menüden açılış `chrome-sandbox` / SUID helper hatasıyla durabilir. Bu durumda `.deb` paketini yukarıdaki komutla kurun.
+
+Daha önce elle oluşturulmuş `~/.local/share/applications/app.mola.desktop.desktop` dosyası varsa `Exec` satırını kontrol edin. `.deb` kurulumu tamamlandıktan sonra, eski kullanıcı dizinine işaret eden bu dosyayı yedeklemek için `applications` dizininin dışına taşıyın; kullanıcıya özel kısayol, paketin `/usr/share/applications` altındaki aynı adlı kısayolunun önüne geçer. Sonraki açılışı uygulama menüsünden doğrulayın.
+
+Linux AppImage dosyası çalıştırılabilir izin ve FUSE 2 uyumluluk kitaplığı gerektirir; yalnızca FUSE 3 kurulmuş olması yeterli değildir. FUSE veya sandbox sorunu yaşarsanız Ubuntu'da `.deb` kurulumunu kullanın; AppImage içeriğini başka bir dizine çıkarmak AppArmor kurulumunun yerini tutmaz. Chromium sandbox'ını kapatan başlatma bayrakları eklemeyin.
 
 Paket tanımı `desktop/electron-builder.yml` içindedir. Uygulama kimliği `app.mola.desktop`, görünür adı `Mola` ve sürümü `desktop/package.json` içinden gelir. Debian paketinin bakımcı adı `Mola`, proje bağlantısı mevcut GitHub deposudur; genel dağıtımdan önce bakımcı iletişim bilgilerini kendi bilgilerinizle güncelleyin.
 
