@@ -31,11 +31,33 @@ const historyQuery = z
     before: z.string().min(1).max(64).optional(),
   })
   .strict();
+const fileType = z.enum([
+  "pdf",
+  "image",
+  "video",
+  "audio",
+  "docx",
+  "xlsx",
+  "pptx",
+  "zip",
+]);
+const documentMimes = {
+  pdf: ["application/pdf"],
+  docx: [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ],
+  xlsx: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  pptx: [
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ],
+  zip: ["application/zip", "application/x-zip-compressed"],
+};
 const searchQuery = z
   .object({
     ...filters,
     channelId: uuid.optional(),
     hasFiles: z.enum(["true", "false"]).default("false"),
+    fileType: fileType.optional(),
     // Retain old clients' UTC calendar-day filters and offset requests.
     from: z.iso.date().optional(),
     until: z.iso.date().optional(),
@@ -56,12 +78,16 @@ const cursorSchema = z
     startAt: z.string().max(40),
     endBefore: z.string().max(40),
     hasFiles: z.boolean(),
+    // Existing signed cursors predate file-type filtering.
+    fileType: fileType.or(z.literal("")).default(""),
     at: z.string().min(1).max(40),
     id: uuid,
   })
   .strict();
 type Cursor = z.infer<typeof cursorSchema>;
-type Context = Omit<Cursor, "version" | "at" | "id">;
+type Context = Omit<Cursor, "version" | "at" | "id" | "fileType"> & {
+  fileType?: Cursor["fileType"];
+};
 const fold = (value: string) =>
   value.normalize("NFKC").toLocaleLowerCase("tr-TR");
 const pattern = (value: string) =>
@@ -369,6 +395,7 @@ export function installCollections(
       !query.userId &&
       !query.startAt &&
       !query.endBefore &&
+      !query.fileType &&
       query.hasFiles !== "true"
     )
       throw new HttpError(
@@ -377,14 +404,17 @@ export function installCollections(
       );
     if (query.cursor && query.offset)
       throw new HttpError(400, "Tek bir sayfalama yöntemi kullanın.");
-    const context = contextFor(
-        actor,
-        "search",
-        query,
-        query.channelId,
-        "",
-        query.hasFiles === "true",
-      ),
+    const context: Context = {
+        ...contextFor(
+          actor,
+          "search",
+          query,
+          query.channelId,
+          "",
+          query.hasFiles === "true" || Boolean(query.fileType),
+        ),
+        fileType: query.fileType || "",
+      },
       cursor = decode(query.cursor, context);
     // Rebuild the allowlist for every page: possession of a cursor grants no access.
     const allowed = repo
@@ -394,7 +424,19 @@ export function installCollections(
     const { conditions, values } = filtered(query, "m.created_at");
     conditions.unshift("m.channel_id IN (SELECT value FROM json_each(?))");
     values.unshift(JSON.stringify(allowed));
-    if (query.hasFiles === "true")
+    if (query.fileType) {
+      const type = query.fileType;
+      const media = type === "image" || type === "video" || type === "audio";
+      const mimes = media ? [`${type}/%`] : documentMimes[type];
+      const matches = media
+        ? "lower(a.mime) LIKE ?"
+        : `(lower(a.mime) IN (${mimes.map(() => "?").join(",")}) OR lower(a.name) LIKE ?)`;
+      conditions.push(
+        `EXISTS(SELECT 1 FROM attachments a WHERE a.message_id=m.id AND ${matches})`,
+      );
+      values.push(...mimes);
+      if (!media) values.push(`%.${type}`);
+    } else if (query.hasFiles === "true")
       conditions.push(
         "EXISTS(SELECT 1 FROM attachments a WHERE a.message_id=m.id)",
       );

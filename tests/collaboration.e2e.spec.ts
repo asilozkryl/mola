@@ -271,6 +271,7 @@ test("advanced search filters attachments, author, channel and date; message lin
     .getByRole("textbox", { name: "Mesajlarda ara", exact: true })
     .fill("kanıtı");
   await expect(dialog.locator(".search-result")).toHaveCount(2);
+  await dialog.getByRole("button", { name: "Filtreler", exact: true }).click();
   await dialog.getByLabel("Kanal", { exact: true }).selectOption(special.id);
   await expect(dialog.locator(".search-result")).toHaveCount(1);
   await dialog

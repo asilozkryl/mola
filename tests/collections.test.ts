@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -201,6 +201,325 @@ async function fixture(
   }
 }
 const cursorQuery = (cursor: string) => `cursor=${encodeURIComponent(cursor)}`;
+
+test("search file types work alone, use media MIME and accept document MIME or exact extensions", () =>
+  fixture(async ({ owner, channel, message, file, get, request }) => {
+    const id = channel();
+    const samples = [
+      ["pdf", "application/pdf", "report.PDF"],
+      ["image", "image/png", "photo.png"],
+      ["video", "video/mp4", "clip.mp4"],
+      ["audio", "audio/ogg", "recording.ogg"],
+      [
+        "docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "report.DOCX",
+      ],
+      [
+        "xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "report.XLSX",
+      ],
+      [
+        "pptx",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "report.PPTX",
+      ],
+      ["zip", "application/zip", "report.ZIP"],
+    ];
+    const expected = new Map<string, string[]>();
+    for (const [type, mime, name] of samples) {
+      const mimeMatch = message(id);
+      file(mimeMatch, { mime: mime.toUpperCase(), name: "upload.bin" });
+      const extensionMatch = message(id);
+      file(extensionMatch, { mime: "application/octet-stream", name });
+      file(message(id), { mime: "text/plain", name: `${name}.txt` });
+      expected.set(
+        type,
+        ["image", "video", "audio"].includes(type)
+          ? [mimeMatch]
+          : [mimeMatch, extensionMatch],
+      );
+    }
+    const zipAlias = message(id);
+    file(zipAlias, {
+      mime: "application/x-zip-compressed",
+      name: "archive.bin",
+    });
+    expected.get("zip")!.push(zipAlias);
+    file(expected.get("pdf")![0], {
+      mime: "application/pdf",
+      name: "second.pdf",
+    });
+    message(id, { content: "pdf image video audio docx xlsx pptx zip" });
+    for (const [type, ids] of expected) {
+      const found = await get<MessageSearchPage>(
+        owner,
+        `/search?fileType=${type}`,
+      );
+      assert.deepEqual(
+        found.messages.map((item) => item.id).sort(),
+        ids.sort(),
+        type,
+      );
+    }
+    const explicitNoFileFlag = await get<MessageSearchPage>(
+      owner,
+      "/search?fileType=pdf&hasFiles=false",
+    );
+    assert.deepEqual(
+      explicitNoFileFlag.messages.map((item) => item.id).sort(),
+      expected.get("pdf")!.sort(),
+    );
+    for (const value of ["", "png", "exe", "pdf' OR 1=1 --"])
+      assert.equal(
+        (await request(owner, `/search?fileType=${encodeURIComponent(value)}`))
+          .status,
+        400,
+      );
+  }));
+
+test("search file types combine with literal text, sender, channel and date filters", () =>
+  fixture(async ({ owner, member, channel, message, file, get }) => {
+    const id = channel(),
+      otherId = channel();
+    const filenameMatch = message(id, {
+      userId: member.id,
+      at: "2026-05-02T00:00:00.000Z",
+    });
+    file(filenameMatch, {
+      name: "İÇERİK_% raporu.pdf",
+      mime: "application/octet-stream",
+    });
+    const textMatch = message(id, {
+      userId: member.id,
+      at: "2026-05-02T12:00:00.000Z",
+      content: "İÇERİK_% planı",
+    });
+    file(textMatch, { name: "attachment.bin", mime: "application/pdf" });
+    for (const [channelId, userId, date, mime, name] of [
+      [
+        id,
+        member.id,
+        "2026-05-02T12:00:00.000Z",
+        "image/png",
+        "İÇERİK_% raporu.png",
+      ],
+      [
+        id,
+        member.id,
+        "2026-05-03T00:00:00.000Z",
+        "application/pdf",
+        "İÇERİK_% raporu.pdf",
+      ],
+      [
+        id,
+        owner.id,
+        "2026-05-02T12:00:00.000Z",
+        "application/pdf",
+        "İÇERİK_% raporu.pdf",
+      ],
+      [
+        otherId,
+        member.id,
+        "2026-05-02T12:00:00.000Z",
+        "application/pdf",
+        "İÇERİK_% raporu.pdf",
+      ],
+      [
+        id,
+        member.id,
+        "2026-05-02T12:00:00.000Z",
+        "application/pdf",
+        "İÇERİK_X raporu.pdf",
+      ],
+    ])
+      file(message(channelId, { userId, at: date }), { mime, name });
+    message(id, {
+      userId: member.id,
+      at: "2026-05-02T12:00:00.000Z",
+      content: "İÇERİK_% dosyasız",
+    });
+    const query = new URLSearchParams({
+      q: "içerik_%",
+      channelId: id,
+      userId: member.id,
+      fileType: "pdf",
+      hasFiles: "true",
+      startAt: "2026-05-02T00:00:00.000Z",
+      endBefore: "2026-05-03T00:00:00.000Z",
+    });
+    const found = await get<MessageSearchPage>(owner, `/search?${query}`);
+    assert.deepEqual(
+      found.messages.map((item) => item.id).sort(),
+      [filenameMatch, textMatch].sort(),
+    );
+  }));
+
+test("typed search keeps public, private and direct-message access scoped and rechecks held pages", () =>
+  fixture(
+    async ({ runtime, owner, member, other, channel, message, file, get }) => {
+      const peerId = randomUUID();
+      runtime.repo.run(
+        "INSERT INTO users(id,workspace_id,name,email,color,role,created_at,email_verified) VALUES(?,?,?,?,?,'member',?,1)",
+        peerId,
+        owner.workspaceId,
+        "Other member",
+        "peer@collections.test",
+        "#aabbcc",
+        at,
+      );
+      const publicId = channel(),
+        privateId = channel("private"),
+        directId = channel("private"),
+        hiddenDirectId = channel("private");
+      runtime.repo.run(
+        "INSERT INTO channel_members VALUES(?,?)",
+        privateId,
+        member.id,
+      );
+      for (const [id, peers] of [
+        [directId, [owner.id, member.id]],
+        [hiddenDirectId, [owner.id, peerId]],
+      ] as const) {
+        runtime.repo.run("UPDATE channels SET kind='dm' WHERE id=?", id);
+        for (const peer of peers)
+          runtime.repo.run("INSERT INTO channel_members VALUES(?,?)", id, peer);
+      }
+      const seed = (id: string, userId = owner.id) => {
+        const mid = message(id, { userId });
+        file(mid, { name: "scoped.pdf", mime: "application/pdf" });
+        return mid;
+      };
+      const publicMessage = seed(publicId),
+        privateMessages = [
+          seed(privateId, member.id),
+          seed(privateId, member.id),
+        ],
+        directMessage = seed(directId);
+      seed(hiddenDirectId);
+      const foreignMessage = seed(
+        channel("public", other.workspaceId),
+        other.id,
+      );
+      const found = await get<MessageSearchPage>(
+        member,
+        "/search?fileType=pdf",
+      );
+      assert.deepEqual(
+        found.messages.map((item) => item.id).sort(),
+        [publicMessage, ...privateMessages, directMessage].sort(),
+      );
+      assert.deepEqual(
+        (
+          await get<MessageSearchPage>(other, "/search?fileType=pdf")
+        ).messages.map((item) => item.id),
+        [foreignMessage],
+      );
+      assert.deepEqual(
+        (
+          await get<MessageSearchPage>(
+            owner,
+            `/search?fileType=pdf&channelId=${privateId}`,
+          )
+        ).messages,
+        [],
+      );
+      const first = await get<MessageSearchPage>(
+        member,
+        `/search?fileType=pdf&channelId=${privateId}&limit=1`,
+      );
+      assert.ok(first.nextCursor);
+      runtime.repo.run(
+        "DELETE FROM channel_members WHERE channel_id=? AND user_id=?",
+        privateId,
+        member.id,
+      );
+      assert.deepEqual(
+        (
+          await get<MessageSearchPage>(
+            member,
+            `/search?fileType=pdf&channelId=${privateId}&limit=1&${cursorQuery(first.nextCursor)}`,
+          )
+        ).messages,
+        [],
+      );
+    },
+  ));
+
+test("typed search cursors bind file type while legacy search and other collection cursors remain valid", () =>
+  fixture(async ({ owner, channel, message, file, get, request }) => {
+    const id = channel();
+    for (let i = 0; i < 3; i++) {
+      file(message(id), { name: `${i}.pdf`, mime: "application/pdf" });
+      file(message(id), { name: `${i}.png`, mime: "image/png" });
+    }
+    const path = `/search?channelId=${id}&limit=1`,
+      first = await get<MessageSearchPage>(owner, `${path}&fileType=pdf`);
+    assert.ok(first.nextCursor);
+    const next = await get<MessageSearchPage>(
+      owner,
+      `${path}&fileType=pdf&hasFiles=true&${cursorQuery(first.nextCursor)}`,
+    );
+    assert.equal(next.messages.length, 1);
+    assert.notEqual(next.messages[0].id, first.messages[0].id);
+    for (const changed of ["&fileType=image", "&hasFiles=true", ""]) {
+      const response = await request(
+        owner,
+        `${path}${changed}&${cursorQuery(first.nextCursor)}`,
+      );
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).code, "INVALID_COLLECTION_CURSOR");
+    }
+    const untyped = await get<MessageSearchPage>(
+      owner,
+      `${path}&hasFiles=true`,
+    );
+    assert.ok(untyped.nextCursor);
+    const mismatch = await request(
+      owner,
+      `${path}&fileType=pdf&${cursorQuery(untyped.nextCursor)}`,
+    );
+    assert.equal(mismatch.status, 400);
+    assert.equal((await mismatch.json()).code, "INVALID_COLLECTION_CURSOR");
+    const legacy = JSON.parse(
+      Buffer.from(untyped.nextCursor.split(".")[0], "base64url").toString(
+        "utf8",
+      ),
+    );
+    delete legacy.fileType;
+    const payload = Buffer.from(JSON.stringify(legacy)).toString("base64url");
+    const signature = createHmac("sha256", Buffer.from("1".repeat(64), "hex"))
+      .update(`mola/collections/v1:${payload}`)
+      .digest("base64url");
+    assert.equal(
+      (
+        await get<MessageSearchPage>(
+          owner,
+          `${path}&hasFiles=true&${cursorQuery(`${payload}.${signature}`)}`,
+        )
+      ).messages.length,
+      1,
+    );
+    const files = await get<ChannelFilesPage>(
+      owner,
+      `/channels/${id}/files?limit=1`,
+    );
+    assert.ok(files.nextCursor);
+    const fileCursor = JSON.parse(
+      Buffer.from(files.nextCursor.split(".")[0], "base64url").toString("utf8"),
+    );
+    assert.equal(Object.hasOwn(fileCursor, "fileType"), false);
+    assert.equal(
+      (
+        await get<ChannelFilesPage>(
+          owner,
+          `/channels/${id}/files?limit=1&${cursorQuery(files.nextCursor)}`,
+        )
+      ).files.length,
+      1,
+    );
+  }));
 
 test("file pages traverse more than 150 tied timestamps without duplicates when a boundary is deleted and a newer file arrives", () =>
   fixture(async ({ runtime, owner, member, channel, message, file, get }) => {

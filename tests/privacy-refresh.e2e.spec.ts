@@ -32,9 +32,14 @@ async function fixture(owner: Page, browser: Browser, run: (context: { viewer: P
 test('open search drops already rendered private previews when access changes', async ({ page, browser }) => fixture(page, browser, async ({ viewer, privateId, revoke }) => {
   await viewer.keyboard.press('Control+k');
   const dialog = viewer.getByRole('dialog', { name: 'Çalışma alanında ara', exact: true });
+  const filters = dialog.getByRole('button', { name: 'Filtreler', exact: true });
+  await filters.click();
+  await expect(dialog.locator(`select[aria-label="Kanal"] option[value="${privateId}"]`)).toHaveCount(1);
   await dialog.getByRole('textbox', { name: 'Mesajlarda ara', exact: true }).fill('Private refresh');
   await expect(dialog.getByText('Private refresh content must disappear.', { exact: true })).toBeVisible();
   await revoke();
+  await expect(filters).toHaveAttribute('aria-expanded', 'false');
+  await filters.click();
   await expect(dialog.locator(`select[aria-label="Kanal"] option[value="${privateId}"]`)).toHaveCount(0);
   await expect(dialog.getByText('Private refresh content must disappear.', { exact: true })).toHaveCount(0);
 }));
@@ -46,8 +51,13 @@ test('a delayed authorized search response cannot restore revoked message conten
   try {
     await viewer.keyboard.press('Control+k');
     const dialog = viewer.getByRole('dialog', { name: 'Çalışma alanında ara', exact: true });
+    const filters = dialog.getByRole('button', { name: 'Filtreler', exact: true });
+    await filters.click();
+    await expect(dialog.locator(`select[aria-label="Kanal"] option[value="${privateId}"]`)).toHaveCount(1);
     await dialog.getByRole('textbox', { name: 'Mesajlarda ara', exact: true }).fill('Private refresh');
     await responseReady; await revoke();
+    await expect(filters).toHaveAttribute('aria-expanded', 'false');
+    await filters.click();
     await expect(dialog.locator(`select[aria-label="Kanal"] option[value="${privateId}"]`)).toHaveCount(0);
     release();
     await expect(dialog.getByText('Mesajlar aranıyor', { exact: true })).toHaveCount(0);
