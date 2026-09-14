@@ -17,6 +17,7 @@ import {
   Code2,
   LoaderCircle,
   Paperclip,
+  Plus,
   RotateCcw,
   Send,
   Smile,
@@ -45,6 +46,8 @@ import "./composer-ux.css";
 const MAX_ATTACHMENTS = 4;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_MESSAGE_LENGTH = 10000;
+const EXPANDED_FORMATTING_MEDIA =
+  "(min-width: 1024px) and (min-height: 600px) and (pointer: fine)";
 
 export function Composer({
   userId,
@@ -99,6 +102,11 @@ export function Composer({
   const [coarsePointer, setCoarsePointer] = useState(
     () => window.matchMedia("(pointer: coarse)").matches,
   );
+  const [roomyDesktop, setRoomyDesktop] = useState(
+    () => window.matchMedia(EXPANDED_FORMATTING_MEDIA).matches,
+  );
+  const channelComposer = !direct && !parentId;
+  const expandedFormatting = channelComposer && roomyDesktop;
   const hintId = useId();
   const feedbackId = useId();
   const deliveryId = useId();
@@ -142,10 +150,18 @@ export function Composer({
 
   useEffect(() => {
     const media = window.matchMedia("(pointer: coarse)");
-    const update = () => setCoarsePointer(media.matches);
+    const formattingMedia = window.matchMedia(EXPANDED_FORMATTING_MEDIA);
+    const update = () => {
+      setCoarsePointer(media.matches);
+      setRoomyDesktop(formattingMedia.matches);
+    };
     update();
     media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+    formattingMedia.addEventListener("change", update);
+    return () => {
+      media.removeEventListener("change", update);
+      formattingMedia.removeEventListener("change", update);
+    };
   }, []);
 
   useEffect(() => {
@@ -188,7 +204,7 @@ export function Composer({
     let width = el.clientWidth;
     observer.observe(el);
     return () => observer.disconnect();
-  }, [content]);
+  }, [content, expandedFormatting]);
 
   useEffect(() => {
     if (!picker) return;
@@ -482,10 +498,28 @@ export function Composer({
       insert("**", true);
     }
   }
+  const formattingControls = (
+    <div className="composer-format-controls">
+      <IconButton
+        label="Kalın yazı"
+        disabled={locked}
+        onClick={() => insert("**", true)}
+      >
+        <Bold size={17} />
+      </IconButton>
+      <IconButton
+        label="Kod ekle"
+        disabled={locked}
+        onClick={() => insert("`", true)}
+      >
+        <Code2 size={19} />
+      </IconButton>
+    </div>
+  );
   return (
     <div
       ref={root}
-      className={`composer-wrap composer-ux ${direct ? "composer-direct" : ""} ${parentId ? "thread-composer" : ""}`}
+      className={`composer-wrap composer-ux ${direct ? "composer-direct" : ""} ${parentId ? "thread-composer" : ""} ${channelComposer ? "composer-channel" : ""}`}
       onKeyDown={(event) => {
         if (event.key === "Escape" && picker) {
           event.preventDefault();
@@ -522,6 +556,9 @@ export function Composer({
       <div
         className={`composer ${content.trim() || files.length ? "has-content" : ""} ${dragging ? "is-dragging" : ""} ${busy ? "is-sending" : ""}`}
       >
+        {expandedFormatting && (
+          <div className="composer-format-bar">{formattingControls}</div>
+        )}
         {dragging && (
           <div className="composer-drop-zone" role="status">
             <Paperclip size={20} aria-hidden="true" />
@@ -726,6 +763,7 @@ export function Composer({
           <div className="composer-tools-left">
             <IconButton
               label="Dosya ekle"
+              className={channelComposer ? "composer-attachment-button" : ""}
               onClick={() => fileInput.current?.click()}
               disabled={
                 locked ||
@@ -735,25 +773,18 @@ export function Composer({
             >
               {uploading ? (
                 <LoaderCircle size={18} className="spin" />
+              ) : channelComposer ? (
+                <Plus size={19} />
               ) : (
                 <Paperclip size={19} />
               )}
             </IconButton>
-            <span className="tool-divider" />
-            <IconButton
-              label="Kalın yazı"
-              disabled={locked}
-              onClick={() => insert("**", true)}
-            >
-              <Bold size={17} />
-            </IconButton>
-            <IconButton
-              label="Kod ekle"
-              disabled={locked}
-              onClick={() => insert("`", true)}
-            >
-              <Code2 size={19} />
-            </IconButton>
+            {!expandedFormatting && (
+              <>
+                <span className="tool-divider" aria-hidden="true" />
+                {formattingControls}
+              </>
+            )}
             <IconButton
               label="Emoji ekle"
               disabled={locked}

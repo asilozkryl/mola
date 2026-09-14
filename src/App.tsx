@@ -147,6 +147,7 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { ProfileIdentity } from "./components/ProfileIdentity";
 import ProfilePage from "./components/ProfilePage";
 import "./components/profile-navigation.css";
+import { shouldGroupMessage } from "./lib/messageGrouping";
 import AdminPanel from "./components/AdminPanel";
 import {
   WorkspaceSwitcher,
@@ -3017,7 +3018,7 @@ export default function App() {
                   if (value === "chat" || value === "files" || value === "pins")
                     selectTab(value);
                 }}
-                className={`conversation-panel gap-0${isDirectConversation ? " dm-conversation" : ""}`}
+                className={`conversation-panel gap-0${isDirectConversation ? " dm-conversation" : view === "channel" ? " channel-conversation" : ""}`}
                 aria-label="Sohbet"
               >
                 <div
@@ -3050,14 +3051,32 @@ export default function App() {
                         )}
                       </div>
                       <div className="channel-title">
-                        <h1>
-                          {view === "saved"
-                            ? "Kaydedilenler"
-                            : view === "inbox"
-                              ? "Aktivite"
-                              : view === "messages"
-                                ? "Özel mesajlar"
-                                : channelName}
+                        <h1
+                          aria-label={
+                            view === "channel" ? channelName : undefined
+                          }
+                        >
+                          {view === "saved" ? (
+                            "Kaydedilenler"
+                          ) : view === "inbox" ? (
+                            "Aktivite"
+                          ) : view === "messages" ? (
+                            "Özel mesajlar"
+                          ) : (
+                            <Button
+                              variant="unstyled"
+                              size="unset"
+                              type="button"
+                              className="channel-name-button"
+                              aria-label={`#${channelName} kanalının bilgileri`}
+                              aria-haspopup="dialog"
+                              disabled={!channel}
+                              onClick={() => setDialog("info")}
+                            >
+                              <span>{channelName}</span>
+                              <ChevronDown size={16} aria-hidden="true" />
+                            </Button>
+                          )}
                           {view === "channel" && channel?.archived && (
                             <span className="channel-archived-label">
                               <Archive size={12} /> Arşivde
@@ -3403,7 +3422,9 @@ export default function App() {
                   ) : (
                     <div
                       className={
-                        isDirectConversation ? "dm-timeline" : undefined
+                        isDirectConversation
+                          ? "dm-timeline"
+                          : "channel-timeline"
                       }
                     >
                       {hasMore ? (
@@ -3500,21 +3521,7 @@ export default function App() {
                           {renderMessage(
                             message,
                             false,
-                            Boolean(
-                              isDirectConversation &&
-                              index > 0 &&
-                              messages[index - 1].userId === message.userId &&
-                              !messages[index - 1].pinned &&
-                              !message.pinned &&
-                              dateLabel(messages[index - 1].createdAt) ===
-                                dateLabel(message.createdAt) &&
-                              Date.parse(message.createdAt) -
-                                Date.parse(messages[index - 1].createdAt) >=
-                                0 &&
-                              Date.parse(message.createdAt) -
-                                Date.parse(messages[index - 1].createdAt) <=
-                                5 * 60_000,
-                            ),
+                            shouldGroupMessage(messages[index - 1], message),
                           )}
                         </div>
                       ))}

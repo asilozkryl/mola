@@ -1,0 +1,292 @@
+/* Channel conversations share one left-aligned reading column. */
+.channel-conversation .channel-heading {
+  height: 58px;
+  min-height: 58px;
+  gap: 6px;
+}
+
+.channel-conversation .channel-title-icon {
+  width: 24px;
+  color: var(--foreground);
+}
+
+.channel-name-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 2px 0;
+  border-radius: 5px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.channel-name-button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-name-button > svg {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.channel-name-button:hover:not(:disabled) {
+  background: var(--muted);
+}
+
+.channel-name-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.channel-conversation .channel-title p {
+  margin-top: 0;
+  font-size: 12px;
+}
+
+.channel-conversation .member-stack {
+  gap: 2px;
+  min-height: 32px;
+  padding: 3px 7px 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.channel-conversation .member-stack .avatar {
+  width: 22px;
+  height: 22px;
+  border-color: var(--card);
+}
+
+.channel-conversation .channel-tabs {
+  height: 37px;
+  min-height: 37px;
+  gap: 22px;
+}
+
+.channel-conversation .channel-tabs > button {
+  padding-bottom: 7px;
+}
+
+.channel-conversation .channel-tabs > button.active::after {
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+
+.channel-timeline {
+  --channel-avatar-size: 36px;
+  --channel-message-gap: 10px;
+  padding-bottom: 8px;
+}
+
+.channel-timeline .channel-welcome-history {
+  padding-block: 16px 6px;
+}
+
+.channel-timeline .date-divider {
+  height: 36px;
+  margin: 8px 0 12px;
+}
+
+.channel-timeline .date-divider::before {
+  background: var(--border);
+}
+
+.channel-timeline .date-divider > span {
+  padding: 4px 13px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.channel-timeline .message {
+  gap: var(--channel-message-gap);
+  padding: 8px var(--content-gutter) 4px;
+}
+
+.channel-timeline .message > .avatar,
+.channel-timeline .message > .message-author-avatar,
+.channel-timeline .message .message-author-avatar > .avatar {
+  flex-shrink: 0;
+  width: var(--channel-avatar-size);
+  height: var(--channel-avatar-size);
+}
+
+.channel-timeline .message > .avatar,
+.channel-timeline .message .message-author-avatar > .avatar {
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.channel-timeline .message-meta {
+  min-height: 20px;
+  margin-bottom: 0;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.channel-timeline .message-meta > strong,
+.channel-timeline .message-author-name > strong {
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.channel-timeline .message .self-label {
+  padding: 0;
+  background: transparent;
+  font-size: 10px;
+}
+
+.channel-timeline .message-text {
+  max-width: none;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.channel-timeline .message[data-grouped="true"] {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+.channel-timeline .message[data-grouped="true"] > .avatar,
+.channel-timeline .message[data-grouped="true"] > .message-author-avatar {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.channel-timeline .message[data-grouped="true"] .message-meta {
+  min-height: 0;
+}
+
+.channel-timeline .message[data-grouped="true"] .message-author-name,
+.channel-timeline .message[data-grouped="true"] .message-meta > strong,
+.channel-timeline .message[data-grouped="true"] .self-label,
+.channel-timeline .message[data-grouped="true"] .bot-label {
+  display: none;
+}
+
+.channel-timeline .message[data-grouped="true"] .message-meta > time {
+  position: absolute;
+  top: 4px;
+  left: var(--content-gutter);
+  width: var(--channel-avatar-size);
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  opacity: 0;
+}
+
+.channel-timeline
+  .message[data-grouped="true"]:is(:hover, :focus-within)
+  .message-meta
+  > time {
+  opacity: 1;
+}
+
+.channel-timeline .message.message-pinned {
+  padding-top: 26px;
+}
+
+.channel-timeline .message-pin-label {
+  left: calc(
+    var(--content-gutter) + var(--channel-avatar-size) +
+      var(--channel-message-gap)
+  );
+}
+
+.channel-timeline .message > .message-actions {
+  top: -15px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.channel-timeline .message .message-reactions > button {
+  border-radius: 14px;
+}
+
+.channel-timeline .message .message-reactions > button.reacted {
+  background: var(--accent);
+}
+
+:root[data-density="comfortable"]
+  .channel-timeline
+  .message[data-grouped="true"] {
+  padding-block: 4px;
+}
+
+:root[data-density="comfortable"] .channel-timeline .message-text {
+  line-height: var(--message-line-height);
+}
+
+@media (min-width: 1200px) {
+  .channel-conversation .channel-title {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .channel-conversation .channel-title h1 {
+    flex-shrink: 0;
+    max-width: 45%;
+  }
+
+  .channel-conversation .channel-title p {
+    padding-left: 14px;
+    border-left: 1px solid var(--border);
+    max-width: 54ch;
+  }
+}
+
+@media (max-width: 800px) {
+  .channel-conversation .channel-heading {
+    gap: 6px;
+  }
+
+  .channel-timeline {
+    --channel-avatar-size: 32px;
+    --channel-message-gap: 9px;
+  }
+
+  .channel-timeline .message > .message-actions {
+    right: 12px;
+  }
+}
+
+@media (pointer: coarse) {
+  .channel-timeline .message-body {
+    padding-right: 38px;
+  }
+
+  .channel-timeline .message-meta {
+    padding-right: 0;
+  }
+
+  .channel-timeline .message[data-grouped="true"] {
+    min-height: 44px;
+    padding-block: 10px;
+  }
+
+  .channel-timeline .message[data-grouped="true"] .message-meta > time {
+    top: 13px;
+    opacity: 1;
+  }
+
+  .channel-timeline .message > .message-actions {
+    top: 4px;
+    padding: 0;
+    background: transparent;
+  }
+
+  .channel-timeline .message.message-pinned > .message-actions {
+    top: 24px;
+  }
+}

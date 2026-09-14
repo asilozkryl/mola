@@ -13,6 +13,34 @@
   box-shadow: 0 0 0 3px #2374590d;
 }
 
+.composer-ux.composer-channel .composer {
+  border-color: color-mix(in srgb, var(--border) 72%, var(--muted-foreground));
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.composer-ux.composer-channel .composer:focus-within {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 1px var(--ring);
+}
+
+.composer-ux .composer-format-bar {
+  padding: 3px 9px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 7px 7px 0 0;
+  background: var(--muted);
+}
+
+.composer-ux .composer-format-controls {
+  display: flex;
+  align-items: center;
+  gap: inherit;
+}
+
+.composer-ux .composer-format-bar .composer-format-controls {
+  gap: 2px;
+}
+
 .composer-ux .composer > textarea {
   min-height: 46px;
   max-height: 160px;
@@ -98,7 +126,8 @@
   visibility: hidden;
 }
 
-.composer-ux .composer-tools .icon-button {
+.composer-ux .composer-tools .icon-button,
+.composer-ux .composer-format-bar .icon-button {
   width: 32px;
   height: 32px;
   border-radius: 5px;
@@ -108,7 +137,8 @@
     color 100ms ease;
 }
 
-.composer-ux .composer-tools .icon-button:hover:not(:disabled) {
+.composer-ux .composer-tools .icon-button:hover:not(:disabled),
+.composer-ux .composer-format-bar .icon-button:hover:not(:disabled) {
   color: var(--accent-foreground);
   background: var(--muted);
 }
@@ -119,9 +149,25 @@
 }
 
 .composer-ux .composer-tools .icon-button:focus-visible,
+.composer-ux .composer-format-bar .icon-button:focus-visible,
 .composer-ux .send-button:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+
+.composer-ux .composer-format-bar .icon-button {
+  width: 30px;
+  height: 28px;
+}
+
+.composer-ux .composer-tools .composer-attachment-button {
+  border-radius: 50%;
+  background: var(--muted);
+  color: var(--accent-foreground);
+}
+
+.composer-ux .composer-tools .composer-attachment-button:hover:not(:disabled) {
+  background: var(--secondary);
 }
 
 .composer-ux .tool-divider {
@@ -431,6 +477,28 @@
   color: var(--muted-foreground);
 }
 
+@media (min-width: 1024px) and (min-height: 600px) and (pointer: fine) {
+  .composer-ux.composer-channel .composer > textarea {
+    padding: 10px 13px 5px;
+    font-size: 14px;
+  }
+
+  .composer-ux.composer-channel .composer-tools {
+    padding: 4px 9px 8px;
+  }
+
+  .composer-ux.composer-channel .composer-tools-left {
+    gap: 5px;
+  }
+
+  .composer-ux.composer-channel .send-button {
+    min-width: 96px;
+    min-height: 32px;
+    padding-inline: 10px;
+    gap: 6px;
+  }
+}
+
 @media (max-width: 600px) {
   .composer-ux .mention-search {
     font-size: 16px;
@@ -496,7 +564,8 @@
 @media (prefers-reduced-motion: reduce) {
   .composer-ux .composer,
   .composer-ux .send-button,
-  .composer-ux .composer-tools .icon-button {
+  .composer-ux .composer-tools .icon-button,
+  .composer-ux .composer-format-bar .icon-button {
     transition: none;
   }
 }
