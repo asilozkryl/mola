@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import type { Bootstrap } from "../shared/types";
 
 async function openWorkspace(page: Page) {
@@ -292,4 +293,59 @@ test.describe("touch profiles", () => {
       page.getByRole("textbox", { name: /kanalına mesaj yaz/ }),
     ).toBeVisible();
   });
+});
+
+test("the self biography shortcut saves changes back to the open profile", async ({
+  page,
+}) => {
+  const origin = "http://127.0.0.1:5174";
+  const registration = await page.request.post("/api/auth/register", {
+    headers: { Origin: origin },
+    data: {
+      name: "Profil Kısayolu",
+      email: `profile-shortcut-${randomUUID()}@example.invalid`,
+      password: "profile-shortcut-browser-password",
+      workspaceName: "Profil Kısayolu Ekibi",
+    },
+  });
+  expect(registration.status()).toBe(200);
+  const data = await openWorkspace(page);
+  const bio = "Ekip için erişilebilir arayüzler tasarlıyorum.";
+  const updatedBio =
+    "Ekip için erişilebilir ve anlaşılır arayüzler tasarlıyorum.";
+  const changed = await page.request.patch("/api/profile", {
+    headers: {
+      Origin: origin,
+      "X-Workspace-Id": data.workspace.id,
+      "X-User-Id": data.user.id,
+    },
+    data: { bio, jobTitle: "Ürün tasarımcısı", location: "İstanbul" },
+  });
+  expect(changed.status()).toBe(200);
+  await page.goto(routeFor(data, data.user.id));
+  const profile = page.getByRole("region", {
+    name: "Üye profili",
+    exact: true,
+  });
+  await expect(profile.locator(".member-profile-about")).toContainText(bio);
+  await profile.getByRole("button", { name: /Düzenle.*Hakkında/ }).click();
+  const settings = page.getByRole("dialog", {
+    name: "Kendine ait bir köşe",
+    exact: true,
+  });
+  await expect(settings.getByLabel("Hakkında", { exact: true })).toHaveValue(
+    bio,
+  );
+  await settings.getByLabel("Hakkında", { exact: true }).fill(updatedBio);
+  await settings
+    .getByRole("button", { name: "Değişiklikleri kaydet", exact: true })
+    .click();
+  await expect(settings.getByRole("status")).toHaveText(
+    "Profilin güncellendi.",
+  );
+  await settings.getByRole("button", { name: "Kapat", exact: true }).click();
+  await expect(settings).toHaveCount(0);
+  await expect(profile.locator(".member-profile-about")).toContainText(
+    updatedBio,
+  );
 });

@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
-  BriefcaseBusiness,
   CalendarDays,
   Check,
   Link,
@@ -265,163 +264,198 @@ export default function ProfilePage({
       )}
       {profile && user && (
         <div className="member-profile-content">
-          <div className="member-profile-intro">
-            <div className="member-profile-avatar">
-              <Avatar
-                user={user}
-                size="large"
-                online={connected && onlineIds.includes(user.id)}
-              />
-            </div>
-            <div className="member-profile-name">
-              <h1 ref={headingRef} tabIndex={-1}>
-                {user.name}
-                {isSelf && <span>Sen</span>}
-              </h1>
-              {user.jobTitle && <p>{user.jobTitle}</p>}
-              <div className="member-profile-presence">
-                <ProfilePresence
-                  online={onlineIds.includes(user.id)}
-                  connected={connected}
-                />
-                {user.status && (
-                  <span className="member-profile-status">{user.status}</span>
-                )}
+          <article className="member-profile-sheet">
+            <header className="member-profile-hero">
+              <div className="member-profile-intro">
+                <div className="member-profile-avatar">
+                  <Avatar
+                    user={user}
+                    size="large"
+                    online={connected && onlineIds.includes(user.id)}
+                  />
+                </div>
+                <div className="member-profile-name">
+                  <h1 ref={headingRef} tabIndex={-1}>
+                    {user.name}
+                    {isSelf && <span>Sen</span>}
+                  </h1>
+                  {user.jobTitle && <p>{user.jobTitle}</p>}
+                  <div className="member-profile-presence">
+                    <ProfilePresence
+                      online={onlineIds.includes(user.id)}
+                      connected={connected}
+                    />
+                    {user.status && (
+                      <span className="member-profile-status">
+                        {user.status}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <div className="member-profile-actions">
-            {isSelf ? (
-              <Button
-                variant="default"
-                size="unset"
-                type="button"
-                className="primary-button"
-                onClick={onEdit}
-              >
-                <Pencil size={15} aria-hidden="true" /> Profili düzenle
-              </Button>
-            ) : profile.canMessage ? (
-              <Button
-                variant="default"
-                size="unset"
-                type="button"
-                className="primary-button"
-                onClick={() => void message()}
-                disabled={messaging}
-              >
-                {messaging ? (
-                  <Spinner label="Sohbet açılıyor" />
-                ) : (
-                  <>
-                    <MessageSquare size={16} aria-hidden="true" /> Mesaj gönder
-                  </>
-                )}
-              </Button>
-            ) : null}
-            <Button
-              variant="outline"
-              size="unset"
-              type="button"
-              className="secondary-button member-profile-copy"
-              onClick={() => void copyLink()}
-            >
-              {copied ? (
-                <Check size={15} aria-hidden="true" />
-              ) : (
-                <Link size={15} aria-hidden="true" />
+              <div className="member-profile-actions">
+                {isSelf ? (
+                  <Button
+                    variant="default"
+                    size="unset"
+                    type="button"
+                    className="primary-button"
+                    onClick={onEdit}
+                  >
+                    <Pencil size={15} aria-hidden="true" /> Profili düzenle
+                  </Button>
+                ) : profile.canMessage ? (
+                  <Button
+                    variant="default"
+                    size="unset"
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void message()}
+                    disabled={messaging}
+                  >
+                    {messaging ? (
+                      <Spinner label="Sohbet açılıyor" />
+                    ) : (
+                      <>
+                        <MessageSquare size={16} aria-hidden="true" /> Mesaj
+                        gönder
+                      </>
+                    )}
+                  </Button>
+                ) : null}
+                <Button
+                  variant="outline"
+                  size="unset"
+                  type="button"
+                  className="secondary-button member-profile-copy"
+                  onClick={() => void copyLink()}
+                >
+                  {copied ? (
+                    <Check size={15} aria-hidden="true" />
+                  ) : (
+                    <Link size={15} aria-hidden="true" />
+                  )}
+                  {copied
+                    ? "Bağlantı kopyalandı"
+                    : "Profil bağlantısını kopyala"}
+                </Button>
+                <span className="sr-only" role="status">
+                  {copied ? "Profil bağlantısı kopyalandı." : ""}
+                </span>
+              </div>
+              {actionError && (
+                <p
+                  className="form-error member-profile-action-error"
+                  role="alert"
+                >
+                  {actionError}
+                </p>
               )}
-              {copied ? "Bağlantı kopyalandı" : "Profil bağlantısını kopyala"}
-            </Button>
-            <span className="sr-only" role="status">
-              {copied ? "Profil bağlantısı kopyalandı." : ""}
-            </span>
-          </div>
-          {actionError && (
-            <p className="form-error member-profile-action-error" role="alert">
-              {actionError}
-            </p>
-          )}
-          <div className="member-profile-details">
-            <section
-              className="member-profile-about"
-              aria-labelledby="member-profile-about-heading"
-            >
-              <h2 id="member-profile-about-heading">Hakkında</h2>
-              {user.bio ? (
-                <p>{user.bio}</p>
-              ) : (
-                <div className="member-profile-empty-about">
-                  <p>
-                    {isSelf
-                      ? "Kendinden kısaca bahset; ekip arkadaşların seni tanısın."
-                      : "Henüz bir tanıtım eklenmemiş."}
-                  </p>
-                  {isSelf && (
+            </header>
+            <div className="member-profile-details">
+              <section
+                className="member-profile-about"
+                aria-labelledby="member-profile-about-heading"
+              >
+                <div className="member-profile-section-heading">
+                  <h2 id="member-profile-about-heading">Hakkında</h2>
+                  {isSelf && user.bio && (
                     <Button
                       variant="unstyled"
                       size="unset"
                       type="button"
+                      className="member-profile-section-edit"
                       onClick={onEdit}
                     >
-                      Tanıtım ekle
+                      <Pencil size={13} aria-hidden="true" />
+                      Düzenle
+                      <span className="sr-only">: Hakkında</span>
                     </Button>
                   )}
                 </div>
-              )}
-            </section>
-            <section
-              className="member-profile-information"
-              aria-labelledby="member-profile-information-heading"
-            >
-              <h2 id="member-profile-information-heading">Profil bilgileri</h2>
-              <dl>
-                <div>
-                  <dt>
-                    <ShieldCheck size={15} aria-hidden="true" /> Rol
-                  </dt>
-                  <dd>{profileRoleLabel(user)}</dd>
+                {user.bio ? (
+                  <p>{user.bio}</p>
+                ) : (
+                  <div className="member-profile-empty-about">
+                    <p>
+                      {isSelf
+                        ? "Kendinden kısaca bahset; ekip arkadaşların seni tanısın."
+                        : "Henüz bir tanıtım eklenmemiş."}
+                    </p>
+                    {isSelf && (
+                      <Button
+                        variant="unstyled"
+                        size="unset"
+                        type="button"
+                        onClick={onEdit}
+                      >
+                        Tanıtım ekle
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </section>
+              <section
+                className="member-profile-information"
+                aria-labelledby="member-profile-information-heading"
+              >
+                <h2 id="member-profile-information-heading">
+                  Profil bilgileri
+                </h2>
+                <div className="member-profile-fact-groups">
+                  {(user.email || user.location) && (
+                    <div className="member-profile-fact-group">
+                      <h3>İletişim</h3>
+                      <dl>
+                        {user.email && (
+                          <div>
+                            <dt>
+                              <Mail size={15} aria-hidden="true" /> E-posta
+                            </dt>
+                            <dd>
+                              <a href={`mailto:${user.email}`}>{user.email}</a>
+                            </dd>
+                          </div>
+                        )}
+                        {user.location && (
+                          <div>
+                            <dt>
+                              <MapPin size={15} aria-hidden="true" /> Konum
+                            </dt>
+                            <dd>{user.location}</dd>
+                          </div>
+                        )}
+                      </dl>
+                    </div>
+                  )}
+                  <div className="member-profile-fact-group">
+                    <h3>Çalışma alanı</h3>
+                    <dl>
+                      <div>
+                        <dt>
+                          <ShieldCheck size={15} aria-hidden="true" /> Rol
+                        </dt>
+                        <dd>{profileRoleLabel(user)}</dd>
+                      </div>
+                      {joinedLabel && (
+                        <div>
+                          <dt>
+                            <CalendarDays size={15} aria-hidden="true" />{" "}
+                            Katılma tarihi
+                          </dt>
+                          <dd>
+                            <time dateTime={profile.joinedAt}>
+                              {joinedLabel}
+                            </time>
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  </div>
                 </div>
-                {user.jobTitle && (
-                  <div>
-                    <dt>
-                      <BriefcaseBusiness size={15} aria-hidden="true" /> Unvan
-                    </dt>
-                    <dd>{user.jobTitle}</dd>
-                  </div>
-                )}
-                {user.email && (
-                  <div>
-                    <dt>
-                      <Mail size={15} aria-hidden="true" /> E-posta
-                    </dt>
-                    <dd>
-                      <a href={`mailto:${user.email}`}>{user.email}</a>
-                    </dd>
-                  </div>
-                )}
-                {user.location && (
-                  <div>
-                    <dt>
-                      <MapPin size={15} aria-hidden="true" /> Konum
-                    </dt>
-                    <dd>{user.location}</dd>
-                  </div>
-                )}
-                {joinedLabel && (
-                  <div>
-                    <dt>
-                      <CalendarDays size={15} aria-hidden="true" /> Katılma
-                      tarihi
-                    </dt>
-                    <dd>
-                      <time dateTime={profile.joinedAt}>{joinedLabel}</time>
-                    </dd>
-                  </div>
-                )}
-              </dl>
-            </section>
-          </div>
+              </section>
+            </div>
+          </article>
         </div>
       )}
     </section>
