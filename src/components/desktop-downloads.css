@@ -463,3 +463,28 @@
     flex-basis: 100%;
   }
 }
+.desktop-download-mac-help {
+  margin-top: 1rem;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.desktop-download-mac-help summary {
+  cursor: pointer;
+  color: var(--foreground);
+  font-weight: 600;
+  padding: 0.5rem 0;
+}
+
+.desktop-download-mac-help summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.desktop-download-mac-help a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

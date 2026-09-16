@@ -431,9 +431,40 @@ export function DesktopDownloads({
           {(selectedPlatform === "windows" || selectedPlatform === "macos") && (
             <p className="desktop-download-signing">
               {selectedPlatform === "macos"
-                ? "Bu macOS paketi henüz Developer ID ile imzalanmış ve Apple tarafından noter onaylı değildir. macOS, uygulamanın açılmasını engelleyebilir. Kurulum engellenirse Mola'yı tarayıcıda kullanabilirsin."
+                ? "Bu macOS paketi henüz Developer ID ile imzalanmış ve Apple tarafından noter onaylı değildir. macOS ilk açılışı engelleyebilir."
                 : "Bu Windows paketi henüz yayıncı sertifikasıyla imzalanmamıştır. Windows SmartScreen bir yayıncı uyarısı gösterebilir. Kurulum engellenirse Mola'yı tarayıcıda kullanabilirsin."}
             </p>
+          )}
+          {selectedPlatform === "macos" && (
+            <details className="desktop-download-mac-help">
+              <summary>Mac'te Mola açılmıyorsa</summary>
+              <p>
+                M serisi işlemcilerde Apple Silicon paketini seç. Güncel DMG
+                içindeki Mola'yı Uygulamalar klasörüne taşı ve eski uygulamayı
+                değiştir. Hesap ve sunucu ayarların korunur.
+              </p>
+              <p>
+                Geliştirici doğrulanamadığı için engellenirse ve bu sayfadan
+                indirdiğin uygulamaya güveniyorsan, açmayı denedikten sonra
+                Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç seçeneğini
+                kullanabilirsin.
+              </p>
+              <p>
+                “Hasarlı / damaged” uyarısı devam ederse açmaya zorlamadan önce
+                paket bütünlüğünü kontrol et.{" "}
+                <a
+                  href="https://github.com/asilozkryl/mola/blob/codex/initial-release/docs/DESKTOP.md#macosta-hasarlı--damaged-uyarısı"
+                  {...external}
+                >
+                  Mola kurulum rehberi
+                </a>{" "}
+                ve{" "}
+                <a href="https://support.apple.com/tr-tr/102445" {...external}>
+                  Apple'ın açılış yönergeleri
+                </a>
+                . Bu sırada Mola'yı tarayıcıda kullanabilirsin.
+              </p>
+            </details>
           )}
         </section>
 

@@ -77,10 +77,10 @@ jobs:
             args: --win --x64
           - os: macos-15-intel
             name: macos-x64
-            args: --mac --x64 -c.mac.identity=null -c.mac.hardenedRuntime=false
+            args: --mac --x64 -c.mac.identity=- -c.mac.hardenedRuntime=false
           - os: macos-15
             name: macos-arm64
-            args: --mac --arm64 -c.mac.identity=null -c.mac.hardenedRuntime=false
+            args: --mac --arm64 -c.mac.identity=- -c.mac.hardenedRuntime=false
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -97,8 +97,12 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
-      - name: Create unsigned installers for review
+      - name: Create installers with ad-hoc Mac bundle signatures
         run: npm run dist -- ${{ matrix.args }}
+      - name: Verify Mac installer signatures and packaged app launch
+        if: runner.os == 'macOS'
+        timeout-minutes: 5
+        run: node scripts/verify-mac-release.cjs
       - name: Create installer integrity checksums
         shell: bash
         run: |

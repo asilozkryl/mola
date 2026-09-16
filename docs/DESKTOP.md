@@ -79,10 +79,10 @@ npm run desktop:pack
 
 Çıktılar `desktop/release/` dizinine yazılır; dosya adında sürüm, işletim sistemi ve mimari bulunur. macOS paketleri Electron 44 nedeniyle **macOS 13 veya üzerini** gerektirir. Linux ve Windows paketleri x64 içindir. [Electron 44 platform değişiklikleri](https://www.electronjs.org/blog/electron-44-0).
 
-Mac'te imzalama sertifikası olmayan yerel denemeler için imzalamayı ve imzalı uygulamalar için kullanılan hardened runtime seçeneğini birlikte kapatın:
+Mac'te imzalama sertifikası olmayan yerel denemeler için uygulama paketini ad-hoc imzayla mühürleyin. Bu imza Apple yayıncı doğrulaması değildir. Bu yerel derlemede, farklı kimlikli Electron kitaplıklarının yüklenebilmesi için hardened runtime kapatılır:
 
 ```sh
-npm run desktop:mac -- -c.mac.identity=null -c.mac.hardenedRuntime=false
+npm run desktop:mac -- -c.mac.identity=- -c.mac.hardenedRuntime=false
 ```
 
 Ubuntu 24.04 ve üzeri için `.deb` paketini paket yöneticisiyle kurun. Paketin bulunduğu dizinde, dosya adını indirdiğiniz sürüme göre değiştirerek:
@@ -109,13 +109,38 @@ Paket tanımı `desktop/electron-builder.yml` içindedir. Uygulama kimliği `app
 
 İlk gerçek indirme bağlantılarının oluşması için bu iş akışının bir sürüm etiketi üzerinde başarıyla tamamlanması gerekir; kodun ana uygulamayla dağıtılması tek başına paket yayımlamaz. Release, depodaki web sürümlerinin `latest` işaretini değiştirmez. İndirme kataloğu yayımlanmış masaüstü sürümlerini ayrıca bulur.
 
-Mevcut CI paketleri imzasızdır; macOS'ta imzalama ve hardened runtime birlikte kapatılır. İndirme sayfası Windows SmartScreen ve macOS Gatekeeper durumunu kurulumdan önce belirtir; yayımlama iş akışı kod imzalama veya Apple noter onayı sağlamaz. Test işindeki geçici Linux çalıştırıcısında Chromium sandbox'ının ihtiyaç duyduğu kullanıcı namespace desteği etkinleştirilir; Electron sandbox'ı açık kalır.
+Windows CI paketleri yayıncı sertifikasıyla imzalanmamıştır. macOS paketleri 1.0.3'ten itibaren Mola kimliğiyle ad-hoc imzalanır; uygulama ve yardımcı bileşenlerin bütünlüğü mühürlenir. Bu, Developer ID veya Apple noter onayı sağlamaz. Hardened runtime bu sertifikasız derlemelerde kapalıdır; Electron renderer sandbox'ı açık kalır.
+
+Her Mac çalıştırıcısı, ZIP'ten çıkarılan ve DMG'den geçici kurulum dizinine kopyalanan gerçek uygulamada kaynak mührünü, `app.mola.desktop` imza kimliğini, mimariyi ve `codesign --verify --deep --strict` sonucunu kontrol eder. Paketlenmiş uygulama geçici kullanıcı profiliyle açılır; ilk sunucu seçimi ve sandbox içindeki web sayfasının çalıştığı doğrulanır. Bu kontroller geçmeden paketler yayımlanmaz. Test, Apple noter onayı veya kullanıcı Mac'indeki Gatekeeper izni yerine geçmez.
+
+## macOS'ta hasarlı / damaged uyarısı
+
+M serisi Mac'lerde `mac-arm64.dmg`, Intel Mac'lerde `mac-x64.dmg` kullanın. 1.0.2 paketinde uygulama imzalama adımı atlandığı için Mola kaynak mührü oluşturulmamıştı; 1.0.3 bu paketleme sorununu düzeltir. Güncel DMG içindeki Mola'yı Uygulamalar klasörüne taşıyıp eski uygulamayı değiştirin. Kullanıcı profilini silmeyin; sunucu adresi ve oturum bilgileri burada saklanır.
+
+Henüz Developer ID ve noter onayı olmadığından macOS ilk açılışı engelleyebilir. Uygulamayı bu deponun sürüm sayfasından indirdiyseniz ve kaynağına güveniyorsanız, açmayı denedikten sonra **Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç** seçeneğini kullanın. [Apple'ın açılış yönergeleri](https://support.apple.com/tr-tr/102445).
+
+“Hasarlı / damaged” uyarısı devam ediyorsa indirdiğiniz dosyanın SHA-256 değerini aynı sürümün `SHA256SUMS` dosyasıyla karşılaştırın. Uygulamalar klasöründeki yeni paketin bütünlük imzasını Terminal'de doğrulayın:
+
+```sh
+codesign --verify --deep --strict --verbose=2 /Applications/Mola.app
+codesign --display --verbose=4 /Applications/Mola.app
+```
+
+İlk komut hatasız tamamlanmalı; ikinci komutta `Identifier=app.mola.desktop` ve bu sertifikasız sürüm için `Signature=adhoc` görünmelidir. Doğrulama başarısızsa uygulamayı açmaya zorlamayın; resmi sürüm dosyasını yeniden indirin. Dosya özeti ve uygulama mührü doğrulandıktan sonra, yalnızca kendi güvendiğiniz Mola kopyasının indirme karantinasını kaldırmak için:
+
+```sh
+codesign --verify --deep --strict /Applications/Mola.app &&
+xattr -dr com.apple.quarantine /Applications/Mola.app &&
+open /Applications/Mola.app
+```
+
+Bu işlem yalnızca `/Applications/Mola.app` için geçerlidir; Apple noter onayı sağlamaz. Sistem genelinde Gatekeeper'ı kapatmayın. Açılış yine engellenirse komut çıktısını ve macOS sürümünü inceleyin; bu sırada web uygulaması kullanılabilir. Uyarısız genel dağıtım için aşağıdaki Developer ID ve noter onayı kurulumu gerekir.
 
 ## İmzalama ve dağıtım
 
 Windows ve macOS'ta kullanıcılara genel dağıtım için kendi yayıncı sertifikalarınız gerekir. İmzasız Windows paketlerinde SmartScreen uyarıları görülebilir; macOS'ta Gatekeeper uygulamanın açılmasını engelleyebilir. CI'ın imzasız paketleri imzalı dağıtımın tamamlandığı anlamına gelmez.
 
-macOS'ta Developer ID Application sertifikasını güvenli ortamdan `CSC_LINK` ve `CSC_KEY_PASSWORD` ile sağlayın. Noter onayı için `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` veya `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` ortam değişkenleri kullanılır. İmzalı derlemeyi macOS üzerinde varsayılan yapılandırmayla (`hardenedRuntime: true`) çalıştırın; `identity=null` / `hardenedRuntime=false` geçersiz kılmalarını kullanmayın. [electron-builder 26 macOS imzalama](https://www.electron.build/v26/docs/features/code-signing/code-signing-mac/) ve [noter onayı seçenekleri](https://www.electron.build/v26/docs/mac/#notarize).
+macOS'ta Developer ID Application sertifikasını güvenli ortamdan `CSC_LINK` ve `CSC_KEY_PASSWORD` ile sağlayın. Noter onayı için `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` veya `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` ortam değişkenleri kullanılır. İmzalı derlemeyi macOS üzerinde varsayılan yapılandırmayla (`hardenedRuntime: true`) çalıştırın; `identity=-` / `hardenedRuntime=false` CI geçersiz kılmalarını kaldırın ve gerekli sırları yalnızca Mac paketleme işlerine bağlayın. Noter onayını ve stapled bileti ayrıca doğrulayın. [electron-builder 26 macOS imzalama](https://www.electron.build/v26/docs/features/code-signing/code-signing-mac/) ve [noter onayı seçenekleri](https://www.electron.build/v26/docs/mac/#notarize).
 
 Windows'ta kendi kod imzalama sağlayıcınızı electron-builder'ın Windows imzalama seçenekleriyle yapılandırın. Dosya tabanlı sertifikanız varsa `CSC_LINK` ve `CSC_KEY_PASSWORD` kullanılabilir; donanım veya bulut tabanlı sertifikalar sağlayıcının entegrasyonunu gerektirir. Sertifika ve parolaları depoya eklemeyin. İmzalı CI dağıtımı için ayrıca güvenli secrets bağlantısı ve imzalı paketlerin hedef cihazlarda doğrulanması gerekir.
 

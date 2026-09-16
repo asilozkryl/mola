@@ -6,6 +6,27 @@ const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { installerGroups, prepareRelease } = require('../scripts/prepare-release.cjs');
 
+test('Mac release runners seal the app bundle and validate packaged installers before publishing', async () => {
+  const { load } = require('js-yaml');
+  const { configureBuildCommand, normalizeOptions } = require('electron-builder/out/builder');
+  const yargs = require('yargs/yargs');
+  const workflow = load(await readFile(join(__dirname, '..', '..', '.github', 'workflows', 'desktop.yml'), 'utf8'));
+  const job = workflow.jobs.package;
+  const macRunners = job.strategy.matrix.include.filter(runner => runner.name.startsWith('macos-'));
+  assert.equal(macRunners.length, 2);
+  for (const runner of macRunners) {
+    const parsed = configureBuildCommand(yargs(runner.args.split(/\s+/))).exitProcess(false).parse();
+    const options = normalizeOptions(parsed);
+    assert.equal(options.config.mac.identity, '-', `${runner.name} must create an ad-hoc bundle signature`);
+    assert.equal(options.config.mac.hardenedRuntime, 'false');
+  }
+  const build = job.steps.findIndex(step => step.run?.includes('npm run dist'));
+  const verification = job.steps.findIndex(step => step.run === 'node scripts/verify-mac-release.cjs');
+  const checksums = job.steps.findIndex(step => step.name === 'Create installer integrity checksums');
+  assert.ok(build < verification && verification < checksums, 'Verify the actual installers before checksumming and uploading them');
+  assert.equal(job.steps[verification].if, "runner.os == 'macOS'");
+});
+
 test('Mac packaging honors each native runner architecture and the combined local command', async () => {
   const { load } = require('js-yaml');
   const { normalizeOptions } = require('electron-builder/out/builder');
