@@ -415,7 +415,7 @@ private func perform(_ configuration: Configuration) throws {
 }
 
 umask(0o077)
-var configuration: Configuration?
+private var configuration: Configuration?
 do {
     guard CommandLine.arguments.count == 2 else { try fail("Güncelleme yardımcısı yalnızca Mola içinden başlatılabilir.") }
     let loaded = try loadConfiguration(CommandLine.arguments[1])
