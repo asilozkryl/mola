@@ -23,7 +23,8 @@ function createUpdateWindowController(options) {
         ? `Mola ${state.latestVersion} güncellemesi…` : 'Güncellemeleri kontrol et…';
     },
     install: (filePath, release) => launchInstaller(filePath, release, {
-      platform, openPath: options.openPath,
+      platform, arch, currentVersion: app.getVersion(),
+      resourcesPath: process.resourcesPath, execPath: process.execPath, openPath: options.openPath,
       relaunch: imagePath => app.relaunch({ execPath: imagePath, args: [] }),
       quit: () => app.quit(),
     }),
@@ -60,13 +61,14 @@ function createUpdateWindowController(options) {
     confirming = true;
     const owner = window;
     try {
-      const format = manager.getState().format;
+      const { format, installMode } = manager.getState();
+      const restarts = installMode === 'relaunch';
       const answer = await dialog.showMessageBox(owner, {
         type: 'question', title: 'Mola güncellemesi',
-        message: format === 'AppImage' ? 'Mola güncellenip yeniden açılsın mı?' : 'Kurulum açılsın ve Mola kapatılsın mı?',
+        message: restarts ? 'Mola güncellenip yeniden açılsın mı?' : 'Kurulum açılsın ve Mola kapatılsın mı?',
         detail: 'Açık görüşmeniz kapanır. Gönderilmemiş mesajınızı kontrol edin.' +
-          (format === 'dmg' ? '\nDMG açıldığında Mola’yı Uygulamalar klasörüne sürükleyerek mevcut sürümü değiştirin.' : ''),
-        buttons: ['Vazgeç', format === 'AppImage' ? 'Güncelle ve yeniden aç' : 'Kurulumu başlat'],
+          (restarts && format === 'dmg' ? '\nMola kapandıktan sonra uygulama güncellenir ve yeniden açılır. macOS güvenlik onayı isteyebilir.' : ''),
+        buttons: ['Vazgeç', restarts ? 'Güncelle ve yeniden aç' : 'Kurulumu başlat'],
         defaultId: 0, cancelId: 0, noLink: true,
       });
       if (answer.response !== 1 || disposed || owner !== window || owner.isDestroyed()) return manager.getState();

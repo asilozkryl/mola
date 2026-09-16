@@ -24,6 +24,12 @@ import {
   formatDownloadSize,
 } from "../lib/desktop-platform";
 import { Logo } from "./ui";
+import {
+  getDesktopUpdateCapability,
+  legacyDesktopUpdateNote,
+  macDesktopBootstrapNote,
+  openDesktopUpdates,
+} from "../lib/desktopUpdates";
 import "./desktop-downloads.css";
 
 const platforms = [
@@ -54,6 +60,7 @@ export function DesktopDownloads({
   serverUrl?: string;
 }) {
   const [device] = useState(() => detectDownloadDevice(navigator));
+  const desktopUpdate = getDesktopUpdateCapability();
   const [selectedPlatform, setSelectedPlatform] =
     useState<DesktopPlatform | null>(() =>
       platforms.some((item) => item.id === device.platform)
@@ -183,11 +190,21 @@ export function DesktopDownloads({
               </strong>
               <p>
                 {device.nativeDesktop
-                  ? "Yeni bir sürüm kurmak veya başka bir bilgisayar için paket indirmek istersen aşağıdan seçebilirsin."
+                  ? desktopUpdate.canUpdate
+                    ? `Yüklü sürüm: ${desktopUpdate.version}. Bu bilgisayarı Mola’nın güncelleme penceresinden güncelleyebilirsin. Başka bir bilgisayar için kurulum dosyaları aşağıda.`
+                    : legacyDesktopUpdateNote
                   : isMobile
                     ? "Bu kurulum dosyaları bilgisayarlar içindir. Telefonda Mola'yı kullanmaya devam edebilir, bilgisayarın için aşağıdan paket seçebilirsin."
                     : "ChromeOS için yerel masaüstü paketi bulunmuyor. Mola'yı tarayıcıda kullanmaya devam edebilirsin."}
               </p>
+              {desktopUpdate.needsMacInstallerStep && <p>{macDesktopBootstrapNote}</p>}
+              {desktopUpdate.canUpdate && (
+                <div className="desktop-download-action">
+                  <button type="button" className="desktop-download-primary" onClick={openDesktopUpdates}>
+                    <RefreshCw size={17} /> Güncellemeleri kontrol et
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

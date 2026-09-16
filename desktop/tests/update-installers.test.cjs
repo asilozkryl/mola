@@ -1,10 +1,9 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { createHash } = require('node:crypto');
-const { mkdtemp, readFile, writeFile, mkdir, rm, stat, symlink, link, chmod, readdir, utimes } = require('node:fs/promises');
+const { mkdtemp, readFile, writeFile, mkdir, rm, stat, symlink, link, chmod, readdir } = require('node:fs/promises');
 const { tmpdir } = require('node:os');
 const { join } = require('node:path');
-const { promisify } = require('node:util');
 const { launchUpdateInstaller } = require('../update-installers.cjs');
 
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -39,27 +38,13 @@ test('package handoff waits for the OS installer before quitting, and propagates
   assert.deepEqual(actions, []);
 });
 
-test('macOS disk images are quarantined before opening without clearing Gatekeeper protection', async (t) => {
+test('macOS never falls back to Finder when the native update installation is unavailable', async (t) => {
   const { filePath, release } = await fixture(t, 'dmg');
-  const actions = [];
-  await launchUpdateInstaller(filePath, release, {
-    platform: 'darwin',
-    execFile: async (executable, args) => {
-      assert.equal(executable, '/usr/bin/xattr');
-      assert.deepEqual(args.slice(0, 2), ['-w', 'com.apple.quarantine']);
-      assert.match(args[2], /^0083;[a-f0-9]+;Mola;[a-f0-9-]+$/i);
-      assert.equal(args[3], filePath);
-      actions.push('quarantine');
-    },
-    openPath: async () => { actions.push('open'); return ''; },
-    quit: () => actions.push('quit'),
-  });
-  assert.deepEqual(actions, ['quarantine', 'open', 'quit']);
   await assert.rejects(launchUpdateInstaller(filePath, release, {
-    platform: 'darwin', execFile: async () => { throw new Error('quarantine denied'); },
-    openPath: async () => { assert.fail('Unmarked downloads must not be opened'); },
+    platform: 'darwin',
+    openPath: async () => assert.fail('Mac updates cannot silently fall back to manual installation'),
     quit: () => assert.fail('Mola must remain running'),
-  }), /quarantine denied/);
+  }), /kurulum.*doğrulanamadı/);
 });
 
 test('Windows installers keep the Internet zone marker before shell handoff', async (t) => {
@@ -73,31 +58,6 @@ test('Windows installers keep the Internet zone marker before shell handoff', as
       return '';
     },
   });
-});
-
-test('native macOS keeps a readable quarantine attribute on the downloaded disk image', { skip: process.platform !== 'darwin' }, async (t) => {
-  const { filePath, release } = await fixture(t, 'dmg');
-  await launchUpdateInstaller(filePath, release, {
-    openPath: async (path) => {
-      const { stdout } = await promisify(require('node:child_process').execFile)('/usr/bin/xattr', ['-p', 'com.apple.quarantine', path]);
-      assert.match(stdout.trim(), /^0083;[a-f0-9]+;Mola;[a-f0-9-]+$/i);
-      return '';
-    },
-  });
-});
-
-test('download metadata may change file timestamps but never permits changed installer contents', async (t) => {
-  const { filePath, release, bytes } = await fixture(t, 'dmg');
-  let opened = false;
-  await launchUpdateInstaller(filePath, release, {
-    platform: 'darwin', execFile: async () => utimes(filePath, new Date(0), new Date(0)),
-    openPath: async () => { opened = true; return ''; },
-  });
-  assert.equal(opened, true);
-  await assert.rejects(launchUpdateInstaller(filePath, release, {
-    platform: 'darwin', execFile: async () => writeFile(filePath, Buffer.alloc(bytes.length, 0x41)),
-    openPath: async () => assert.fail('Changed installer cannot be launched'),
-  }), /hash|doğrula|checksum/i);
 });
 
 test('modified installers never reach the OS or close the app', async (t) => {

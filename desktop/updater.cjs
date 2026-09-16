@@ -207,11 +207,14 @@ function createUpdateManager({ currentVersion, platform, arch, packageType, cach
   fetchImpl = globalThis.fetch, onChange = () => {}, install: installFile = async () => {},
   requestTimeoutMs = 20_000, downloadTimeoutMs = 10 * 60_000 }) {
   const supported = !!versionParts(currentVersion) && !!targetName(currentVersion, platform, arch, packageType);
+  // Installation behavior is a capability of this packaged updater, never
+  // metadata supplied by a remote release or its asset extension.
+  const installMode = !supported ? null : (platform === 'darwin' && packageType === 'dmg') || packageType === 'AppImage' ? 'relaunch' : 'installer';
   const timeoutBound = (value, fallback, max) => Number.isFinite(value) ? Math.max(10, Math.min(max, value)) : fallback;
   requestTimeoutMs = timeoutBound(requestTimeoutMs, 20_000, 60_000);
   downloadTimeoutMs = timeoutBound(downloadTimeoutMs, 600_000, 1_800_000);
   let state = { phase: supported ? 'idle' : 'unsupported', currentVersion, latestVersion: null,
-    format: packageType, platform, progress: 0, transferred: 0, total: 0, releaseUrl: null, error: '', lastCheckedAt: null };
+    format: packageType, platform, installMode, progress: 0, transferred: 0, total: 0, releaseUrl: null, error: '', lastCheckedAt: null };
   let selected = null; let readyPath = null; let operation = null; let generation = 0;
   const getState = () => ({ ...state, canDownload: !!selected && ['available', 'error'].includes(state.phase), canInstall: !!readyPath && state.phase === 'ready' });
   const setState = patch => { state = { ...state, ...patch }; try { onChange(getState()); } catch { /* UI observers cannot interrupt integrity checks. */ } };

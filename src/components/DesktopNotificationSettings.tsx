@@ -11,6 +11,12 @@ import {
   showDesktopNotification,
 } from "../lib/desktopNotifications";
 import { playMolaNotificationSound } from "../lib/notificationSound";
+import {
+  getDesktopUpdateCapability,
+  legacyDesktopUpdateNote,
+  macDesktopBootstrapNote,
+  openDesktopUpdates,
+} from "../lib/desktopUpdates";
 
 export function DesktopNotificationSettings(props: NotificationSettingsProps) {
   const {
@@ -20,7 +26,7 @@ export function DesktopNotificationSettings(props: NotificationSettingsProps) {
     onResumeNotifications,
     onClose,
   } = props;
-  const desktopVersion = navigator.userAgent.match(/(?:^|\s)MolaDesktop\/(\d+\.\d+\.\d+)(?:\s|$)/)?.[1];
+  const desktopUpdate = getDesktopUpdateCapability();
   const [preferences, setPreferences] = useState(() =>
     readDesktopNotificationPreferences(userId),
   );
@@ -311,23 +317,25 @@ export function DesktopNotificationSettings(props: NotificationSettingsProps) {
             <span><RefreshCw size={20} /></span>
             <div>
               <h3 id="desktop-updates-heading">Uygulama güncellemeleri</h3>
-              <p>{desktopVersion ? `Yüklü sürüm: ${desktopVersion}` : "Mola’nın yeni masaüstü sürümlerini takip et."}</p>
+              <p>{desktopUpdate.version ? `Yüklü sürüm: ${desktopUpdate.version}` : "Güncelleme sistemine ilk geçiş"}</p>
             </div>
           </div>
           <div className="notification-actions">
-            {desktopVersion ? (
+            {desktopUpdate.canUpdate ? (
               <Button variant="unstyled" size="unset" className="notification-primary"
-                onClick={() => window.open("mola-desktop://app/updates", "_blank")}>
+                onClick={openDesktopUpdates}>
                 <RefreshCw size={15} /> Güncellemeleri kontrol et
               </Button>
             ) : (
-              <a href="/download" className="notification-primary">Yeni masaüstü sürümünü indir</a>
+              <a href="/download" className="notification-primary">İlk güncelleme için kurulum dosyasını indir</a>
             )}
           </div>
           <p className="notification-desktop-help">
-            {desktopVersion
-              ? "Yeni sürümler otomatik kontrol edilir. İndirme ve kurulum sen başlattığında yapılır."
-              : "Uygulama içinden güncelleme özelliği için Mola’yı bir kez yeni kurulum dosyasıyla güncelle."}
+            {desktopUpdate.canUpdate
+              ? desktopUpdate.needsMacInstallerStep
+                ? macDesktopBootstrapNote
+                : "Yeni sürümler otomatik kontrol edilir. İndirme ve kurulum sen başlattığında yapılır."
+              : legacyDesktopUpdateNote}
           </p>
         </section>
         {error && (

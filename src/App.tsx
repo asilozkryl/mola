@@ -73,6 +73,12 @@ import type {
 } from "../shared/types";
 import { api, bootstrap, post, ApiError, setApiWorkspace } from "./lib/api";
 import {
+  getDesktopUpdateCapability,
+  legacyDesktopUpdateNote,
+  macDesktopBootstrapNote,
+  openDesktopUpdates,
+} from "./lib/desktopUpdates";
+import {
   appRouteAddress,
   readAppRoute,
   type AppRoute,
@@ -195,6 +201,7 @@ export default function App() {
 }
 
 function WorkspaceApp() {
+  const desktopUpdate = getDesktopUpdateCapability();
   const [data, setData] = useState<Bootstrap | null>(null);
   const [accountData, setAccountData] = useState<AccountBootstrap | null>(null);
   const accountRef = useRef(accountData);
@@ -4489,10 +4496,25 @@ function WorkspaceApp() {
               <MonitorUp size={22} />
               <span>
                 <strong>Mola masaüstü uygulaması</strong>
-                <p>Cihazına uygun Windows, macOS veya Linux sürümünü indir.</p>
-                <a href="/download" target="_blank" rel="noopener noreferrer">
-                  Masaüstü uygulamasını indir →
-                </a>
+                <p>
+                  {desktopUpdate.canUpdate
+                    ? `Yüklü sürüm: ${desktopUpdate.version}. Yeni sürümleri Mola’nın güncelleme penceresinden kontrol edebilirsin.`
+                    : desktopUpdate.nativeDesktop
+                      ? legacyDesktopUpdateNote
+                      : "Cihazına uygun Windows, macOS veya Linux sürümünü indir."}
+                </p>
+                {desktopUpdate.needsMacInstallerStep && <p>{macDesktopBootstrapNote}</p>}
+                {desktopUpdate.canUpdate ? (
+                  <Button variant="unstyled" size="unset" className="notification-primary" onClick={openDesktopUpdates}>
+                    Güncellemeleri kontrol et
+                  </Button>
+                ) : (
+                  <a href="/download" target="_blank" rel="noopener noreferrer">
+                    {desktopUpdate.nativeDesktop
+                      ? "İlk güncelleme için kurulum dosyasını indir"
+                      : "Masaüstü uygulamasını indir →"}
+                  </a>
+                )}
               </span>
             </div>
             <div>

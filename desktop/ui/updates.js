@@ -8,6 +8,7 @@ const elements = Object.fromEntries([
 ].map(id => [id, document.getElementById(id)]));
 const phases = new Set(['idle', 'checking', 'current', 'available', 'downloading', 'ready', 'installing', 'installed', 'error', 'unsupported']);
 const formats = new Set(['dmg', 'exe', 'deb', 'AppImage']);
+const installModes = new Set(['relaunch', 'installer']);
 const numberFormat = new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const dateFormat = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 const inFlight = new Set();
@@ -23,12 +24,15 @@ function readableError(error, fallback) {
   return error.message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '');
 }
 
-function installationCopy(format) {
-  if (format === 'dmg') return 'DMG açılınca Mola’yı Applications (Uygulamalar) klasörüne sürükle ve mevcut uygulamayı değiştir. Ardından Mola’yı yeniden aç.';
+function installationCopy(format, installMode) {
+  if (installMode === 'relaunch') {
+    return 'Onayladığında Mola kapanır, mevcut uygulama güncellenir ve yeniden açılır.' +
+      (format === 'dmg' ? ' macOS güvenlik onayı isteyebilir.' : ' Görüşmeni bitirip gönderilmemiş mesajlarını kontrol et.');
+  }
+  if (installMode !== 'installer') return '';
   if (format === 'exe') return 'Windows kurulum penceresindeki adımları tamamla. Mevcut Mola kurulumu güncellenir; ardından uygulamayı yeniden açabilirsin.';
   if (format === 'deb') return 'Sisteminin paket yükleyicisinde kurulumu tamamla. Yönetici parolası istenebilir. Kurulumdan sonra Mola’yı yeniden aç.';
-  if (format === 'AppImage') return 'Onayladığında mevcut AppImage güncellenir ve Mola yeniden açılır. Görüşmeni bitirip gönderilmemiş mesajlarını kontrol et.';
-  return '';
+  return 'Güncellemeyi tamamlamak için açılan sistem kurulum penceresindeki adımları izle.';
 }
 
 function acceptState(value) {
@@ -38,6 +42,7 @@ function acceptState(value) {
     currentVersion: typeof value.currentVersion === 'string' ? value.currentVersion : '—',
     latestVersion: typeof value.latestVersion === 'string' ? value.latestVersion : null,
     format: formats.has(value.format) ? value.format : null,
+    installMode: installModes.has(value.installMode) ? value.installMode : null,
     error: typeof value.error === 'string' ? value.error : '',
   };
   render();
@@ -48,6 +53,7 @@ function render() {
   if (disposed) return;
   const phase = state?.phase || 'idle';
   const format = state?.format;
+  const restarts = state?.installMode === 'relaunch';
   const busy = inFlight.size > 0;
   const descriptions = {
     idle: ['Yeni bir sürüm var mı?', 'Mola’nın bu bilgisayara uygun en yeni sürümünü kontrol et.'],
@@ -56,12 +62,10 @@ function render() {
     available: ['Yeni bir Mola sürümü var', 'Hazır olduğunda güncellemeyi indir. Kurulum için ayrıca onayın istenir.'],
     downloading: ['Güncelleme indiriliyor', 'Mola’yı kullanmaya devam edebilirsin. Dosya tamamlandığında doğrulanacak.'],
     ready: ['Güncelleme kurulmaya hazır', 'İndirme tamamlandı ve dosyanın bütünlüğü doğrulandı.'],
-    installing: [format === 'AppImage' ? 'Mola yeniden açılmak üzere…' : 'Kurulum açılıyor…', 'Lütfen işlemin tamamlanmasını bekle.'],
-    installed: format === 'dmg'
-      ? ['DMG açıldı', 'Mola’yı Applications (Uygulamalar) klasörüne sürükleyip mevcut uygulamayı değiştir. Kurulumu tamamladıktan sonra Mola’yı yeniden aç.']
-      : format === 'AppImage'
-        ? ['Mola yeniden açılıyor', 'Güncelleme uygulandı. Çalışma alanın yeni pencerede açılacak.']
-        : ['Kurulum açıldı', 'Güncellemeyi tamamlamak için açılan sistem kurulum penceresindeki adımları izle.'],
+    installing: [restarts ? 'Güncelleme hazırlanıyor…' : 'Kurulum açılıyor…', 'Lütfen işlemin tamamlanmasını bekle.'],
+    installed: restarts
+      ? ['Mola yeniden açılmak üzere', 'Mola kapandıktan sonra güncelleme tamamlanacak ve uygulama yeniden açılacak.']
+      : ['Kurulum açıldı', 'Güncellemeyi tamamlamak için açılan sistem kurulum penceresindeki adımları izle.'],
     error: ['İşlem tamamlanamadı', 'Bağlantını kontrol edip yeniden deneyebilirsin.'],
     unsupported: ['Bu kurulumda güncelleme kullanılamıyor', 'Bu Mola kurulumu için uygulama içinden güncelleme desteklenmiyor.'],
   };
@@ -90,7 +94,7 @@ function render() {
   const checked = state?.lastCheckedAt ? new Date(state.lastCheckedAt) : null;
   elements['last-checked'].hidden = !checked || !Number.isFinite(checked.getTime());
   elements['last-checked'].textContent = elements['last-checked'].hidden ? '' : `Son kontrol: ${dateFormat.format(checked)}`;
-  const help = installationCopy(format);
+  const help = installationCopy(format, state?.installMode);
   elements['installation-note'].hidden = !help || !['available', 'ready', 'installed', 'error'].includes(phase)
     || (phase === 'error' && state?.canDownload !== true && state?.canInstall !== true);
   elements['installation-help'].textContent = help;
@@ -105,8 +109,8 @@ function render() {
   elements['download-update'].hidden = !canDownload;
   elements['download-update'].disabled = busy || !bridge || state?.canDownload === false;
   elements['install-update'].hidden = !canInstall;
-  elements['install-update'].disabled = busy || !bridge || state?.canInstall === false || !format;
-  elements['install-update'].textContent = format === 'dmg' ? 'DMG’yi aç' : format === 'AppImage' ? 'Güncelle ve yeniden aç' : 'Kurulumu başlat';
+  elements['install-update'].disabled = busy || !bridge || state?.canInstall === false || !format || !state?.installMode;
+  elements['install-update'].textContent = restarts ? 'Güncelle ve yeniden aç' : 'Kurulumu başlat';
   elements['cancel-update'].hidden = phase !== 'downloading';
   elements['cancel-update'].disabled = !bridge || inFlight.has('cancelUpdate');
 }

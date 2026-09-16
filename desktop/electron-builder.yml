@@ -3,6 +3,7 @@ productName: Mola
 artifactName: Mola-${version}-${os}-${arch}.${ext}
 asar: true
 npmRebuild: false
+beforePack: scripts/build-mac-updater.cjs
 publish: null
 directories:
   output: release
@@ -30,6 +31,9 @@ mac:
   hardenedRuntime: true
   entitlements: assets/entitlements.mac.plist
   entitlementsInherit: assets/entitlements.mac.plist
+  extraResources:
+    - from: release/.native/mac-updater-${arch}
+      to: mac-updater
   extendInfo:
     NSMicrophoneUsageDescription: Mola sesli görüşmelere katılmak için mikrofonunuzu kullanır.
     NSCameraUsageDescription: Mola görüntülü görüşmeler için kameranızı kullanır.

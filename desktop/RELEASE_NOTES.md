@@ -8,15 +8,19 @@ Mola masaüstü istemcisi mevcut Mola sunucunuza bağlanır. Bilgisayarınıza a
 
 İlk açılışta ekibinizin Mola sunucu adresini (`https://…`) girin ve mevcut hesabınızla giriş yapın. Sunucu adresi bu bilgisayarda saklanır; tarayıcı oturumu otomatik aktarılmaz.
 
-## 1.0.7 uygulama içinden güncelleme
+## 1.0.8 uygulama içinden güncelleme ve yeniden açılma
 
-- **Mola → Güncellemeleri kontrol et** menüsü ve **Bildirimler ve uygulama → Uygulama güncellemeleri** bölümü eklendi.
+- **Mola → Güncellemeleri kontrol et** menüsü, **Bildirimler ve uygulama → Uygulama güncellemeleri** bölümü, Yardım ve uygulama içindeki indirme sayfası yerel güncelleme penceresini açar.
 - Uygulama açıldıktan yaklaşık bir dakika sonra ve altı saatte bir yeni sürüm aranır. İndirme ve kurulum kullanıcı başlattığında yapılır; indirme görüşmeyi kesmez.
 - Bu bilgisayarın işletim sistemi ve mimarisine uygun dosya uygulamada indirilir; dosya bütünlüğü kurulum öncesinde yeniden doğrulanır.
-- macOS'ta DMG açılır; Mola'yı Uygulamalar klasörüne sürükleyerek mevcut sürümü değiştirin. Windows ve Debian/Ubuntu'da sistem kurulum penceresini tamamlayın. AppImage, yazılabilir mevcut dosyayı yedekleyerek günceller ve yeniden açılır.
+- macOS'ta **Güncelle ve yeniden aç** uygulama paketinin tamamını değiştirip Mola'yı yeniden açar. Güncellemede DMG'yi açmak veya uygulamayı elle sürüklemek gerekmez. Uygulama kimliği, sürüm, mimari ve imza doğrulanır; kurulu uygulamaya ve klasörüne yazma izni gerekir.
+- Mac güncellemesi hazırlanamazsa mevcut uygulama açık kalır. Değiştirme veya yeniden açma hatasında önceki sürüm geri yüklenmeye çalışılır; kurtarma kopyası korunur.
+- Windows ve Debian/Ubuntu'da sistem kurulum penceresini tamamlayın; işletim sistemi yönetici izni isteyebilir. AppImage, yazılabilir mevcut dosyayı yedekleyerek günceller ve yeniden açılır.
 - Kurulum başlatılmadan önce Mola'nın kapanacağı onaylanır. Uygulama haber vermeden yeniden başlamaz.
 
-**İlk geçiş:** 1.0.5 ve önceki sürümler güncelleme sistemini içermediği için 1.0.7'yı bir kez indirip kurun. Sonraki sürümler uygulama üzerinden indirilebilir ve kurulumu başlatılabilir. macOS'ta Developer ID bulunmadığı için son değiştirme adımı Uygulamalar klasöründe tamamlanır.
+**İlk geçiş:** 1.0.5 ve önceki sürümler güncelleme sistemini içermediği için 1.0.8'i bir kez indirip kurun. Mac'teki 1.0.6/1.0.7 dosyayı uygulamada indirebilir; ancak 1.0.8'e ilk geçişte açılan DMG'deki Mola'yı Uygulamalar klasörüne sürükleyerek mevcut kopyayı değiştirmeniz gerekir. 1.0.8 kurulduktan sonraki Mac güncellemeleri uygulama içinden tamamlanır.
+
+macOS'taki ad-hoc imza Developer ID veya Apple noter onayı değildir. Güncelleme işletim sisteminin güvenlik denetimini kaldırmaz; macOS yeniden açılışta onay isteyebilir. Kaynağına güvendiğiniz Mola için gerekirse **Sistem Ayarları → Gizlilik ve Güvenlik → Yine de Aç** seçeneğini kullanın.
 
 ## Bildirimler ve Mola sesi
 

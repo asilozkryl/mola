@@ -105,6 +105,10 @@ jobs:
         if: runner.os == 'macOS'
         timeout-minutes: 5
         run: node scripts/verify-mac-release.cjs
+      - name: Verify native Mac update replacement and recovery
+        if: runner.os == 'macOS'
+        timeout-minutes: 5
+        run: node scripts/test-mac-updater.cjs
       - name: Create installer integrity checksums
         shell: bash
         run: |

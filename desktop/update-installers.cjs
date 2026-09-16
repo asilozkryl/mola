@@ -1,6 +1,6 @@
 const { constants } = require('node:fs');
 const { access, lstat, open, mkdtemp, rename, rm, writeFile } = require('node:fs/promises');
-const { createHash, randomUUID } = require('node:crypto');
+const { createHash } = require('node:crypto');
 const { dirname, extname, isAbsolute, join } = require('node:path');
 const { promisify } = require('node:util');
 const execFileDefault = promisify(require('node:child_process').execFile);
@@ -156,6 +156,12 @@ async function replaceAppImage(download, release, { appImagePath, relaunch, quit
  */
 async function launchUpdateInstaller(filePath, release, {
   platform = process.platform,
+  arch = process.arch,
+  currentVersion,
+  execPath = process.execPath,
+  resourcesPath = process.resourcesPath,
+  spawn,
+  helperReadyTimeoutMs,
   appImagePath = process.env.APPIMAGE,
   openPath,
   execFile = execFileDefault,
@@ -169,12 +175,12 @@ async function launchUpdateInstaller(filePath, release, {
   try {
     await verifyHash(download.file, release);
     if (release.format === 'AppImage') return await replaceAppImage(download, release, { appImagePath, relaunch, quit });
+    if (platform === 'darwin') return await require('./mac-update.cjs').prepareMacUpdate(download, release, {
+      arch, currentVersion, execPath, resourcesPath, execFile, spawn, helperReadyTimeoutMs, quit,
+    });
     if (typeof openPath !== 'function') throw installerError('Sistem yükleyicisi başlatılamıyor.');
     await assertUnchanged(filePath, download.info);
-    if (platform === 'darwin') {
-      const quarantine = `0083;${Math.floor(Date.now() / 1000).toString(16)};Mola;${randomUUID()}`;
-      await execFile('/usr/bin/xattr', ['-w', 'com.apple.quarantine', quarantine, filePath]);
-    } else if (platform === 'win32') {
+    if (platform === 'win32') {
       const origin = new URL(release.url);
       if (origin.protocol !== 'https:' || /[\r\n]/.test(release.url)) throw installerError('Güncelleme indirme adresi geçersiz.');
       await writeFile(`${filePath}:Zone.Identifier`, `[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=${origin.href}\r\n`, { encoding: 'utf8', mode: 0o600 });

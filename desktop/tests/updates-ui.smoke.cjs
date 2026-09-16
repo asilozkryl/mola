@@ -50,7 +50,7 @@ test('updater renderer separates verified downloads from explicit platform insta
     globalThis.calls = [];
     globalThis.unsubscribed = 0;
     globalThis.state = {
-      phase: 'idle', currentVersion: '1.0.5', latestVersion: null, format: 'dmg',
+      phase: 'idle', currentVersion: '1.0.5', latestVersion: null, format: 'dmg', installMode: 'relaunch',
       platform: 'darwin', progress: 0, transferred: 0, total: 0,
       releaseUrl: null, error: '', lastCheckedAt: null,
     };
@@ -113,27 +113,35 @@ test('updater renderer separates verified downloads from explicit platform insta
   });
 
   await t.test('installer actions are honest about each native package format', async () => {
-    for (const [format, label, copy] of [
-      ['dmg', 'DMG’yi aç', /Applications/],
-      ['exe', 'Kurulumu başlat', /kurulum/i],
-      ['deb', 'Kurulumu başlat', /paket/i],
-      ['AppImage', 'Güncelle ve yeniden aç', /yeniden aç/i],
+    for (const [format, installMode, label, copy] of [
+      ['dmg', 'relaunch', 'Güncelle ve yeniden aç', /macOS.*güvenlik onayı/],
+      ['exe', 'installer', 'Kurulumu başlat', /kurulum/i],
+      ['deb', 'installer', 'Kurulumu başlat', /paket/i],
+      ['AppImage', 'relaunch', 'Güncelle ve yeniden aç', /yeniden aç/i],
     ]) {
-      await application.evaluate((_electron, state) => globalThis.setState(state), { phase: 'ready', format, progress: 100 });
+      await application.evaluate((_electron, state) => globalThis.setState(state), { phase: 'ready', format, installMode, progress: 100 });
       await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible();
       await expect(page.locator('#installation-help')).toContainText(copy);
     }
-    await application.evaluate(() => globalThis.setState({ phase: 'ready', format: 'dmg' }));
-    await page.getByRole('button', { name: 'DMG’yi aç', exact: true }).click();
-    await expect(page.locator('#state-title')).toHaveText('DMG açıldı');
-    await expect(page.locator('#state-description')).toContainText('Applications');
-    await expect(page.locator('body')).not.toContainText('Mola güncellendi');
+    await application.evaluate(() => globalThis.setState({ phase: 'ready', format: 'dmg', installMode: 'relaunch' }));
+    await page.getByRole('button', { name: 'Güncelle ve yeniden aç', exact: true }).click();
+    await expect(page.locator('#state-title')).toHaveText('Mola yeniden açılmak üzere');
+    await expect(page.locator('#state-description')).toContainText('Mola kapandıktan sonra');
+    await expect(page.locator('body')).not.toContainText(/Mola güncellendi|Güncelleme uygulandı|sürükle|DMG açıldı/);
+  });
+
+  await t.test('package format alone cannot promise an automatic restart', async () => {
+    await application.evaluate(() => globalThis.setState({ phase: 'ready', format: 'dmg', installMode: 'installer' }));
+    await expect(page.getByRole('button', { name: 'Kurulumu başlat', exact: true })).toBeVisible();
+    await expect(page.locator('#installation-help')).not.toContainText('otomatik');
+    await application.evaluate(() => globalThis.setState({ installMode: 'unknown' }));
+    await expect(page.locator('#install-update')).toBeDisabled();
   });
 
   await t.test('a pending download can be cancelled without a late reply restoring stale progress', async () => {
     await application.evaluate(() => {
       globalThis.holdDownload = true;
-      globalThis.setState({ phase: 'available', format: 'dmg', error: '' });
+      globalThis.setState({ phase: 'available', format: 'dmg', installMode: 'relaunch', error: '' });
     });
     await page.getByRole('button', { name: /indir/i }).click();
     await expect(page.getByRole('progressbar')).toBeVisible();

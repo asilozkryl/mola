@@ -81,6 +81,21 @@ test('current, unsupported, drafts, prereleases and noncanonical versions never 
   assert.equal(unsupported.calls.length, 0);
 });
 
+test('install mode is derived from supported local platform and package type', async t => {
+  for (const [platform, arch, packageType, installMode] of [
+    ['darwin', 'arm64', 'dmg', 'relaunch'], ['darwin', 'x64', 'dmg', 'relaunch'],
+    ['linux', 'x64', 'AppImage', 'relaunch'], ['linux', 'x64', 'deb', 'installer'],
+    ['win32', 'x64', 'exe', 'installer'], ['linux', 'arm64', 'AppImage', null],
+    ['darwin', 'arm64', null, null], ['darwin', 'arm64', 'exe', null],
+  ]) {
+    const item = release();
+    item.metadata.installMode = installMode === 'relaunch' ? 'installer' : 'relaunch';
+    const f = await fixture(t, { releases: [item], manager: { platform, arch, packageType } });
+    assert.equal(f.manager.getState().installMode, installMode, `${platform}/${arch}/${packageType}`);
+    assert.equal((await f.manager.check()).installMode, installMode);
+  }
+});
+
 test('incomplete releases, duplicate assets and unsafe URLs fail closed', async t => {
   for (const mutate of [
     data => data.assets.pop(), data => data.assets.push(data.assets[0]),

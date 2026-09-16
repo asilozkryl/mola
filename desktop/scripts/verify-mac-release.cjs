@@ -3,12 +3,15 @@
 const assert = require('node:assert/strict');
 const { execFile } = require('node:child_process');
 const { once } = require('node:events');
-const { mkdtemp, mkdir, rm, stat } = require('node:fs/promises');
+const { createHash } = require('node:crypto');
+const { EventEmitter } = require('node:events');
+const { mkdtemp, mkdir, rm, stat, open, readFile, writeFile, realpath } = require('node:fs/promises');
 const { createServer } = require('node:http');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 const { promisify } = require('node:util');
 const { _electron, expect } = require('@playwright/test');
+const { prepareMacUpdate } = require('../mac-update.cjs');
 
 const run = promisify(execFile);
 const { version } = require('../package.json');
@@ -16,6 +19,13 @@ const commandOptions = { timeout: 60_000, maxBuffer: 4 * 1024 * 1024 };
 
 async function verifyApplication(appPath, root) {
   const executable = path.join(appPath, 'Contents/MacOS/Mola');
+  const updater = path.join(appPath, 'Contents/Resources/mac-updater');
+  assert.ok((await stat(updater)).isFile(), 'The native macOS updater must be packaged before signing.');
+  await run('/usr/bin/codesign', ['--verify', '--strict', '--verbose=2', updater], commandOptions);
+  const helperArchitecture = await run('/usr/bin/lipo', ['-archs', updater], commandOptions);
+  assert.equal(helperArchitecture.stdout.trim(), process.arch === 'arm64' ? 'arm64' : 'x86_64');
+  assert.equal((await readFile(updater)).includes(Buffer.from('MOLA_UPDATER_TEST_SCENARIO')), false,
+    'A production release must not contain the test-only updater build.');
   const resourceSeal = await stat(path.join(appPath, 'Contents/_CodeSignature/CodeResources'));
   assert.ok(resourceSeal.isFile() && resourceSeal.size > 0, 'Mola must have a sealed app bundle, not only Electron linker signatures.');
   await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', appPath], commandOptions);
@@ -91,6 +101,69 @@ async function verifyApplication(appPath, root) {
   }
 }
 
+async function verifyUpdatePreparation(appPath, diskImage) {
+  const canonicalApp = await realpath(appPath);
+  const installed = await stat(canonicalApp);
+  const file = await open(diskImage, 'r');
+  const hash = createHash('sha256');
+  for await (const bytes of file.createReadStream({ start: 0, autoClose: false })) hash.update(bytes);
+  const release = { format: 'dmg', version, size: (await file.stat()).size, sha256: hash.digest('hex') };
+  let inspected = false;
+  let stopped = false;
+  let preparedConfiguration;
+  let inspection;
+  const child = new EventEmitter();
+  child.pid = process.pid + 1000;
+  child.exitCode = null;
+  child.signalCode = null;
+  child.kill = () => { stopped = true; };
+  child.unref = () => {};
+  try {
+    await assert.rejects(prepareMacUpdate({ file }, release, {
+      execPath: path.join(canonicalApp, 'Contents/MacOS/Mola'),
+      resourcesPath: path.join(canonicalApp, 'Contents/Resources'),
+      currentVersion: version, arch: process.arch, execFile: run,
+      spawn(helper, args, spawnOptions) {
+        assert.equal(helper, path.join(canonicalApp, 'Contents/Resources/mac-updater'));
+        assert.equal(args.length, 1);
+        assert.deepEqual(spawnOptions, { detached: true, stdio: 'ignore' });
+        // Only the process handoff is substituted. Image mounting, copying,
+        // metadata checks, codesign, architecture and quarantine all run natively.
+        inspection = (async () => {
+          const config = JSON.parse(await readFile(args[0], 'utf8'));
+          preparedConfiguration = config;
+          const candidate = config.candidatePath;
+          assert.equal((await stat(path.dirname(candidate))).mode & 0o777, 0o700);
+          await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', candidate], commandOptions);
+          const attribute = await run('/usr/bin/xattr', ['-p', 'com.apple.quarantine', candidate], commandOptions);
+          assert.match(attribute.stdout.trim(), /^0083;[a-f0-9]+;Mola;[a-f0-9-]+$/i);
+          assert.equal((await stat(canonicalApp)).ino, installed.ino, 'Preparation must not modify the installed bundle');
+          inspected = true;
+          const temporary = config.readyPath + '.tmp';
+          await writeFile(temporary, JSON.stringify({ schema: 1, phase: 'ready', pid: child.pid }), { mode: 0o600 });
+          await require('node:fs/promises').rename(temporary, config.readyPath);
+        })();
+        // Surface any inspection failure to the production readiness waiter.
+        inspection.catch(error => child.emit('error', error));
+        return child;
+      },
+      quit: async () => {
+        await inspection;
+        assert.equal(inspected, true);
+        const commit = JSON.parse(await readFile(preparedConfiguration.commitPath, 'utf8'));
+        assert.deepEqual(commit, { schema: 1, parentPid: process.pid, helperPid: child.pid });
+        throw Object.assign(new Error('Native preparation test stopped before quitting'), { userMessage: 'Native preparation test stopped before quitting' });
+      },
+    }), /Native preparation test stopped before quitting/);
+    assert.equal(inspected, true);
+    assert.equal(stopped, true);
+    assert.equal((await stat(canonicalApp)).ino, installed.ino);
+    await assert.rejects(stat(path.dirname(preparedConfiguration.candidatePath)), { code: 'ENOENT' });
+    await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', canonicalApp], commandOptions);
+    console.log('Verified native DMG update preparation: hdiutil, ditto, version, architecture, signature, quarantine and unchanged installed app.');
+  } finally { await file.close(); }
+}
+
 async function main() {
   assert.equal(process.platform, 'darwin', 'Run this validation on a native macOS runner.');
   assert.ok(['arm64', 'x64'].includes(process.arch), 'Unsupported macOS architecture.');
@@ -113,6 +186,7 @@ async function main() {
       await run('/usr/bin/hdiutil', ['detach', mount], commandOptions);
     }
     await verifyApplication(path.join(dmgRoot, 'Mola.app'), dmgRoot);
+    await verifyUpdatePreparation(path.join(dmgRoot, 'Mola.app'), `${stem}.dmg`);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

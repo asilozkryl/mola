@@ -1,7 +1,7 @@
 {
   "name": "mola-desktop",
   "desktopName": "app.mola.desktop.desktop",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Mevcut Mola sunucunuza bağlanan masaüstü istemcisi",
   "private": true,
   "author": "Mola",

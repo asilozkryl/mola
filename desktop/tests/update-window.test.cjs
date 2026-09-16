@@ -2,14 +2,16 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { test } = require('node:test');
 
-function fixture({ packaged = true, answer = 0 } = {}) {
+function fixture({ packaged = true, answer = 0, launchInstaller = async () => { throw new Error('No actual installer may run in controller tests'); } } = {}) {
   const handlers = new Map();
   const windows = [];
   const notifications = [];
   const timers = [];
   const calls = { check: 0, download: 0, install: 0, cancel: 0, prompts: 0 };
-  let state = { phase: 'ready', currentVersion: '1.0.6', latestVersion: '1.0.7', format: 'dmg', canInstall: true };
+  let state = { phase: 'ready', currentVersion: '1.0.6', latestVersion: '1.0.7', format: 'dmg', installMode: 'relaunch', canInstall: true };
   let publish;
+  let managerOptions;
+  const prompts = [];
   const menuItem = { label: '' };
   const dependencies = {
     app: { isPackaged: packaged, getVersion: () => '1.0.6' },
@@ -22,7 +24,7 @@ function fixture({ packaged = true, answer = 0 } = {}) {
       show() { this.shown = true; }
       close() {}
     },
-    dialog: { showMessageBox: async () => { calls.prompts++; return { response: answer }; } },
+    dialog: { showMessageBox: async (_owner, options) => { calls.prompts++; prompts.push(options); return { response: answer }; } },
     localWindow(page) {
       const window = new EventEmitter();
       Object.assign(window, { destroyed: false, isDestroyed: () => window.destroyed, show() {}, focus() {}, isMinimized: () => false,
@@ -34,11 +36,12 @@ function fixture({ packaged = true, answer = 0 } = {}) {
       if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== `mola-desktop://app/${page}`) throw new Error('Untrusted sender');
     },
     cacheDir: '/unused-mola-test-cache', platform: 'darwin', arch: 'arm64', packageType: 'dmg',
-    launchInstaller: async () => { throw new Error('No actual installer may run in controller tests'); },
+    launchInstaller,
     setTimeout: callback => { timers.push(callback); return { unref() {} }; },
     setInterval: callback => { timers.push(callback); return { unref() {} }; },
     clearTimeout() {}, clearInterval() {},
     createManager(options) {
+      managerOptions = options;
       publish = options.onChange;
       return {
         getState: () => state,
@@ -50,7 +53,7 @@ function fixture({ packaged = true, answer = 0 } = {}) {
     },
   };
   const controller = require('../update-window.cjs').createUpdateWindowController(dependencies);
-  return { controller, handlers, windows, notifications, timers, calls, dependencies, menuItem,
+  return { controller, handlers, windows, notifications, timers, calls, dependencies, menuItem, prompts, managerOptions,
     setState(next) { state = { ...state, ...next }; publish(state); },
     event() { const window = windows.at(-1); return { sender: window.webContents, senderFrame: window.webContents.mainFrame }; },
   };
@@ -82,6 +85,41 @@ test('installation requires a fresh native confirmation and never runs on cancel
   accepted.controller.show();
   await accepted.handlers.get('desktop:updates:install')(accepted.event());
   assert.equal(accepted.calls.install, 1);
+});
+
+test('Mac update confirmation offers an in-app restart with truthful system approval copy', async () => {
+  const f = fixture({ answer: 1 });
+  f.controller.show();
+  await f.handlers.get('desktop:updates:install')(f.event());
+  assert.equal(f.prompts[0].message, 'Mola güncellenip yeniden açılsın mı?');
+  assert.deepEqual(f.prompts[0].buttons, ['Vazgeç', 'Güncelle ve yeniden aç']);
+  assert.match(f.prompts[0].detail, /macOS.*güvenlik onayı/);
+  assert.doesNotMatch(f.prompts[0].detail, /sürükle|DMG aç/);
+  assert.equal(f.calls.install, 1);
+});
+
+test('confirmation follows the local install capability and preserves system installer flows', async () => {
+  for (const format of ['exe', 'deb', 'dmg']) {
+    const f = fixture({ answer: 1 });
+    f.setState({ format, installMode: 'installer' });
+    f.controller.show();
+    await f.handlers.get('desktop:updates:install')(f.event());
+    assert.deepEqual(f.prompts[0].buttons, ['Vazgeç', 'Kurulumu başlat']);
+    assert.equal(f.calls.install, 1);
+  }
+});
+
+test('the installer receives only the trusted process identity and current app version', async () => {
+  let invocation;
+  const f = fixture({ launchInstaller: async (...args) => { invocation = args; } });
+  const release = { format: 'dmg', version: '1.0.7' };
+  await f.managerOptions.install('/cache/Mola.dmg', release);
+  assert.equal(invocation[0], '/cache/Mola.dmg');
+  assert.equal(invocation[1], release);
+  assert.equal(invocation[2].arch, 'arm64');
+  assert.equal(invocation[2].currentVersion, '1.0.6');
+  assert.equal(invocation[2].execPath, process.execPath);
+  assert.equal(invocation[2].resourcesPath, process.resourcesPath);
 });
 
 test('closing the updater while the confirmation is pending prevents installation', async () => {
