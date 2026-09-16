@@ -154,7 +154,7 @@ Windows'ta kendi kod imzalama sağlayıcınızı electron-builder'ın Windows im
 
 ## Masaüstü bildirimleri ve Mola sesi
 
-**1.0.4 ve üzeri** masaüstü istemcisinde **Bildirimler ve uygulama → Masaüstü bildirimleri → Bu cihazda bildirimleri aç** yolunu kullanın. Mola'nın izin penceresinde onay verin; işletim sistemi ayrıca izin istiyorsa onu da onaylayın. **Test bildirimi gönder** ile teslimi kontrol edin. macOS'ta gerekirse **Sistem Ayarları → Bildirimler → Mola** bölümünü açın; Odak / Rahatsız Etme modu ve sistem ses ayarları bildirimin görünmesini veya duyulmasını etkileyebilir.
+**1.0.5 ve üzeri** masaüstü istemcisinde **Bildirimler ve uygulama → Masaüstü bildirimleri → Bu cihazda bildirimleri aç** yolunu kullanın. Mola'nın izin penceresinde onay verin; işletim sistemi ayrıca izin istiyorsa onu da onaylayın. **Test bildirimi gönder** ile teslimi kontrol edin. macOS'ta gerekirse **Sistem Ayarları → Bildirimler → Mola** bölümünü açın; Odak / Rahatsız Etme modu ve sistem ses ayarları bildirimin görünmesini veya duyulmasını etkileyebilir.
 
 Electron'da Web Push aboneliği desteklenmediği için masaüstü, `PushManager` varlığını yeterli saymaz ve tarayıcı Push aboneliği oluşturmaya çalışmaz. Sunucunun mevcut Socket.IO `notifications:attention` olayları, yerel Web Notification API'siyle sistem bildirimine dönüşür. Çalışma alanı ve kanal modları, sessiz saatler ve uygulamanın sessize alma tercihi korunur. Ön planda okumakta olduğunuz sohbet için tekrar uyarı verilmez; pencere arka plandayken aynı sohbetten gelen mesaj da uyarı oluşturabilir. Mesaj içeriği sistem bildiriminde gösterilmez. Bildirime tıklamak ilgili mesaja gider ve uygulamayı öne getirir; açık görüşmeyi kapatan bir sayfa yenilemesi yapılmaz.
 

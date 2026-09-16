@@ -8,7 +8,7 @@ Mola masaüstü istemcisi mevcut Mola sunucunuza bağlanır. Bilgisayarınıza a
 
 İlk açılışta ekibinizin Mola sunucu adresini (`https://…`) girin ve mevcut hesabınızla giriş yapın. Sunucu adresi bu bilgisayarda saklanır; tarayıcı oturumu otomatik aktarılmaz.
 
-## 1.0.4 bildirimler ve Mola sesi
+## 1.0.5 bildirimler ve Mola sesi
 
 - Masaüstünde bildirim açılmasını engelleyen tarayıcı Push aboneliği kaldırıldı; yerel sistem bildirimleri kullanılır.
 - İlk izin ve reddettikten sonra yeniden deneme düzeltildi. Sunucuya özel bildirim izni uygulama yeniden açıldığında korunur.

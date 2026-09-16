@@ -174,10 +174,12 @@ test('the real desktop notification settings recover from denial and retain cons
   // have no notification daemon; that must surface honestly instead of claiming
   // success merely because the Notification constructor returned.
   await page.getByRole('button', { name: 'Test bildirimi gönder', exact: true }).click();
-  await expect.poll(async () => {
-    if (await page.locator('.notification-error').count()) return 'unavailable';
-    return (await page.locator('.notification-success').textContent())?.includes('sistemine gönderildi') ? 'shown' : 'pending';
-  }, { timeout: 12_000 }).not.toBe('pending');
+  await expect.poll(() => page.evaluate(() => {
+    // Take one nonblocking snapshot. Waiting for a success element here would
+    // miss the error that appears when a host has no notification daemon.
+    if (document.querySelector('.notification-error')) return 'unavailable';
+    return document.querySelector('.notification-success')?.textContent?.includes('sistemine gönderildi') ? 'shown' : 'pending';
+  }), { timeout: 12_000 }).not.toBe('pending');
   if (await page.locator('.notification-error').count()) {
     await expect(page.locator('.notification-success')).toHaveCount(0);
     t.diagnostic(`Native notification service reported: ${await page.locator('.notification-error').textContent()}`);
