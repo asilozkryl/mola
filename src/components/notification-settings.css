@@ -256,3 +256,40 @@
     transition: none;
   }
 }
+.notification-desktop-help {
+  margin: 12px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.notification-sound-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.notification-sound-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.notification-sound-controls input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--primary);
+}
+.notification-sound-controls button {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--secondary);
+  color: var(--foreground);
+}

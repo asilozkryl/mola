@@ -5,6 +5,7 @@ const { createServer } = require('node:http');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
+const { createECDH } = require('node:crypto');
 const { _electron, expect } = require('@playwright/test');
 
 const desktopRoot = path.resolve(__dirname, '..');
@@ -222,6 +223,21 @@ test('desktop setup validates the server, isolates remote content, and preserves
 
   await t.test('notification permission remains granted when queried after approval', async () => {
     const remote = application.windows().find((page) => page.url() === url);
+    await application.evaluate(({ dialog }) => {
+      const original = dialog.showMessageBox;
+      let declined = false;
+      dialog.showMessageBox = (...args) => {
+        if (!declined && args.at(-1).message === 'bildirim erişimine izin verilsin mi?') {
+          declined = true;
+          return Promise.resolve({ response: 0, checkboxChecked: false });
+        }
+        return original.apply(dialog, args);
+      };
+    });
+    await remote.getByRole('button', { name: 'Bildirim izni iste' }).click();
+    await expect(remote.locator('#notification-result')).toHaveText('denied');
+    // Electron initially reports denied when no grant exists. An explicit
+    // action must still prompt, including after declining a previous request.
     await remote.getByRole('button', { name: 'Bildirim izni iste' }).click();
     await expect(remote.locator('#notification-result')).toHaveText('granted');
     const state = await remote.evaluate(async () => (await navigator.permissions.query({ name: 'notifications' })).state);
@@ -239,6 +255,21 @@ test('desktop setup validates the server, isolates remote content, and preserves
     assert.equal(workerState, 'granted', 'The trusted service worker must see the notification permission granted by its window.');
   });
 
+  await t.test('Electron exposes PushManager but cannot create a Web Push subscription', async () => {
+    const remote = application.windows().find((page) => page.url() === url);
+    const key = createECDH('prime256v1');
+    key.generateKeys();
+    const result = await remote.evaluate(async publicKey => {
+      const registration = await navigator.serviceWorker.ready;
+      try {
+        await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: new Uint8Array(publicKey) });
+        return null;
+      } catch (error) { return { name: error.name, message: error.message }; }
+    }, [...key.getPublicKey()]);
+    assert.equal(result?.name, 'AbortError');
+    assert.match(result.message, /push service not available/i);
+  });
+
   await t.test('saved server and HTTP-only session survive a full app restart', async () => {
     await closeApplication(application);
     application = undefined;
@@ -247,6 +278,16 @@ test('desktop setup validates the server, isolates remote content, and preserves
     await expect(remote).toHaveURL(url);
     await expect(remote.getByRole('status')).toHaveText('Oturum açık');
     await assertSandbox(remote);
+    assert.equal(await remote.evaluate(() => Notification.permission), 'granted',
+      'Notification consent must survive restart without requesting permission or a Web Push subscription.');
+    const soundState = await remote.evaluate(async () => {
+      const context = new AudioContext();
+      await context.resume();
+      const state = context.state;
+      await context.close();
+      return state;
+    });
+    assert.equal(soundState, 'running', 'Opted-in notification sounds must work before the first interaction after restart.');
   });
 });
 
@@ -263,6 +304,9 @@ test('MOLA_SERVER_URL selects the server without exposing another server\'s sess
   await assertSandbox(remote);
   await remote.getByRole('button', { name: 'Oturum aç', exact: true }).click();
   await expect(remote.getByRole('status')).toHaveText('Oturum açık');
+  await application.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
+  await remote.getByRole('button', { name: 'Bildirim izni iste' }).click();
+  await expect(remote.locator('#notification-result')).toHaveText('granted');
   await closeApplication(application);
   application = undefined;
 
@@ -271,6 +315,8 @@ test('MOLA_SERVER_URL selects the server without exposing another server\'s sess
   const otherRemote = await application.firstWindow();
   await expect(otherRemote).toHaveURL(other.url);
   await expect(otherRemote.getByRole('status')).toHaveText('Oturum kapalı');
+  assert.notEqual(await otherRemote.evaluate(() => Notification.permission), 'granted',
+    'A saved notification grant must never cross server origins or ports.');
 });
 
 test('an unavailable server change returns to setup and a corrected address connects', { timeout: 60_000 }, async (t) => {

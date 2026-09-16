@@ -8,7 +8,16 @@ Mola masaüstü istemcisi mevcut Mola sunucunuza bağlanır. Bilgisayarınıza a
 
 İlk açılışta ekibinizin Mola sunucu adresini (`https://…`) girin ve mevcut hesabınızla giriş yapın. Sunucu adresi bu bilgisayarda saklanır; tarayıcı oturumu otomatik aktarılmaz.
 
-## 1.0.3 macOS paketleme düzeltmesi
+## 1.0.4 bildirimler ve Mola sesi
+
+- Masaüstünde bildirim açılmasını engelleyen tarayıcı Push aboneliği kaldırıldı; yerel sistem bildirimleri kullanılır.
+- İlk izin ve reddettikten sonra yeniden deneme düzeltildi. Sunucuya özel bildirim izni uygulama yeniden açıldığında korunur.
+- Özgün Mola sesi, ses önizlemesi ve bu bilgisayardaki hesaba özel sessize alma seçeneği eklendi.
+- Kanal ve sessiz saat tercihleri korunur. Pencere arka plandayken gelen mesajlar bildirim oluşturabilir; bildirime tıklamak uygulamayı öne getirip ilgili mesaja gider.
+
+Kurulumdan sonra **Bildirimler ve uygulama → Bu cihazda bildirimleri aç** seçeneğini kullanın. Bildirimler için pencere açık veya küçültülmüş olmalı; uygulamadan çıkınca bildirim gelmez. Sistem bildirim izni ve Odak / Rahatsız Etme tercihleri geçerlidir.
+
+## macOS paket bütünlüğü
 
 macOS uygulama paketi artık Mola kimliğiyle ad-hoc imzalanır ve kaynak bütünlüğü mühürlenir. Önceki sürümde bu adım atlanıyordu. Her iki Mac mimarisinde ZIP ve DMG içindeki gerçek uygulamanın imzası, mimarisi ve ilk açılışı yayımlanmadan önce kontrol edilir. Önceki Mola uygulamasını Uygulamalar klasöründe yenisiyle değiştirin; kullanıcı profilinizi silmeniz gerekmez.
 

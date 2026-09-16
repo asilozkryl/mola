@@ -150,7 +150,19 @@ Windows'ta kendi kod imzalama sağlayıcınızı electron-builder'ın Windows im
 - Ekran paylaşımı her başlatıldığında Mola'nın izin penceresi gösterilir. İzin verdikten sonra mevcutsa işletim sisteminin kaynak seçicisi, diğer durumlarda Mola'nın ekran/pencere seçicisi açılır. macOS'ta ekran kaydı izni, Linux Wayland'de uygun masaüstü portalı gerekir. Ekran paylaşımı sistem sesini içermez.
 - Görüşmeyi küçük pencereye alma mevcut web özelliğini kullanır. Destek cihaz ve Electron sürümüyle doğrulanmalıdır.
 - Harici bağlantılar sistem tarayıcısında açılır. Uzak Mola sayfasının Node.js erişimi yoktur; kurulum arayüzü ayrı tutulur.
-- Otomatik güncelleme, sistem tepsisi ve yerel arka plan bildirimi bu sürüme dahil değildir. Uygulama kapalıyken bildirim alma garantisi yoktur. Web uygulamasındaki tarayıcı bildirimi / Web Push özellikleri Electron'da ayrıca doğrulanmalıdır; tarayıcı desteği masaüstü desteği olarak kabul edilmez.
+- Otomatik güncelleme ve sistem tepsisi bu sürüme dahil değildir. Bildirimler aşağıdaki masaüstü akışını kullanır; Mola penceresi kapatıldığında veya uygulamadan çıkıldığında mesajları dinleyen bağlantı da kapanır.
+
+## Masaüstü bildirimleri ve Mola sesi
+
+**1.0.4 ve üzeri** masaüstü istemcisinde **Bildirimler ve uygulama → Masaüstü bildirimleri → Bu cihazda bildirimleri aç** yolunu kullanın. Mola'nın izin penceresinde onay verin; işletim sistemi ayrıca izin istiyorsa onu da onaylayın. **Test bildirimi gönder** ile teslimi kontrol edin. macOS'ta gerekirse **Sistem Ayarları → Bildirimler → Mola** bölümünü açın; Odak / Rahatsız Etme modu ve sistem ses ayarları bildirimin görünmesini veya duyulmasını etkileyebilir.
+
+Electron'da Web Push aboneliği desteklenmediği için masaüstü, `PushManager` varlığını yeterli saymaz ve tarayıcı Push aboneliği oluşturmaya çalışmaz. Sunucunun mevcut Socket.IO `notifications:attention` olayları, yerel Web Notification API'siyle sistem bildirimine dönüşür. Çalışma alanı ve kanal modları, sessiz saatler ve uygulamanın sessize alma tercihi korunur. Ön planda okumakta olduğunuz sohbet için tekrar uyarı verilmez; pencere arka plandayken aynı sohbetten gelen mesaj da uyarı oluşturabilir. Mesaj içeriği sistem bildiriminde gösterilmez. Bildirime tıklamak ilgili mesaja gider ve uygulamayı öne getirir; açık görüşmeyi kapatan bir sayfa yenilemesi yapılmaz.
+
+Bildirim izni tam sunucu adresine özel olarak `notification-permissions.json` dosyasına kaydedilir ve uygulama yeniden açıldığında korunur. Mikrofon, kamera ve ekran izinleri bu dosyaya taşınmaz. Açma/kapatma ve ses tercihi ise bu sunucudaki bu hesap ve bilgisayar için saklanır; tarayıcı bildirimleri veya diğer bilgisayarların tercihleri değiştirilmez. Reddedilen masaüstü bildirim izni Aç düğmesiyle yeniden istenebilir.
+
+**Mola bildirim sesi** özgün, 0,74 saniyelik iki tondan oluşur. **Sesi dinle** yalnızca önizleme yapar; yanındaki kutu gelen bildirimlerin sesini kapatır. Sistem bildirim sesi ayrıca kapatılarak çift ses önlenir. Hızlı mesajlar tek uyarıda birleştirilir; okunmamış sayıları güncellenmeye devam eder. Ses susturma veya çıkış sırasında bekleyen sesler iptal edilir. Ses kaynağı ve yeniden üretim komutu [ses açıklamasında](../public/sounds/README.md) bulunur.
+
+Pencere açık veya küçültülmüş ve sunucu bağlantısı etkin olmalıdır. Uygulamadan çıkınca, pencereyi kapatınca, bilgisayar uyurken veya çevrimdışıyken bu masaüstü akışı bildirim göndermez; arka planda APNs/FCM servisi ya da sistem tepsisi çalıştırılmaz. Testin sisteme gönderilmiş olması, işletim sisteminin onu mutlaka ekranda gösterdiği anlamına gelmez.
 
 Sunucu güncellemeleri istemci içindeki web arayüzüne yansır. Electron veya masaüstü kabuğu güncellemeleri için yeni paket kurulması gerekir. Sunucu bağlantısı olmadan ekip verileriyle çevrimdışı çalışma desteklenmez.
 

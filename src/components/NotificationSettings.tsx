@@ -32,20 +32,14 @@ import {
 import { Modal } from "./ui";
 import { NotificationPreferencesPanel } from "./NotificationPreferencesPanel";
 import "./notification-settings.css";
+import { isDesktopRuntime } from "../lib/desktopNotifications";
+import { DesktopNotificationSettings } from "./DesktopNotificationSettings";
 
 const permission = () =>
   "Notification" in window ? Notification.permission : "default";
 type Operation = "enable" | "disable" | "test" | "install";
 
-export function NotificationSettings({
-  userId,
-  workspaceId,
-  workspaceName,
-  channels,
-  members,
-  revision: settingsRevision = 0,
-  onClose,
-}: {
+export interface NotificationSettingsProps {
   userId: string;
   workspaceId: string;
   workspaceName: string;
@@ -53,7 +47,28 @@ export function NotificationSettings({
   members: readonly User[];
   revision?: number;
   onClose: () => void;
-}) {
+}
+
+export function NotificationSettings(props: NotificationSettingsProps) {
+  return isDesktopRuntime() ? (
+    <DesktopNotificationSettings
+      key={`${props.userId}:${props.workspaceId}`}
+      {...props}
+    />
+  ) : (
+    <BrowserNotificationSettings {...props} />
+  );
+}
+
+function BrowserNotificationSettings({
+  userId,
+  workspaceId,
+  workspaceName,
+  channels,
+  members,
+  revision: settingsRevision = 0,
+  onClose,
+}: NotificationSettingsProps) {
   const [preferences, setPreferences] = useState<PushPreferences | null>(null);
   const [registered, setRegistered] = useState(false);
   const [browserPermission, setBrowserPermission] = useState(permission);

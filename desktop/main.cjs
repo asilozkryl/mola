@@ -4,6 +4,7 @@ const { readFile } = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { normalizeServerUrl, isTrustedUrl, isTrustedDownloadUrl, popupAction, permissionKinds, isDisplayCapturePermission } = require('./policy.cjs');
 const { readSettings, saveSettings } = require('./settings.cjs');
+const { createNotificationPermissionStore } = require('./notification-permissions.cjs');
 
 app.setName('Mola');
 if (app.commandLine.hasSwitch('user-data-dir')) {
@@ -15,6 +16,7 @@ protocol.registerSchemesAsPrivileged([{
 
 const localOrigin = 'mola-desktop://app';
 const settingsFile = join(app.getPath('userData'), 'desktop-settings.json');
+const notificationPermissionsFile = join(app.getPath('userData'), 'notification-permissions.json');
 const icon = join(__dirname, 'assets', 'icon.png');
 const remotePreferences = {
   nodeIntegration: false, contextIsolation: true, sandbox: true,
@@ -27,6 +29,7 @@ let setupError = '';
 let connecting = false;
 let quitting = false;
 let picker = null;
+let notificationPermissions;
 const configuredSessions = new WeakSet();
 
 function localWindow(page, options = {}) {
@@ -94,8 +97,18 @@ function guardRemoteWindow(window, origin, callPopup = false) {
   contents.on('will-frame-navigate', event => {
     if (!event.isMainFrame || (callPopup && event.url !== 'about:blank')) event.preventDefault();
   });
-  contents.setWindowOpenHandler(({ url }) => {
+  contents.setWindowOpenHandler(({ url, referrer }) => {
     if (callPopup || !trustedMain(contents, origin)) return { action: 'deny' };
+    // A notification click can restore this window without navigation, reload,
+    // a renderer IPC bridge, or access to arbitrary local/external URLs.
+    // Mola intentionally sends Referrer-Policy: no-referrer. The active trusted
+    // WebContents still owns this fixed, focus-only request when its referrer is empty.
+    if (url === 'mola-desktop://app/notification-focus' && (!referrer.url || isTrustedUrl(referrer.url, origin))) {
+      if (window.isMinimized()) window.restore();
+      window.show();
+      window.focus();
+      return { action: 'deny' };
+    }
     const action = popupAction(url, origin);
     if (action === 'call') {
       return { action: 'allow', overrideBrowserWindowOptions: {
@@ -118,8 +131,10 @@ function guardRemoteWindow(window, origin, callPopup = false) {
 function configureSession(ses, origin) {
   if (configuredSessions.has(ses)) return;
   configuredSessions.add(ses);
-  // Decisions last for this process. Restarting lets a previously denied device prompt again.
+  // Device decisions last for this process. Notification consent survives restart
+  // separately, scoped to the exact server that requested it.
   const grants = new Map();
+  const granted = kind => kind === 'notifications' ? notificationPermissions.get(origin) : grants.get(kind);
   const passivePermissions = new Set(['fullscreen', 'clipboard-sanitized-write']);
   let permissionPending = false;
   ses.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => {
@@ -127,7 +142,7 @@ function configureSession(ses, origin) {
     // for the active server, but cannot create a grant or inherit another origin's.
     if (contents === null && permission === 'notifications') {
       return serverUrl === origin && isTrustedUrl(requestingOrigin, origin) &&
-        (!details.requestingUrl || isTrustedUrl(details.requestingUrl, origin)) && grants.get('notifications') === true;
+        (!details.requestingUrl || isTrustedUrl(details.requestingUrl, origin)) && granted('notifications') === true;
     }
     if (!trustedMain(contents, origin) || !isTrustedUrl(requestingOrigin, origin) ||
         details.isMainFrame === false || (details.requestingUrl && !isTrustedUrl(details.requestingUrl, origin))) return false;
@@ -137,7 +152,7 @@ function configureSession(ses, origin) {
       const kind = details.mediaType === 'audio' ? 'microphone' : details.mediaType === 'video' ? 'camera' : null;
       return Boolean(kind && grants.get(kind));
     }
-    return grants.get(permission) === true;
+    return granted(permission) === true;
   });
   ses.setPermissionRequestHandler((contents, permission, callback, details) => {
     if (!trustedMain(contents, origin) || details.isMainFrame === false ||
@@ -146,8 +161,10 @@ function configureSession(ses, origin) {
     // Display access is confirmed each time, including legacy chromeMediaSource
     // requests which do not pass through the getDisplayMedia source picker.
     const kinds = isDisplayCapturePermission(permission, details) ? ['screen'] : permissionKinds(permission, details);
-    if (!kinds || kinds.some(kind => grants.get(kind) === false)) return callback(false);
-    if (kinds.every(kind => grants.get(kind) === true)) return callback(true);
+    // A new explicit notification request can retry an earlier denial. Media
+    // and other permissions retain their existing process-lifetime behavior.
+    if (!kinds || kinds.some(kind => kind !== 'notifications' && granted(kind) === false)) return callback(false);
+    if (kinds.every(kind => granted(kind) === true)) return callback(true);
     if (permissionPending) return callback(false);
     permissionPending = true;
     const labels = { microphone: 'mikrofon', camera: 'kamera', screen: 'ekran paylaşımı', notifications: 'bildirim', 'speaker-selection': 'ses çıkış aygıtı' };
@@ -167,7 +184,13 @@ function configureSession(ses, origin) {
             }
           }
         }
-        for (const kind of kinds) if (kind !== 'screen') grants.set(kind, allowed);
+        for (const kind of kinds) {
+          if (kind === 'notifications') {
+            if (!trustedMain(contents, origin)) return callback(false);
+            await notificationPermissions.set(origin, allowed);
+          } else if (kind !== 'screen') grants.set(kind, allowed);
+        }
+        allowed = allowed && trustedMain(contents, origin);
         callback(allowed);
       } catch { callback(false); }
       finally { permissionPending = false; }
@@ -238,7 +261,7 @@ async function connect(value) {
   const window = new BrowserWindow({
     width: 1380, height: 900, minWidth: 800, minHeight: 600,
     title: 'Mola', backgroundColor: '#153d36', icon, show: false,
-    webPreferences: { ...remotePreferences, session: ses },
+    webPreferences: { ...remotePreferences, session: ses, autoplayPolicy: 'no-user-gesture-required' },
   });
   mainWindow = window;
   serverUrl = origin;
@@ -306,6 +329,7 @@ if (!app.requestSingleInstanceLock()) {
   });
   void app.whenReady().then(async () => {
     app.setAppUserModelId('app.mola.desktop');
+    notificationPermissions = await createNotificationPermissionStore(notificationPermissionsFile);
     const localFiles = { 'setup.html': 'text/html', 'screen.html': 'text/html', 'setup.js': 'text/javascript', 'screen.js': 'text/javascript', 'styles.css': 'text/css' };
     protocol.handle('mola-desktop', async request => {
       const url = new URL(request.url);

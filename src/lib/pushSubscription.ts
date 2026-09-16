@@ -1,6 +1,7 @@
 import type { NotificationPreferences } from "../../shared/collaboration-types";
 import { api } from "./api";
 import { applicationKey, pwaRegistration, supportsPush } from "./pwa";
+import { isDesktopRuntime } from "./desktopNotifications";
 
 export interface PushPreferences extends NotificationPreferences {
   publicKey: string;
@@ -80,6 +81,7 @@ export async function restorePushSubscription(
 ) {
   if (
     signal.aborted ||
+    isDesktopRuntime() ||
     !supportsPush() ||
     Notification.permission !== "granted"
   )

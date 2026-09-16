@@ -147,6 +147,7 @@ import {
 } from "./components/DirectConversation";
 import IntegrationsDialog from "./components/IntegrationsDialog";
 import { NotificationSettings } from "./components/NotificationSettings";
+import { clearDesktopNotifications, isDesktopRuntime, showDesktopNotification } from './lib/desktopNotifications';
 import { ChannelNotificationPreferences } from "./components/NotificationPreferencesPanel";
 import type { NotificationState } from "../shared/collaboration-types";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -353,6 +354,9 @@ function WorkspaceApp() {
   const viewRef = useRef(view);
   const tabRef = useRef(tab);
   quietRef.current = quiet;
+  useEffect(() => {
+    if (quiet) clearDesktopNotifications();
+  }, [quiet]);
   viewRef.current = view;
   tabRef.current = tab;
   channelRef.current = channelId;
@@ -989,10 +993,18 @@ function WorkspaceApp() {
         if (
           attention.channelId === channelRef.current &&
           viewRef.current === "channel" &&
-          tabRef.current === "chat"
+          tabRef.current === "chat" &&
+          (!isDesktopRuntime() || (document.visibilityState === 'visible' && document.hasFocus()))
         )
           return;
-        notify("Diğer bir sohbette yeni bir mesaj var.");
+        if (isDesktopRuntime()) {
+          void showDesktopNotification(current.user.id, attention, {
+            current: () => !disposed && !quietRef.current && dataRef.current?.user.id === current.user.id && dataRef.current?.workspace.id === workspaceId,
+          }).catch(() => {
+            if (!disposed && dataRef.current?.user.id === current.user.id)
+              notify('Masaüstü bildirimi gönderilemedi. Bildirim ayarlarından test edebilirsin.');
+          });
+        } else notify("Diğer bir sohbette yeni bir mesaj var.");
       },
     );
     client.on(
@@ -1089,6 +1101,7 @@ function WorkspaceApp() {
     );
     return () => {
       disposed = true;
+      clearDesktopNotifications();
       client.removeAllListeners();
       client.disconnect();
       clearInterval(timer);
