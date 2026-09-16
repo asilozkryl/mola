@@ -4525,7 +4525,6 @@ function WorkspaceApp() {
       <IncomingCallTransfer
         call={call}
         onAccept={() => {
-          setDialog(null);
           setCallSetupChannel(null);
           setShowCall(true);
           void call.acceptTransfer();

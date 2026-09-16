@@ -462,3 +462,39 @@ test("a cancel click cannot undo a transfer already committed while completion d
     await close();
   }
 });
+
+test("accepting a transfer preserves unsaved profile work on the receiving device", async ({
+  browser,
+}) => {
+  const { a, b, close } = await setup(browser);
+  try {
+    await b.setViewportSize({ width: 1440, height: 1000 });
+    await b
+      .getByRole("button", { name: "Profil ayarları", exact: true })
+      .click();
+    const settings = b.getByRole("dialog", {
+      name: "Kendine ait bir köşe",
+      exact: true,
+    });
+    await settings
+      .getByLabel("Unvanın", { exact: true })
+      .fill("Kaydedilmemiş unvan");
+    await join(a);
+    await offer(a, b);
+    await b
+      .getByRole("button", { name: "Bu cihazda devam et", exact: true })
+      .click();
+    await expect(
+      b.getByRole("button", { name: "Mikrofonu kapat", exact: true }),
+    ).toBeVisible();
+    await b
+      .getByRole("button", { name: "Görüşmeyi küçült", exact: true })
+      .click();
+    await expect(settings).toBeVisible();
+    await expect(settings.getByLabel("Unvanın", { exact: true })).toHaveValue(
+      "Kaydedilmemiş unvan",
+    );
+  } finally {
+    await close();
+  }
+});
