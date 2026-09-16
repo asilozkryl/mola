@@ -142,6 +142,11 @@ async function main() {
       }
       const [code] = await childExit;
       assert.equal(code, 0, stderr);
+      const ready = await readJSON(config.readyPath);
+      if (ready) await until(() => {
+        try { process.kill(ready.pid, 0); return false; }
+        catch (error) { if (error.code === 'ESRCH') return true; throw error; }
+      }, 70_000);
       const started = await readJSON(receipt);
       const previousStarted = await readJSON(previousReceipt);
       if (started) running.add(started.pid);
@@ -202,6 +207,10 @@ async function main() {
       assert.equal(failed.result.phase, 'failed', `${name} must fail`);
       assert.equal((await stat(failed.targetPath)).ino, failed.installedIdentity.ino, `${name} must preserve the installed bundle`);
       assert.equal(await readJSON(failed.receipt), null, `${name} must never launch the candidate`);
+      if (name === 'modified-candidate') {
+        const restored = await readJSON(failed.previousReceipt);
+        assert.equal(restored?.version, '1.2.2', 'An intact previous app reopens after post-exit candidate validation fails');
+      }
       console.log(`Passed: ${name} preserves the installed app.`);
     }
   } finally {

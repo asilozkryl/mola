@@ -64,11 +64,37 @@ private func trace(_ message: String) {
     #endif
 }
 
+private func resolvedPath(_ path: String) throws -> String {
+    guard let resolved = realpath(path, nil) else {
+        try fail("Güncelleme dosyasının gerçek konumu doğrulanamadı.")
+    }
+    defer { free(resolved) }
+    return String(cString: resolved)
+}
+
 private func canonicalPath(_ path: String) throws -> String {
     guard path.hasPrefix("/"), !path.utf8.contains(0), path.utf8.count < 4096 else {
         try fail("Güncelleme dosyasının yolu geçersiz.")
     }
-    let canonical = url(path).standardizedFileURL.resolvingSymlinksInPath().path
+    let components = path.split(separator: "/", omittingEmptySubsequences: false)
+    guard components.dropFirst().allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+        try fail("Güncelleme yolu geçersiz yol bileşenleri içeriyor.")
+    }
+    var information = stat()
+    let canonical: String
+    if lstat(path, &information) == 0 {
+        canonical = try resolvedPath(path)
+    } else {
+        guard errno == ENOENT, let separator = path.lastIndex(of: "/") else {
+            try fail("Güncelleme dosyasının gerçek konumu doğrulanamadı.")
+        }
+        let parent = String(path[..<separator])
+        let leaf = String(path[path.index(after: separator)...])
+        canonical = try resolvedPath(parent.isEmpty ? "/" : parent) + "/" + leaf
+    }
+    // POSIX realpath agrees with Node fs.realpath. Foundation URL
+    // standardization may prettify /private/var to /var on macOS instead.
+    trace("canonical path: \(path) -> \(canonical)")
     guard canonical == path else { try fail("Güncelleme yolu sembolik bağlantı veya yönlendirme içeriyor.") }
     return canonical
 }
@@ -318,8 +344,8 @@ private func launch(_ configuration: Configuration) throws {
     }
     guard error == nil, application.processIdentifier != configuration.parentPid,
           application.bundleIdentifier == configuration.bundleId,
-          application.bundleURL?.resolvingSymlinksInPath().path == configuration.targetPath,
-          application.executableURL?.resolvingSymlinksInPath().path == url(configuration.targetPath).appendingPathComponent("Contents/MacOS/Mola").path,
+          application.bundleURL.flatMap({ try? resolvedPath($0.path) }) == configuration.targetPath,
+          application.executableURL.flatMap({ try? resolvedPath($0.path) }) == url(configuration.targetPath).appendingPathComponent("Contents/MacOS/Mola").path,
           !application.isTerminated else {
         if !application.isTerminated {
             throw LaunchStillRunning(message: "Açılan Mola'nın konumu doğrulanamadı. Çalışan uygulama korunuyor; eski sürümün kurtarma kopyası saklandı.")
