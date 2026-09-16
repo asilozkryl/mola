@@ -298,7 +298,7 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
       };
       const transfer: PendingTransfer = {
         info, workspaceId: options.workspaceId, userId: options.user.id, targetSocketId, state: 'pending',
-        timer: setTimeout(() => cancelTransfer(io, transfer, 'Aktarım isteğinin süresi doldu. Görüşme mevcut cihazda devam ediyor.'), Math.max(1, info.expiresAt - Date.now())),
+        timer: setTimeout(() => cancelTransfer(io, transfer, 'Aktarım isteğinin süresi doldu. Görüşme önceki cihazda devam ediyor.'), Math.max(1, info.expiresAt - Date.now())),
       };
       transfer.timer.unref();
       registry!.transfers.set(info.id, transfer);
@@ -316,8 +316,8 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
       return;
     }
     cancelTransfer(io, transfer, socket.id === transfer.targetSocketId
-      ? 'Diğer cihaz aktarımı kabul etmedi. Görüşme burada devam ediyor.'
-      : 'Aktarım iptal edildi. Görüşme mevcut cihazda devam ediyor.');
+      ? 'Aktarım kabul edilmedi. Görüşme önceki cihazda devam ediyor.'
+      : 'Aktarım iptal edildi. Görüşme önceki cihazda devam ediyor.');
     if (typeof ack === 'function') ack({ ok: true });
   });
 
@@ -332,7 +332,7 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
     if (!await transferHasAccess(io, registry!, transfer)
       || channels.get(socket.id) !== transfer.info.channelId
       || registry!.transfers.get(transfer.info.id) !== transfer) {
-      cancelTransfer(io, transfer, 'Aktarım tamamlanamadı. Görüşme mevcut cihazda devam ediyor.');
+      cancelTransfer(io, transfer, 'Aktarım tamamlanamadı. Görüşme önceki cihazda devam ediyor.');
       return ack({ ok: false, error: 'Aktarım tamamlanamadı. Yeniden deneyin.' });
     }
     const mic = rooms.get(transfer.info.channelId)?.get(transfer.info.sourceSocketId)?.mic ?? false;

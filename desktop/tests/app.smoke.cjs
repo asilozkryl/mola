@@ -66,8 +66,9 @@ const fixtureHtml = `<!doctype html>
   </script>
 </body></html>`;
 
-async function fixtureServer() {
+async function fixtureServer(unavailable = false) {
   const server = createServer((request, response) => {
+    if (unavailable) { request.socket.destroy(); return; }
     response.setHeader('Cache-Control', 'no-store');
     if (request.url === '/api/session') {
       response.setHeader('Content-Type', 'application/json');
@@ -114,6 +115,33 @@ async function launch(userData, serverUrl, fakeMedia = true) {
   });
 }
 
+async function closeApplication(application) {
+  if (!application) return;
+  let timer;
+  try {
+    await Promise.race([
+      application.close(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          application.process()?.kill('SIGKILL');
+          reject(new Error('Electron did not close within 5 seconds; its isolated test process was stopped.'));
+        }, 5000);
+      }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
+async function cleanup(application, userData, ...servers) {
+  try { await closeApplication(application); }
+  finally {
+    for (const server of servers) {
+      server.closeAllConnections();
+      await new Promise(resolve => server.close(resolve));
+    }
+    await rm(userData, { recursive: true, force: true });
+  }
+}
+
 async function assertSandbox(page) {
   assert.deepEqual(await page.evaluate(() => ({
     require: typeof window.require,
@@ -126,12 +154,7 @@ test('desktop setup validates the server, isolates remote content, and preserves
   const userData = await mkdtemp(path.join(tmpdir(), 'mola-desktop-smoke-'));
   const { server, url } = await fixtureServer();
   let application;
-  t.after(async () => {
-    await application?.close();
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-    await rm(userData, { recursive: true, force: true });
-  });
+  t.after(() => cleanup(application, userData, server));
 
   await t.test('first launch rejects plain HTTP on a public host and accepts loopback', async () => {
     application = await launch(userData);
@@ -217,7 +240,7 @@ test('desktop setup validates the server, isolates remote content, and preserves
   });
 
   await t.test('saved server and HTTP-only session survive a full app restart', async () => {
-    await application.close();
+    await closeApplication(application);
     application = undefined;
     application = await launch(userData);
     const remote = await application.firstWindow();
@@ -232,14 +255,7 @@ test('MOLA_SERVER_URL selects the server without exposing another server\'s sess
   const { server, url } = await fixtureServer();
   const other = await fixtureServer();
   let application;
-  t.after(async () => {
-    await application?.close();
-    server.closeAllConnections();
-    other.server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-    await new Promise((resolve) => other.server.close(resolve));
-    await rm(userData, { recursive: true, force: true });
-  });
+  t.after(() => cleanup(application, userData, server, other.server));
   application = await launch(userData, url);
   const remote = await application.firstWindow();
   await expect(remote).toHaveURL(url);
@@ -247,7 +263,7 @@ test('MOLA_SERVER_URL selects the server without exposing another server\'s sess
   await assertSandbox(remote);
   await remote.getByRole('button', { name: 'Oturum aç', exact: true }).click();
   await expect(remote.getByRole('status')).toHaveText('Oturum açık');
-  await application.close();
+  await closeApplication(application);
   application = undefined;
 
   // Cookies alone ignore ports. Separate server partitions must prevent a leak.
@@ -257,23 +273,33 @@ test('MOLA_SERVER_URL selects the server without exposing another server\'s sess
   await expect(otherRemote.getByRole('status')).toHaveText('Oturum kapalı');
 });
 
-test('an unavailable server returns to setup and a corrected address connects', { timeout: 60_000 }, async (t) => {
+test('an unavailable server change returns to setup and a corrected address connects', { timeout: 60_000 }, async (t) => {
   const userData = await mkdtemp(path.join(tmpdir(), 'mola-desktop-recovery-smoke-'));
   const { server, url } = await fixtureServer();
-  const unavailable = await fixtureServer();
-  await new Promise((resolve) => unavailable.server.close(resolve));
+  const unavailable = await fixtureServer(true);
   let application;
-  t.after(async () => {
-    await application?.close();
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-    await rm(userData, { recursive: true, force: true });
+  t.after(() => cleanup(application, userData, server, unavailable.server));
+  // Playwright attaches through the initial renderer. Replacing that renderer
+  // during launch can strand its attachment on CI; attach first, then exercise
+  // the real menu/IPC connect and recovery path against a failed connection.
+  t.diagnostic('Recovery: attaching to the ready test application.');
+  application = await launch(userData, url);
+  const initial = await application.firstWindow();
+  await expect(initial.getByRole('heading', { name: 'Mola test sunucusu' })).toBeVisible();
+  await application.evaluate(({ Menu, dialog }) => {
+    const original = dialog.showMessageBox;
+    dialog.showMessageBox = (...args) => args.at(-1).message === 'Sunucuya yeniden bağlanılsın mı?'
+      ? Promise.resolve({ response: 1, checkboxChecked: false }) : original.apply(dialog, args);
+    Menu.getApplicationMenu().items[0].submenu.items.find(item => item.label === 'Sunucu adresini değiştir…').click();
   });
-  application = await launch(userData, unavailable.url);
   await expect.poll(() => application.windows().find((page) => page.url() === 'mola-desktop://app/setup.html')).toBeTruthy();
   const setup = application.windows().find((page) => page.url() === 'mola-desktop://app/setup.html');
+  t.diagnostic('Recovery: requesting the unavailable server through setup.');
+  await setup.getByLabel('Sunucu adresi').fill(unavailable.url);
+  await setup.getByRole('button', { name: 'Bağlan', exact: true }).click();
   await expect(setup.getByRole('alert')).toBeVisible();
   await expect(setup.getByRole('alert')).not.toHaveText('');
+  t.diagnostic('Recovery: correcting the address and checking the loaded server.');
   await setup.getByLabel('Sunucu adresi').fill(url);
   await setup.getByRole('button', { name: 'Bağlan', exact: true }).click();
   await expect.poll(() => application.windows().find((page) => page.url() === url)).toBeTruthy();
@@ -285,12 +311,7 @@ test('cancelling the Linux screen picker rejects capture', { skip: process.platf
   const userData = await mkdtemp(path.join(tmpdir(), 'mola-desktop-picker-smoke-'));
   const { server, url } = await fixtureServer();
   let application;
-  t.after(async () => {
-    await application?.close();
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-    await rm(userData, { recursive: true, force: true });
-  });
+  t.after(() => cleanup(application, userData, server));
   application = await launch(userData, url, false);
   const remote = await application.firstWindow();
   await expect(remote).toHaveURL(url);

@@ -165,7 +165,8 @@ export function CallTransferDevices({
               <strong>Diğer cihazın henüz görünmüyor</strong>
               <p>
                 Aynı hesapla giriş yap, bu çalışma alanını aç ve uygulamayı
-                ekranda açık tut. Cihazın burada görünecek.
+                ekranda açık tut. Görünmüyorsa diğer cihazda Mola’yı yenile
+                veya yeniden aç.
               </p>
             </div>
           )}

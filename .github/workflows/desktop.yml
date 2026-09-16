@@ -49,6 +49,7 @@ jobs:
       - name: Enable Chromium sandbox namespaces on the ephemeral runner
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Smoke test Electron with a virtual display
+        timeout-minutes: 4
         run: xvfb-run --auto-servernum npm run test:smoke
       - name: Install Mola app test dependencies
         working-directory: .
@@ -57,6 +58,7 @@ jobs:
         working-directory: .
         run: npm run build
       - name: Verify the real Mola app inside Electron
+        timeout-minutes: 3
         working-directory: .
         run: xvfb-run --auto-servernum npm run desktop:test:app
 
