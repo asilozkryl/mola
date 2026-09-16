@@ -75,6 +75,7 @@ async function verifyApplication(appPath, root) {
     const updateState = await updates.evaluate(() => window.molaDesktop.getUpdateState());
     assert.equal(updateState.currentVersion, version);
     assert.equal(updateState.format, 'dmg');
+    assert.equal(updateState.installMode, 'relaunch');
     assert.notEqual(updateState.phase, 'unsupported');
     await updates.close();
     console.log(`Verified ${path.basename(root)}: ${architecture.stdout.trim()}, valid bundle signature, packaged ${version}, setup and sandboxed renderer.`);

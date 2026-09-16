@@ -58,6 +58,11 @@ private struct Identity {
 
 private func fail(_ message: String) throws -> Never { throw UpdateFailure(message: message) }
 private func url(_ path: String) -> URL { URL(fileURLWithPath: path) }
+private func trace(_ message: String) {
+    #if MOLA_UPDATER_TESTING
+    fputs("Native updater test [\(ProcessInfo.processInfo.systemUptime)]: \(message)\n", stderr)
+    #endif
+}
 
 private func canonicalPath(_ path: String) throws -> String {
     guard path.hasPrefix("/"), !path.utf8.contains(0), path.utf8.count < 4096 else {
@@ -118,6 +123,7 @@ private func syncDirectory(_ path: String) throws {
 }
 
 private func command(_ executable: String, _ arguments: [String]) throws -> (String, String) {
+    trace("command: \(executable) \(arguments.joined(separator: " "))")
     let process = Process()
     let output = Pipe()
     let errors = Pipe()
@@ -127,7 +133,11 @@ private func command(_ executable: String, _ arguments: [String]) throws -> (Str
     process.standardError = errors
     try process.run()
     let deadline = ProcessInfo.processInfo.systemUptime + 30
-    while process.isRunning && ProcessInfo.processInfo.systemUptime < deadline { Thread.sleep(forTimeInterval: 0.02) }
+    // Foundation delivers task lifecycle events through the run loop. Keep it
+    // serviced while retaining a deadline, as waitUntilExit() does internally.
+    while process.isRunning && ProcessInfo.processInfo.systemUptime < deadline {
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.02))
+    }
     if process.isRunning {
         process.terminate()
         Thread.sleep(forTimeInterval: 0.1)
@@ -137,6 +147,7 @@ private func command(_ executable: String, _ arguments: [String]) throws -> (Str
     }
     let stdout = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     let stderr = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    trace("command completed: \(process.terminationStatus)")
     guard process.terminationStatus == 0 else {
         try fail("macOS uygulama paketini doğrulayamadı. Mevcut sürüm korunuyor.")
     }
@@ -277,6 +288,7 @@ private final class LaunchResult: @unchecked Sendable {
 }
 
 private func launch(_ configuration: Configuration) throws {
+    trace("launch requested")
     #if MOLA_UPDATER_TESTING
     if ProcessInfo.processInfo.environment["MOLA_UPDATER_TEST_SCENARIO"] == "deny-launch" {
         try fail("Test: LaunchServices rejected the update.")
@@ -291,6 +303,7 @@ private func launch(_ configuration: Configuration) throws {
     options.addsToRecentItems = false
     options.createsNewApplicationInstance = true
     NSWorkspace.shared.openApplication(at: url(configuration.targetPath), configuration: options) { application, error in
+        trace("LaunchServices completed, pid: \(application?.processIdentifier ?? 0), error: \(String(describing: error))")
         result.set(application, error)
     }
     let deadline = ProcessInfo.processInfo.systemUptime + 45
@@ -346,13 +359,17 @@ private func reopenOriginal(_ configuration: Configuration, identity: Identity) 
 }
 
 private func perform(_ configuration: Configuration) throws {
+    trace("configuration accepted; validating bundles")
     try verifyBundle(configuration.targetPath, version: configuration.currentVersion, configuration: configuration)
     try verifyBundle(configuration.candidatePath, version: configuration.version, configuration: configuration)
     let installed = try Identity(configuration.targetPath)
     let candidate = try Identity(configuration.candidatePath)
     try writeJSON(["schema": 1, "phase": "ready", "pid": Int(getpid())], to: configuration.readyPath)
+    trace("ready published; waiting for commit")
     try waitForCommit(configuration)
+    trace("commit received; waiting for parent exit")
     try waitForParentExit(configuration)
+    trace("parent exited")
     var swapped = false
     do {
         guard installed.matches(try Identity(configuration.targetPath)), candidate.matches(try Identity(configuration.candidatePath)) else {
@@ -361,6 +378,7 @@ private func perform(_ configuration: Configuration) throws {
         try verifyBundle(configuration.targetPath, version: configuration.currentVersion, configuration: configuration)
         try verifyBundle(configuration.candidatePath, version: configuration.version, configuration: configuration)
         try swap(configuration.targetPath, configuration.candidatePath)
+        trace("bundles swapped")
         swapped = true
         try syncDirectory(url(configuration.targetPath).deletingLastPathComponent().path)
         try syncDirectory(url(configuration.candidatePath).deletingLastPathComponent().path)

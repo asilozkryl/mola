@@ -44,6 +44,7 @@ app.run()
 // consent and then exits, just as Electron does in production.
 const driverSource = String.raw`
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const { spawn } = require('node:child_process');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 (async () => {
@@ -51,7 +52,9 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
   const config = JSON.parse(await fs.readFile(configFile, 'utf8'));
   config.parentPid = process.pid;
   await fs.writeFile(configFile, JSON.stringify(config), { mode: 0o600 });
-  const child = spawn(helper, [configFile], { detached: true, stdio: 'ignore' });
+  const log = fsSync.openSync(configFile + '.helper.log', 'wx', 0o600);
+  const child = spawn(helper, [configFile], { detached: true, stdio: ['ignore', log, log] });
+  fsSync.closeSync(log);
   child.on('error', error => { console.error(error); process.exit(1); });
   child.unref();
   const deadline = Date.now() + 25000;
@@ -126,18 +129,32 @@ async function main() {
       const childExit = once(child, 'exit');
       let stderr = '';
       child.stderr.on('data', bytes => { stderr += bytes; });
-      const result = await until(() => readJSON(config.resultPath));
+      let result;
+      try {
+        // LaunchServices has a 45-second native deadline. Wait long enough to
+        // receive that explicit outcome rather than masking it with a fixture timeout.
+        result = await until(() => readJSON(config.resultPath), 70_000);
+      } catch (error) {
+        console.error(`Native fixture ${name}: driver stderr: ${stderr}`);
+        console.error(await readFile(configFile + '.helper.log', 'utf8').catch(() => 'No helper log'));
+        console.error({ ready: await readJSON(config.readyPath), commit: await readJSON(config.commitPath), result: await readJSON(config.resultPath) });
+        throw error;
+      }
       const [code] = await childExit;
       assert.equal(code, 0, stderr);
       const started = await readJSON(receipt);
       const previousStarted = await readJSON(previousReceipt);
       if (started) running.add(started.pid);
       if (previousStarted) running.add(previousStarted.pid);
+      if (name === 'successful-update' && result.phase !== 'installed') {
+        console.error(await readFile(configFile + '.helper.log', 'utf8'));
+        console.error(result);
+      }
       return { ...config, result, receipt, previousReceipt, installedIdentity, candidateIdentity, quarantineValue };
     }
 
     const success = await fixture('successful-update');
-    assert.equal(success.result.phase, 'installed');
+    assert.equal(success.result.phase, 'installed', JSON.stringify(success.result));
     assert.equal(success.result.backupPath, success.candidatePath);
     assert.equal((await stat(success.targetPath)).ino, success.candidateIdentity.ino, 'New bundle replaces the complete old bundle');
     assert.equal((await stat(success.candidatePath)).ino, success.installedIdentity.ino, 'Previous bundle is preserved intact');

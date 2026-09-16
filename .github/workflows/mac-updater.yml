@@ -1,0 +1,29 @@
+name: Check Mac updater
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-updater-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-helper:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.20.0
+      - name: Exercise native bundle replacement and recovery
+        run: node desktop/scripts/test-mac-updater.cjs
