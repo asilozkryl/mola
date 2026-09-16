@@ -46,6 +46,8 @@ export interface NotificationSettingsProps {
   channels: readonly Channel[];
   members: readonly User[];
   revision?: number;
+  quiet?: boolean;
+  onResumeNotifications?: () => void;
   onClose: () => void;
 }
 

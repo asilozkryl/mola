@@ -138,6 +138,79 @@ test("Electron can request initially denied permission without a Web Push subscr
     }
 });
 
+test("desktop quiet mode reports paused delivery and resumes without changing message preferences", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  const policyChanges: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("request", (request) => {
+    if (
+      request.method() === "PATCH" &&
+      /\/api\/(?:notifications\/settings|channels\/[^/]+\/notification-settings)$/.test(
+        new URL(request.url()).pathname,
+      )
+    )
+      policyChanges.push(request.url());
+  });
+  await page.addInitScript(() => localStorage.setItem("mola:quiet", "true"));
+  await desktop(page);
+  const deviceState = page.locator(".notification-device-state");
+  await page
+    .getByRole("button", { name: "Bu cihazda bildirimleri aç", exact: true })
+    .click();
+  await expect(deviceState).toHaveAttribute("data-state", "paused");
+  await expect(deviceState).toContainText("Bildirimler bu cihazda duraklatıldı");
+  await expect(deviceState).toContainText("Sessiz mod açık");
+  await expect(
+    page.getByText("Test bildirimi, mesaj filtrelerini ve sessiz modu atlar.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Test bildirimi gönder", exact: true })
+    .click();
+  await expect(page.locator(".notification-success")).toContainText(
+    "sistemine gönderildi",
+  );
+  await expect(deviceState).toHaveAttribute("data-state", "paused");
+  expect(await page.evaluate(() => localStorage.getItem("mola:quiet"))).toBe(
+    "true",
+  );
+  const resume = page.getByRole("button", {
+    name: "Bildirimleri sürdür",
+    exact: true,
+  });
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await resume.scrollIntoViewIfNeeded();
+    const dialog = page.getByRole("dialog", {
+      name: "Bildirimler ve uygulama",
+      exact: true,
+    });
+    expect(
+      await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth),
+    ).toBe(true);
+    await page.screenshot({
+      path: `/tmp/mola-desktop-quiet-${width}.png`,
+      animations: "disabled",
+    });
+  }
+  await resume.click();
+  await expect(deviceState).toHaveAttribute("data-state", "enabled");
+  await expect(deviceState).toContainText("Bu cihazda bildirimler açık");
+  await expect(resume).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("mola:quiet"))).toBe(
+    "false",
+  );
+  expect(
+    await page.evaluate(() => (window as any).desktopNotificationQa.prompts),
+  ).toBe(1);
+  expect(policyChanges).toEqual([]);
+  expect(errors).toEqual([]);
+  await expect(page.locator("vite-error-overlay")).toHaveCount(0);
+});
+
 test("desktop denial can be retried and local sound can be previewed or silenced", async ({
   page,
 }) => {

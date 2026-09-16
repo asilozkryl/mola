@@ -1062,9 +1062,10 @@ function WorkspaceApp() {
           : old,
       );
     });
-    client.on("channel:created", (channel: Channel) =>
-      setData((old) =>
-        old
+    client.on("channel:created", (channel: Channel) => {
+      if (disposed) return;
+      const update = (old: Bootstrap | null) =>
+        old?.workspace.id === workspaceId && old.user.id === data.user.id
           ? {
               ...old,
               channels: [
@@ -1072,9 +1073,12 @@ function WorkspaceApp() {
                 channel,
               ],
             }
-          : old,
-      ),
-    );
+          : old;
+      // A first DM and its attention event can arrive in the same React batch.
+      // Make the authorized channel available to socket listeners immediately.
+      dataRef.current = update(dataRef.current);
+      setData(update);
+    });
     client.on(
       "typing",
       ({
@@ -3985,6 +3989,12 @@ function WorkspaceApp() {
           channels={data.channels}
           members={data.members}
           revision={notificationSettingsRevision}
+          quiet={quiet}
+          onResumeNotifications={() => {
+            localStorage.setItem("mola:quiet", "false");
+            quietRef.current = false;
+            setQuiet(false);
+          }}
           onClose={() => setDialog(null)}
         />
       )}

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { randomUUID } from 'node:crypto';
-import { _electron, expect } from '@playwright/test';
+import { _electron, expect, request } from '@playwright/test';
 import { createApp } from '../../server/app.ts';
 
 async function closeApplication(application) {
@@ -78,6 +78,186 @@ test('packaged web UI sends and reloads messages through the real Mola API and S
   assert.deepEqual(errors, []);
   await mkdir(resolve('artifacts'), { recursive: true });
   await page.screenshot({ path: resolve('artifacts/mola-desktop.png'), animations: 'disabled' });
+});
+
+test('real messages from another account notify desktop for mentions, all-channel mode and a batched first DM', { timeout: 90_000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'mola-desktop-live-notifications-'));
+  const profile = join(directory, 'profile');
+  await mkdir(profile, { recursive: true });
+  const reservation = createServer();
+  reservation.listen(0, '127.0.0.1');
+  await once(reservation, 'listening');
+  const port = reservation.address().port;
+  await new Promise(done => reservation.close(done));
+  const origin = `http://127.0.0.1:${port}`;
+  const previousStatic = process.env.SERVE_STATIC;
+  process.env.SERVE_STATIC = 'true';
+  const runtime = createApp({
+    appOrigin: origin, databasePath: ':memory:', dataDir: directory,
+    uploadDir: join(directory, 'uploads'), production: false,
+    mailEncryptionKey: 'c'.repeat(64), mailTransport: async () => {},
+  });
+  let application;
+  let sender;
+  t.after(async () => {
+    try { await closeApplication(application); }
+    finally {
+      await sender?.dispose();
+      await runtime.close();
+      if (previousStatic === undefined) delete process.env.SERVE_STATIC;
+      else process.env.SERVE_STATIC = previousStatic;
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+  await new Promise(done => runtime.server.listen(port, '127.0.0.1', done));
+  const env = { ...process.env, MOLA_SERVER_URL: origin };
+  delete env.ELECTRON_RUN_AS_NODE;
+  const require = createRequire(new URL('../package.json', import.meta.url));
+  application = await _electron.launch({
+    executablePath: require('electron'), chromiumSandbox: true,
+    args: [resolve('desktop/main.cjs'), `--user-data-dir=${profile}`], env,
+  });
+  const page = await application.firstWindow();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await expect(page.getByRole('textbox', { name: /kanalına mesaj yaz/ })).toBeVisible({ timeout: 30_000 });
+  const headers = { Origin: origin };
+  // Electron's native session cookie jar is separate from Playwright's API
+  // request jar. Recipient requests must run through the actual renderer.
+  const recipientRequest = (path, method = 'GET', data) => page.evaluate(async ({ path, method, data }) => {
+    const response = await fetch(path, {
+      method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+      ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+    });
+    return { status: response.status, data: await response.json() };
+  }, { path, method, data });
+  const registration = await recipientRequest('/api/auth/register', 'POST', {
+    name: 'Masaüstü Alıcısı', email: `desktop-recipient-${randomUUID()}@example.invalid`,
+    password: 'desktop-live-notification-Password1!', workspaceName: 'Canlı Bildirim Testi',
+  });
+  assert.equal(registration.status, 200);
+  const recipient = registration.data;
+  const invitation = await recipientRequest('/api/invites', 'POST');
+  assert.equal(invitation.status, 201);
+  const inviteToken = new URL(invitation.data.url).searchParams.get('invite');
+  sender = await request.newContext({ baseURL: origin });
+  const senderRegistration = await sender.post('/api/auth/register', {
+    headers, data: {
+      name: 'Gerçek Gönderici', email: `desktop-sender-${randomUUID()}@example.invalid`,
+      password: 'desktop-live-notification-Password2!', inviteToken,
+    },
+  });
+  assert.equal(senderRegistration.status(), 200);
+  const senderData = await senderRegistration.json();
+  assert.notEqual(senderData.user.id, recipient.user.id);
+
+  await page.addInitScript(() => {
+    const NativeSocket = WebSocket;
+    // Preserve real Socket.IO bytes. Buffering only changes their scheduling so
+    // channel creation and its first attention can arrive in one React batch.
+    const wire = window.molaLiveWire = { holding: false, frames: [], delivered: [] };
+    window.WebSocket = class extends NativeSocket {
+      constructor(...args) {
+        super(...args);
+        let handler = null;
+        Object.defineProperty(this, 'onmessage', {
+          configurable: true,
+          get: () => handler,
+          set: value => { handler = value; },
+        });
+        this.addEventListener('message', event => {
+          if (wire.holding) wire.frames.push({ socket: this, handler, event });
+          else {
+            wire.delivered.push(String(event.data));
+            handler?.call(this, event);
+          }
+        });
+      }
+    };
+    wire.release = () => {
+      wire.holding = false;
+      for (const frame of wire.frames.splice(0)) {
+        wire.delivered.push(String(frame.event.data));
+        frame.handler?.call(frame.socket, frame.event);
+      }
+    };
+    const NativeNotification = Notification;
+    window.molaLiveNotifications = [];
+    window.Notification = class {
+      static get permission() { return NativeNotification.permission; }
+      static requestPermission(...args) { return NativeNotification.requestPermission(...args); }
+      constructor(title, options) {
+        window.molaLiveNotifications.push({ title, options });
+        setTimeout(() => this.onshow?.(), 0);
+      }
+      close() { this.onclose?.(); }
+    };
+  });
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: /kanalına mesaj yaz/ })).toBeVisible({ timeout: 30_000 });
+  await application.evaluate(({ dialog }) => {
+    const original = dialog.showMessageBox;
+    dialog.showMessageBox = (...args) => args.at(-1).title === 'Mola izin isteği'
+      ? Promise.resolve({ response: 1, checkboxChecked: false })
+      : original.apply(dialog, args);
+  });
+  await page.getByRole('button', { name: 'Bildirimler ve uygulama', exact: true }).click();
+  await page.getByRole('button', { name: 'Bu cihazda bildirimleri aç', exact: true }).click();
+  await expect(page.locator('.notification-device-state')).toHaveAttribute('data-state', 'enabled');
+  assert.equal(await page.evaluate(() => Notification.permission), 'granted');
+  await page.getByRole('checkbox', { name: 'Mola bildirim sesi' }).uncheck();
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    document.hasFocus = () => false;
+  });
+  const room = `workspace-user:${recipient.workspace.id}:${recipient.user.id}`;
+  await expect.poll(() => runtime.io.sockets.adapter.rooms.get(room)?.size ?? 0).toBeGreaterThan(0);
+  const channel = recipient.channels.find(candidate => candidate.name === 'genel');
+  assert.ok(channel);
+  const mode = await recipientRequest('/api/notifications/settings');
+  assert.equal(mode.data.defaultMode, 'mentions');
+  const send = async (channelId, content) => {
+    const response = await sender.post(`/api/channels/${channelId}/messages`, { headers, data: { content } });
+    assert.equal(response.status(), 201);
+    return response.json();
+  };
+  const expectNotification = message => expect.poll(() => page.evaluate(id =>
+    window.molaLiveNotifications.some(item => item.options.tag === `mola:${id}`), message.id),
+  ).toBe(true);
+  const mentioned = await send(channel.id, `@[${recipient.user.id}] Gerçek mesajdan gelen masaüstü bildirimi`);
+  await expectNotification(mentioned);
+  t.diagnostic('A real channel mention produced a native desktop Notification with default mentions policy.');
+
+  // The application intentionally coalesces attention inside two seconds.
+  // Wait for that real interval rather than replacing the production clock.
+  await new Promise(done => setTimeout(done, 2100));
+  const allMode = await recipientRequest('/api/notifications/settings', 'PATCH', { defaultMode: 'all' });
+  assert.equal(allMode.status, 200);
+  const ordinary = await send(channel.id, 'Tüm mesajlar modunda normal kanal mesajı');
+  await expectNotification(ordinary);
+  t.diagnostic('A real ordinary channel message produced a desktop Notification when workspace mode was all.');
+
+  await new Promise(done => setTimeout(done, 2100));
+  const mentionsMode = await recipientRequest('/api/notifications/settings', 'PATCH', { defaultMode: 'mentions' });
+  assert.equal(mentionsMode.status, 200);
+  await page.evaluate(() => { window.molaLiveWire.holding = true; });
+  const dmResponse = await sender.post('/api/dms', { headers, data: { userId: recipient.user.id } });
+  assert.equal(dmResponse.status(), 201);
+  const dm = await dmResponse.json();
+  assert.equal(dm.kind, 'dm');
+  const firstDm = await send(dm.id, 'Yeni özel konuşmadaki ilk gerçek mesaj');
+  await expect.poll(() => page.evaluate(({ channelId, messageId }) => {
+    const frames = window.molaLiveWire.frames.map(frame => String(frame.event.data));
+    return frames.some(frame => frame.includes('"channel:created"') && frame.includes(channelId)) &&
+      frames.some(frame => frame.includes('"notifications:attention"') && frame.includes(messageId));
+  }, { channelId: dm.id, messageId: firstDm.id })).toBe(true);
+  assert.equal(await page.evaluate(id => window.molaLiveNotifications.some(item => item.options.tag === `mola:${id}`), firstDm.id), false);
+  await page.evaluate(() => window.molaLiveWire.release());
+  await expectNotification(firstDm);
+  assert.equal(await page.evaluate(() => window.molaLiveNotifications.length), 3);
+  assert.ok((await page.evaluate(() => window.molaLiveNotifications)).every(item => item.options.silent === true));
+  assert.deepEqual(errors, []);
 });
 
 test('the real desktop notification settings recover from denial and retain consent and sound preferences after restart', { timeout: 90_000 }, async (t) => {

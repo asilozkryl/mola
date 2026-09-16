@@ -13,7 +13,13 @@ import {
 import { playMolaNotificationSound } from "../lib/notificationSound";
 
 export function DesktopNotificationSettings(props: NotificationSettingsProps) {
-  const { userId, workspaceId, onClose } = props;
+  const {
+    userId,
+    workspaceId,
+    quiet = false,
+    onResumeNotifications,
+    onClose,
+  } = props;
   const desktopVersion = navigator.userAgent.match(/(?:^|\s)MolaDesktop\/(\d+\.\d+\.\d+)(?:\s|$)/)?.[1];
   const [preferences, setPreferences] = useState(() =>
     readDesktopNotificationPreferences(userId),
@@ -52,7 +58,14 @@ export function DesktopNotificationSettings(props: NotificationSettingsProps) {
   }, [userId]);
   const supported = desktopNotificationsSupported();
   const enabled = preferences.enabled && permission === "granted";
-  const state = !supported ? "unsupported" : enabled ? "enabled" : "disabled";
+  const paused = enabled && quiet;
+  const state = !supported
+    ? "unsupported"
+    : paused
+      ? "paused"
+      : enabled
+        ? "enabled"
+        : "disabled";
   async function run(action: () => Promise<void>) {
     if (operation.current) return;
     operation.current = true;
@@ -95,23 +108,27 @@ export function DesktopNotificationSettings(props: NotificationSettingsProps) {
             </div>
           </div>
           <div
-            className={`notification-device-state ${enabled ? "is-enabled" : ""}`}
+            className={`notification-device-state ${state === "enabled" ? "is-enabled" : ""}`}
             data-state={state}
             role="status"
           >
-            {enabled ? <Check size={17} /> : <BellOff size={17} />}
+            {state === "enabled" ? <Check size={17} /> : <BellOff size={17} />}
             <div>
               <strong>
                 {!supported
                   ? "Bu sistemde bildirimler kullanılamıyor"
-                  : enabled
-                    ? "Bu cihazda bildirimler açık"
-                    : "Bu cihazda bildirimler kapalı"}
+                  : paused
+                    ? "Bildirimler bu cihazda duraklatıldı"
+                    : enabled
+                      ? "Bu cihazda bildirimler açık"
+                      : "Bu cihazda bildirimler kapalı"}
               </strong>
               <p>
-                {enabled
-                  ? "Kanal tercihlerin ve sessiz saatlerin uygulanır."
-                  : "Aç düğmesiyle Mola için bildirim izni verebilirsin."}
+                {paused
+                  ? "Sessiz mod açık. Gelen mesajlar için bildirim ve ses gönderilmiyor."
+                  : enabled
+                    ? "Kanal tercihlerin ve sessiz saatlerin uygulanır."
+                    : "Aç düğmesiyle Mola için bildirim izni verebilirsin."}
               </p>
             </div>
           </div>
@@ -141,7 +158,9 @@ export function DesktopNotificationSettings(props: NotificationSettingsProps) {
                       enabled: true,
                     });
                     setNotice(
-                      "Bildirimler bu cihazda açıldı. Test bildirimiyle kontrol edebilirsin.",
+                      quiet
+                        ? "Bildirim izni verildi. Mesaj bildirimleri sessiz mod nedeniyle duraklatıldı."
+                        : "Bildirimler bu cihazda açıldı. Test bildirimiyle kontrol edebilirsin.",
                     );
                   })
                 }
@@ -150,10 +169,28 @@ export function DesktopNotificationSettings(props: NotificationSettingsProps) {
               </Button>
             ) : (
               <>
+                {paused && onResumeNotifications && (
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    className="notification-primary"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        onResumeNotifications();
+                        setNotice(
+                          "Bu cihazdaki sessiz mod kapatıldı. Kanal tercihlerin ve sessiz saatlerin uygulanmaya devam eder.",
+                        );
+                      })
+                    }
+                  >
+                    <Bell size={15} /> Bildirimleri sürdür
+                  </Button>
+                )}
                 <Button
                   variant="unstyled"
                   size="unset"
-                  className="notification-primary"
+                  className={paused ? "notification-secondary" : "notification-primary"}
                   disabled={busy}
                   onClick={() =>
                     void run(async () => {
@@ -209,6 +246,9 @@ export function DesktopNotificationSettings(props: NotificationSettingsProps) {
               <RefreshCw size={15} /> Durumu yenile
             </Button>
           </div>
+          <p className="notification-desktop-help">
+            Test bildirimi, mesaj filtrelerini ve sessiz modu atlar.
+          </p>
           <p className="notification-desktop-help">
             Bildirim gelmiyorsa sisteminin Bildirimler bölümünde Mola'ya izin
             ver. macOS'ta Sistem Ayarları → Bildirimler → Mola yolunu kullan.
