@@ -35,9 +35,7 @@ mac:
     NSCameraUsageDescription: Mola görüntülü görüşmeler için kameranızı kullanır.
   target:
     - target: dmg
-      arch: [x64, arm64]
     - target: zip
-      arch: [x64, arm64]
 win:
   icon: assets/icon.png
   target:

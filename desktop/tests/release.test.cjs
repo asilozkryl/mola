@@ -6,6 +6,23 @@ const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const { installerGroups, prepareRelease } = require('../scripts/prepare-release.cjs');
 
+test('Mac packaging honors each native runner architecture and the combined local command', async () => {
+  const { load } = require('js-yaml');
+  const { normalizeOptions } = require('electron-builder/out/builder');
+  const { computeArchToTargetNamesMap } = require('app-builder-lib/out/targets/targetFactory');
+  const { Platform } = require('app-builder-lib');
+  const { Arch } = require('builder-util');
+  const config = load(await readFile(join(__dirname, '..', 'electron-builder.yml'), 'utf8'));
+  for (const flags of [{ x64: true }, { arm64: true }, { x64: true, arm64: true }]) {
+    const options = normalizeOptions({ mac: [], ...flags });
+    const targets = computeArchToTargetNamesMap(options.targets.get(Platform.MAC), {
+      platformSpecificBuildOptions: config.mac, defaultTarget: ['dmg', 'zip'],
+    }, Platform.MAC);
+    assert.deepEqual([...targets.keys()].map(value => Arch[value]).sort(), Object.keys(flags).sort());
+    for (const formats of targets.values()) assert.deepEqual([...formats].sort(), ['dmg', 'zip']);
+  }
+});
+
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'mola-release-'));
   t.after(() => rm(root, { recursive: true, force: true }));

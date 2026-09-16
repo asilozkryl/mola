@@ -88,7 +88,7 @@ npm run desktop:mac -- -c.mac.identity=null -c.mac.hardenedRuntime=false
 Ubuntu 24.04 ve üzeri için `.deb` paketini paket yöneticisiyle kurun. Paketin bulunduğu dizinde, dosya adını indirdiğiniz sürüme göre değiştirerek:
 
 ```sh
-sudo apt install ./Mola-1.0.0-linux-amd64.deb
+sudo apt install ./Mola-1.0.2-linux-amd64.deb
 ```
 
 Kurulum uygulamayı `/opt/Mola/mola` konumuna yerleştirir ve Chromium sandbox'ının kullanıcı namespace erişimi için Mola'ya özel AppArmor profilini yükler. `linux-unpacked` klasörünü veya `.deb` içeriğini `~/.local/opt` gibi başka bir konuma kopyalamak bu kurulumu gerçekleştirmez; Ubuntu'da menüden açılış `chrome-sandbox` / SUID helper hatasıyla durabilir. Bu durumda `.deb` paketini yukarıdaki komutla kurun.
@@ -101,7 +101,7 @@ Paket tanımı `desktop/electron-builder.yml` içindedir. Uygulama kimliği `app
 
 ## GitHub Actions
 
-**Build Mola Desktop** iş akışı Actions ekranından elle başlatılabilir. `desktop-v*` etiketi gönderildiğinde de çalışır; etiket sürümü `desktop/package.json` sürümüyle eşleşmelidir (örneğin `1.0.0` için `desktop-v1.0.0`). Sürümü değiştirirken `desktop/package-lock.json` dosyasını da güncelleyin.
+**Build Mola Desktop** iş akışı Actions ekranından elle başlatılabilir. `desktop-v*` etiketi gönderildiğinde de çalışır; etiket sürümü `desktop/package.json` sürümüyle eşleşmelidir (örneğin `1.0.2` için `desktop-v1.0.2`). Sürümü değiştirirken `desktop/package-lock.json` dosyasını da güncelleyin.
 
 İş akışı önce masaüstü birim ve gerçek Electron açılış testlerini Linux'ta çalıştırır. Ayrıca web uygulamasını derleyip gerçek Mola sunucusu üzerinde Electron'dan mesaj gönderme ve kalıcılık akışını doğrular. Ardından Linux, Windows, Intel macOS ve Apple Silicon macOS paketlerini ilgili işletim sistemlerinin ayrı çalıştırıcılarında üretir. [GitHub çalıştırıcı mimarileri](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
