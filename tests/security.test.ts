@@ -226,8 +226,14 @@ test('Socket.IO rejects foreign origins, scopes DM events and prevents unauthori
   } finally { sockets.forEach(socket => socket.disconnect()); }
 });
 
-test('calls enforce the six connection room limit and release capacity after leaving', async () => {
-  const sockets = await Promise.all(Array.from({ length: 7 }, () => socketFor('alice')));
+test('calls enforce the six participant room limit and release capacity after leaving', async () => {
+  const names = Array.from({ length: 7 }, (_, index) => `capacity-${index}`);
+  for (const name of names) {
+    const id = randomUUID();
+    runtime.repo.run('INSERT INTO users (id,workspace_id,name,email,password_hash,color,role,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)', id, workspace, name, `${name}@example.invalid`, null, '#abcdef', 'member', '', new Date().toISOString());
+    session(name, id);
+  }
+  const sockets = await Promise.all(names.map(name => socketFor(name)));
   try {
     for (const socket of sockets.slice(0, 6)) assert.equal((await socket.timeout(2000).emitWithAck('call:join', { channelId: channel })).ok, true);
     assert.equal((await sockets[6].timeout(2000).emitWithAck('call:join', { channelId: channel })).ok, false);

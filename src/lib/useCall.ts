@@ -42,7 +42,14 @@ type CallSignal = {
   candidate?: RTCIceCandidateInit;
   renegotiate?: boolean;
 };
-type JoinAck = { ok: boolean; error?: string; peers?: CallPeer[] };
+type JoinAck = {
+  ok: boolean;
+  error?: string;
+  peers?: CallPeer[];
+  mic?: boolean;
+  transferId?: string;
+  transferCompleted?: boolean;
+};
 type TransferState = {
   details: CallTransfer;
   direction: "incoming" | "outgoing";
@@ -334,10 +341,22 @@ export function useCall({
             deviceId,
           })) as CallTransferAck;
         if (!result.ok) throw new Error(result.error);
+        const terminal = completedTransfers.current.get(result.transfer.id);
         if (version !== sessionVersion.current || !joinedRef.current) {
-          socket.emit("call:transfer:cancel", {
-            transferId: result.transfer.id,
-          });
+          if (
+            terminal?.state === "completed" &&
+            !joinedRef.current &&
+            !joiningRef.current
+          ) {
+            setTransferNotice({
+              message: `Görüşme ${result.transfer.targetDevice} cihazına aktarıldı.`,
+              error: false,
+            });
+          } else if (!terminal) {
+            socket.emit("call:transfer:cancel", {
+              transferId: result.transfer.id,
+            });
+          }
           return;
         }
         const next: TransferState = {
@@ -347,7 +366,6 @@ export function useCall({
         };
         transferRef.current = next;
         setTransfer(next);
-        const terminal = completedTransfers.current.get(result.transfer.id);
         if (terminal) receiveTransferStatus.current(terminal);
       } catch (error) {
         if (version === sessionVersion.current)
@@ -618,10 +636,22 @@ export function useCall({
         );
       }
     };
-    const onClosed = (payload: { channelId: string; error: string }) => {
+    const onClosed = (payload: {
+      channelId: string;
+      error?: string;
+      reason?: string;
+    }) => {
       if (payload.channelId !== currentChannel.current) return;
       leave();
-      setError(payload.error || "Bu görüşme yönetici tarafından kapatıldı.");
+      if (payload.reason === "device-switch") {
+        setTransferNotice({
+          message:
+            "Görüşme başka bir cihazında devam ediyor. Bu cihazın görüşme bağlantısı kapatıldı.",
+          error: false,
+        });
+      } else {
+        setError(payload.error || "Bu görüşme yönetici tarafından kapatıldı.");
+      }
     };
     socket.on("call:peers", onPeers);
     socket.on("call:closed", onClosed);
@@ -697,6 +727,7 @@ export function useCall({
       joinTarget.current = channel;
       setJoining(true);
       setError(null);
+      setTransferNotice(null);
       joiningRef.current = true;
       if (!socket?.connected || !user) {
         if (handoff) cancelTransfer();
@@ -749,7 +780,8 @@ export function useCall({
         )
           throw new Error("Mikrofon bulunamadı.");
         acquired.getAudioTracks().forEach((track) => {
-          track.enabled = !handoff && !preferencesRef.current.startMuted;
+          // Admission decides which device owns the call and its mute state.
+          track.enabled = false;
         });
         let config: { iceServers: RTCIceServer[]; relayConfigured?: boolean };
         try {
@@ -810,8 +842,29 @@ export function useCall({
         setJoined(true);
         setJoining(false);
         joiningRef.current = false;
-        setMic(!handoff && !preferencesRef.current.startMuted);
-        publishState({ mic: !handoff && !preferencesRef.current.startMuted });
+        const completed = handoff
+          ? completedTransfers.current.get(handoff.id)
+          : undefined;
+        const enabled = handoff
+          ? (ack.mic ??
+            (completed?.state === "completed"
+              ? (completed.mic ?? handoff.mic)
+              : false))
+          : !preferencesRef.current.startMuted && (ack.mic ?? true);
+        acquired.getAudioTracks().forEach((track) => {
+          track.enabled = enabled;
+        });
+        setMic(enabled);
+        publishState({ mic: enabled });
+        if (handoff && ack.transferCompleted && ack.transferId === handoff.id) {
+          // The terminal event may arrive before or after the join ACK. Both
+          // paths settle the same transfer without admitting a second session.
+          receiveTransferStatus.current({
+            id: handoff.id,
+            state: "completed",
+            mic: enabled,
+          });
+        }
         updatePeers(ack.peers ?? []);
       } catch (err) {
         stopStream(acquired);

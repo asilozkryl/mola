@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -63,6 +64,31 @@ async function instrumentMedia(page: Page) {
     };
   });
 }
+async function openCallParticipants(pages: Page[]) {
+  const origin = 'http://127.0.0.1:5174';
+  const headers = { Origin: origin };
+  let inviteToken: string | undefined;
+  for (const [index, page] of pages.entries()) {
+    const registered = await page.request.post(`${origin}/api/auth/register`, {
+      headers,
+      data: {
+        name: `Görüşme Katılımcısı ${index + 1}`,
+        email: `call-participant-${randomUUID()}@example.invalid`,
+        password: 'call-participant-password-2026',
+        ...(inviteToken ? { inviteToken } : { workspaceName: 'Görüşme Test Ekibi' }),
+      },
+    });
+    expect(registered.status()).toBe(200);
+    if (index === 0) {
+      const invitation = await page.request.post(`${origin}/api/invites`, { headers });
+      expect(invitation.status()).toBe(201);
+      inviteToken = new URL((await invitation.json()).url).searchParams.get('invite')!;
+      expect(inviteToken).toBeTruthy();
+    }
+    await page.goto('/');
+    await expect(page.getByText('Her şey güncel', { exact: true })).toBeVisible();
+  }
+}
 async function startCall(page: Page) {
   await page.getByRole('button', { name: 'Bir araya gel', exact: true }).click();
   await page.getByRole('button', { name: 'Görüşmeye katıl', exact: true }).click();
@@ -90,13 +116,7 @@ test('two browsers exchange audio, camera and screen, keep audio when minimized,
     await instrumentMedia(a); await instrumentMedia(b);
     const errors: string[] = [];
     a.on('pageerror', e => errors.push(e.message)); b.on('pageerror', e => errors.push(e.message));
-    await a.goto('/');
-    await expect(a.getByRole('button', { name: 'Bir araya gel', exact: true })).toBeVisible();
-    await second.addCookies(await first.cookies());
-    await b.goto('/');
-    await expect(b.getByRole('button', { name: 'Bir araya gel', exact: true })).toBeVisible();
-    await expect(a.getByText('Her şey güncel', { exact: true })).toBeVisible();
-    await expect(b.getByText('Her şey güncel', { exact: true })).toBeVisible();
+    await openCallParticipants([a, b]);
     await startCall(a);
     await expect(a.getByText('Katılımcılar bekleniyor', { exact: false })).toBeVisible();
     await startCall(b);
@@ -202,13 +222,7 @@ test('one stalled stats request leaves other peers and call controls responsive 
   try {
     const pages = await Promise.all(contexts.map(context => context.newPage()));
     for (const page of pages) await instrumentMedia(page);
-    await pages[0].goto('/');
-    await expect(pages[0].getByText('Her şey güncel', { exact: true })).toBeVisible();
-    for (let index = 1; index < pages.length; index++) {
-      await contexts[index].addCookies(await contexts[0].cookies());
-      await pages[index].goto('/');
-      await expect(pages[index].getByText('Her şey güncel', { exact: true })).toBeVisible();
-    }
+    await openCallParticipants(pages);
     for (const page of pages) await startCall(page);
     for (const page of pages) await expect.poll(() => page.evaluate(() => window.__callTest.peers.filter(peer => peer.connectionState === 'connected').length)).toBe(2);
     const observer = pages[0];
@@ -268,11 +282,7 @@ test('local and remote speaking fall back to a shared Web Audio graph when audio
         return filtered as RTCStatsReport;
       };
     });
-    await a.goto('/');
-    await expect(a.getByText('Her şey güncel', { exact: true })).toBeVisible();
-    await contexts[1].addCookies(await contexts[0].cookies());
-    await b.goto('/');
-    await expect(b.getByText('Her şey güncel', { exact: true })).toBeVisible();
+    await openCallParticipants([a, b]);
     await startCall(a); await startCall(b);
     await Promise.all([waitForConnected(a), waitForConnected(b)]);
     await expect(b.locator('.call-person').nth(1)).toHaveClass(/call-person-speaking/);
@@ -341,11 +351,7 @@ test('archiving an active channel ends microphone, camera, screen and peer conne
   try {
     const [a, b] = await Promise.all(contexts.map(context => context.newPage()));
     await Promise.all([instrumentMedia(a), instrumentMedia(b)]);
-    await a.goto('/');
-    await expect(a.getByRole('button', { name: 'Bir araya gel', exact: true })).toBeVisible();
-    await contexts[1].addCookies(await contexts[0].cookies());
-    await b.goto('/');
-    await Promise.all([a, b].map(page => expect(page.getByText('Her şey güncel', { exact: true })).toBeVisible()));
+    await openCallParticipants([a, b]);
     const snapshot = await (await a.request.get('/api/auth/me')).json();
     const channelName = (await a.getByRole('textbox', { name: /kanalına mesaj yaz/ }).getAttribute('aria-label'))!.match(/^#(.+) kanalına mesaj yaz$/)![1];
     const channel = snapshot.channels.find((entry: { name: string }) => entry.name === channelName);

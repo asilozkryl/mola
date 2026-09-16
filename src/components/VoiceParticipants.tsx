@@ -120,7 +120,11 @@ export function VoiceRoomPreview({
   onOpenProfile?: (id: string) => void;
   activeChannelName?: string;
 }) {
-  const full = connected && peers.length >= 6 && !isCurrentCall;
+  const full =
+    connected &&
+    peers.length >= 6 &&
+    !isCurrentCall &&
+    !peers.some((peer) => peer.user.id === currentUserId);
   return (
     <Modal title={channel.name} onClose={onClose}>
       <div className="voice-preview">

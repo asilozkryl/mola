@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import type { Bootstrap } from "../shared/types";
+import type { Bootstrap, CallPeer, VoiceRoster } from "../shared/types";
 
 test.use({
   launchOptions: {
@@ -198,6 +198,105 @@ test("switching rooms can be cancelled and then safely opens preparation after l
   await page
     .getByRole("button", { name: "Görüşmeden ayrıl", exact: true })
     .click();
+});
+
+test("a full room allows replacing the current account's other device while still blocking a seventh person", async ({
+  page,
+}) => {
+  let sendRoster: ((roster: VoiceRoster) => void) | undefined;
+  await page.routeWebSocket(/socket\.io\//, (route) => {
+    const server = route.connectToServer();
+    // Only the participant snapshot is synthetic; connection state and the
+    // preview-to-preparation interaction still use the running application.
+    server.onMessage((message) => {
+      if (!String(message).startsWith('42["voice:roster",'))
+        route.send(message);
+    });
+    sendRoster = (roster) =>
+      route.send(`42${JSON.stringify(["voice:roster", roster])}`);
+  });
+  const data = await ready(page);
+  const voice = data.channels.find((item) => item.kind === "voice")!;
+  await expect(page.locator(".channel-tab-end")).toHaveAttribute(
+    "data-connected",
+    "true",
+  );
+  await expect.poll(() => Boolean(sendRoster)).toBe(true);
+  const publish = (includesCurrentAccount: boolean) => {
+    const peers: CallPeer[] = Array.from({ length: 6 }, (_, index) => ({
+      socketId: `capacity-device-${index}`,
+      user:
+        includesCurrentAccount && index === 0
+          ? data.user
+          : {
+              ...data.user,
+              id: `capacity-member-${index}`,
+              name: `Oda Katılımcısı ${index + 1}`,
+              email: `capacity-member-${index}@example.invalid`,
+            },
+      mic: true,
+      camera: false,
+      sharing: false,
+    }));
+    sendRoster!({
+      workspaceId: data.workspace.id,
+      channels: [{ channelId: voice.id, peers }],
+    });
+  };
+  publish(true);
+  await page
+    .getByRole("button", {
+      name: `${voice.name} katılımcılarını gör`,
+      exact: true,
+    })
+    .click();
+  const preview = page.getByRole("dialog", { name: voice.name, exact: true });
+  const capacity = preview.getByLabel("6 kişi, kapasite 6 kişi", {
+    exact: true,
+  });
+  const previewJoin = preview.getByRole("button", {
+    name: "Sesli odaya katıl",
+    exact: true,
+  });
+  await expect(capacity).toBeVisible();
+  await expect(preview.locator(".voice-participant")).toHaveCount(6);
+  await expect(previewJoin).toBeEnabled();
+  await previewJoin.click();
+
+  const setup = page.getByRole("dialog", {
+    name: "Görüşmeye hazırlan",
+    exact: true,
+  });
+  const setupJoin = setup.getByRole("button", {
+    name: "Görüşmeye katıl",
+    exact: true,
+  });
+  await expect(setup).toContainText("6 kişi görüşmede · En fazla 6 kişi");
+  await expect(setupJoin).toBeEnabled();
+
+  publish(false);
+  await expect(setupJoin).toBeDisabled();
+  await expect(setup).toContainText("Bu görüşme şu an dolu.");
+  await expect(setup).toContainText("6 kişi görüşmede · En fazla 6 kişi");
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", {
+      name: `${voice.name} katılımcılarını gör`,
+      exact: true,
+    })
+    .click();
+  await expect(capacity).toBeVisible();
+  await expect(preview.locator(".voice-participant")).toHaveCount(6);
+  await expect(
+    preview.getByRole("button", { name: "Oda dolu", exact: true }),
+  ).toBeDisabled();
+
+  publish(true);
+  await expect(previewJoin).toBeEnabled();
+  await expect(capacity).toBeVisible();
+  await previewJoin.click();
+  await expect(setupJoin).toBeEnabled();
+  await expect(setup).toContainText("6 kişi görüşmede · En fazla 6 kişi");
 });
 
 test("failed room join does not label its sidebar entry as an active call", async ({

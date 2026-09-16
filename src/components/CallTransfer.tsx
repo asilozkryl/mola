@@ -165,8 +165,8 @@ export function CallTransferDevices({
               <strong>Diğer cihazın henüz görünmüyor</strong>
               <p>
                 Aynı hesapla giriş yap, bu çalışma alanını aç ve uygulamayı
-                ekranda açık tut. Görünmüyorsa diğer cihazda Mola’yı yenile
-                veya yeniden aç.
+                ekranda açık tut. Görünmüyorsa diğer cihazda Mola’yı yenile veya
+                yeniden aç.
               </p>
             </div>
           )}
@@ -202,8 +202,8 @@ export function IncomingCallTransfer({
         </p>
         <ul>
           <li>
-            <Check size={16} /> Bağlantı kurulana kadar önceki cihazda devam
-            edersin.
+            <Check size={16} /> Bu cihaz hazır olduğunda önceki cihazın görüşme
+            bağlantısı kapanır.
           </li>
           <li>
             <Check size={16} /> Mikrofon izni istenebilir; sessiz durumun

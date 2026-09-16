@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 
 type CaptureKind = "audio" | "camera" | "screen";
 declare global {
@@ -91,6 +92,38 @@ async function joinCall(page: Page) {
   await expect(
     page.getByRole("button", { name: "Mikrofonu kapat", exact: true }),
   ).toBeVisible();
+}
+
+async function openCallParticipants(pages: Page[]) {
+  const origin = "http://127.0.0.1:5174";
+  const headers = { Origin: origin };
+  let inviteToken: string | undefined;
+  for (const [index, page] of pages.entries()) {
+    const registered = await page.request.post(`${origin}/api/auth/register`, {
+      headers,
+      data: {
+        name: `Ses Katılımcısı ${index + 1}`,
+        email: `voice-participant-${randomUUID()}@example.invalid`,
+        password: "voice-participant-password-2026",
+        ...(inviteToken
+          ? { inviteToken }
+          : { workspaceName: "Ses Test Ekibi" }),
+      },
+    });
+    expect(registered.status()).toBe(200);
+    if (index === 0) {
+      const invitation = await page.request.post(`${origin}/api/invites`, {
+        headers,
+      });
+      expect(invitation.status()).toBe(201);
+      inviteToken = new URL((await invitation.json()).url).searchParams.get(
+        "invite",
+      )!;
+      expect(inviteToken).toBeTruthy();
+    }
+    await page.goto("/");
+    await expect(page.getByText("Her şey güncel", { exact: true })).toBeVisible();
+  }
 }
 
 async function changeMicrophone(page: Page) {
@@ -236,11 +269,7 @@ test("muting during microphone replacement keeps the new sender silent", async (
     const b = await second.newPage();
     await instrumentCapture(a);
     await instrumentCapture(b);
-    await a.goto("/");
-    await expect(a.getByText("Her şey güncel", { exact: true })).toBeVisible();
-    await second.addCookies(await first.cookies());
-    await b.goto("/");
-    await expect(b.getByText("Her şey güncel", { exact: true })).toBeVisible();
+    await openCallParticipants([a, b]);
     await joinCall(a);
     await joinCall(b);
     await expect

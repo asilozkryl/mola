@@ -391,6 +391,10 @@ export function CallPanel({
   const blockedCallback = useRef(() => setAudioBlocked(true));
   const closeCallback = useRef(onClose);
   closeCallback.current = () => {
+    if (call.receivingTransfer) {
+      call.cancelTransfer();
+      return;
+    }
     if (!call.joined) call.leave();
     onClose();
   };
@@ -944,15 +948,17 @@ export function CallPanel({
                 </div>
                 <h3>Görüşmeye katılıyorsunuz</h3>
                 <p>Tarayıcınız sorarsa mikrofon erişimine izin verin.</p>
-                <Button
-                  variant="unstyled"
-                  size="unset"
-                  type="submit"
-                  className="call-secondary"
-                  onClick={leaveCall}
-                >
-                  İptal et
-                </Button>
+                {!call.receivingTransfer && (
+                  <Button
+                    variant="unstyled"
+                    size="unset"
+                    type="submit"
+                    className="call-secondary"
+                    onClick={leaveCall}
+                  >
+                    İptal et
+                  </Button>
+                )}
               </div>
             ) : !call.joined ? (
               <div className="call-waiting">

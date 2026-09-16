@@ -88,9 +88,6 @@ test('only ready idle own other sessions in the same authorized workspace are di
   await client({ name: 'other-person', user: 'other' });
   await client({ name: 'other-workspace', workspace: 'beta' });
   await client({ name: 'old-app', registered: false });
-  const busy = await client({ name: 'busy', session: 'busy-session' });
-  await join(busy);
-  await client({ name: 'busy-browser-other-tab', session: 'busy-session' });
   access.set('revoked', false);
   await client({ name: 'revoked' });
   const result = await source.timeout(2500).emitWithAck('call:devices:list');
@@ -98,11 +95,11 @@ test('only ready idle own other sessions in the same authorized workspace are di
   assert.equal(result.devices.length, 1);
   assert.equal(result.devices[0].id, 'phone-session');
   assert.deepEqual(Object.keys(result.devices[0]).sort(), ['id', 'name']);
-  for (const deviceId of ['desktop-session', 'other-person', 'other-workspace', 'old-app', 'busy-session', 'revoked'])
+  for (const deviceId of ['desktop-session', 'other-person', 'other-workspace', 'old-app', 'revoked'])
     assert.equal((await request(source, deviceId)).ok, false);
 }));
 
-test('a transfer stages muted without evicting source and commits latest microphone state only on target ready', async () => fixture(async ({ client, peers }) => {
+test('accepting an authorized transfer replaces its source immediately with the latest microphone state and no duplicate roster', async () => fixture(async ({ client, peers }) => {
   const source = await client({ name: 'desktop' });
   const target = await client({ name: 'phone' });
   const outsider = await client({ name: 'outsider', user: 'other' });
@@ -115,32 +112,34 @@ test('a transfer stages muted without evicting source and commits latest microph
   assert.equal(transfer.channelName, 'Tasarım odası');
   assert.equal(transfer.sourceSocketId, source.id);
   assert.equal(peers().length, 1);
-  assert.equal((await ready(target, transfer.id)).ok, false, 'ready before staged join must not evict');
+  assert.equal((await ready(target, transfer.id)).ok, false, 'ready before accepted join must not evict');
   assert.equal((await join(outsider, transfer.id)).ok, false);
   assert.equal((await cancel(outsider, transfer.id)).ok, false);
-  assert.equal((await ready(source, transfer.id)).ok, false);
-  assert.equal((await join(target, transfer.id)).ok, true);
-  assert.equal(peers().length, 2);
-  assert.equal(peers().find(peer => peer.socketId === target.id)?.mic, false);
-  target.emit('call:state', { mic: true, camera: true, sharing: true });
-  // An ack on the same ordered socket confirms the earlier event was processed.
-  await target.timeout(2500).emitWithAck('call:devices:list');
-  assert.deepEqual(peers().find(peer => peer.socketId === target.id), {
-    socketId: target.id, user: peers()[0].user, mic: false, camera: false, sharing: false,
-  });
-  source.emit('call:state', { mic: false });
+  source.emit('call:state', { mic: false, camera: true, sharing: true });
   await source.timeout(2500).emitWithAck('call:devices:list');
+  const sourceEvents: string[] = [];
+  source.on('call:transfer:status', () => sourceEvents.push('completed'));
+  source.on('call:closed', () => sourceEvents.push('closed'));
   const sourceStatus = event<CallTransferStatus>(source, 'call:transfer:status');
   const targetStatus = event<CallTransferStatus>(target, 'call:transfer:status');
-  assert.deepEqual(await ready(target, transfer.id), { ok: true, mic: false });
+  const sourceClosed = event<{ reason: string }>(source, 'call:closed');
+  const resultJoin = await join(target, transfer.id);
+  assert.equal(resultJoin.ok, true);
+  assert.equal(resultJoin.transferCompleted, true);
+  assert.equal(resultJoin.mic, false);
   assert.deepEqual(await sourceStatus, { id: transfer.id, state: 'completed', mic: false });
   assert.deepEqual(await targetStatus, { id: transfer.id, state: 'completed', mic: false });
+  assert.equal((await sourceClosed).reason, 'device-switch');
+  assert.deepEqual(sourceEvents, ['completed', 'closed']);
   assert.deepEqual(peers().map(peer => peer.socketId), [target.id]);
-  assert.equal((await ready(target, transfer.id)).ok, false, 'completed id cannot be replayed');
+  assert.deepEqual([peers()[0].mic, peers()[0].camera, peers()[0].sharing], [false, false, false]);
+  assert.equal((await ready(target, transfer.id)).ok, false, 'there is no staged session to commit or replay');
+  assert.equal((await cancel(source, transfer.id)).ok, false, 'late cancel cannot undo committed transfer');
   assert.equal((await join(outsider, transfer.id)).ok, false);
+  assert.equal(source.connected, true);
 }));
 
-test('a full six-person call permits only its validated replacement and retains the normal capacity limit', async () => fixture(async ({ client, peers }) => {
+test('a full six-person call permits a transfer without adding a seventh participant', async () => fixture(async ({ client, peers }) => {
   const source = await client({ name: 'source' });
   const target = await client({ name: 'target' });
   const ordinary = await client({ name: 'ordinary', user: 'seventh' });
@@ -150,22 +149,19 @@ test('a full six-person call permits only its validated replacement and retains 
   assert.equal((await join(target, 'forged')).ok, false);
   const { transfer } = await request(source, 'target');
   assert.equal((await join(target, transfer.id)).ok, true);
-  assert.equal(peers().length, 7);
-  assert.equal((await join(ordinary)).ok, false);
-  assert.equal((await ready(target, transfer.id)).ok, true);
   assert.equal(peers().length, 6);
+  assert.equal(peers().some(peer => peer.socketId === source.id), false);
   assert.equal((await join(ordinary)).ok, false);
 }));
 
-test('declining and cancelling staged transfers preserve source and make the target available again', async () => fixture(async ({ client, peers }) => {
+test('declining and cancelling pending transfers preserve source and make the target available again', async () => fixture(async ({ client, peers }) => {
   const source = await client({ name: 'source' });
   const target = await client({ name: 'target' });
   await join(source);
-  for (const staged of [false, true]) {
+  for (const actor of [source, target]) {
     const { transfer } = await request(source, 'target');
-    if (staged) await join(target, transfer.id);
     const status = event<CallTransferStatus>(source, 'call:transfer:status');
-    assert.equal((await cancel(staged ? source : target, transfer.id)).ok, true);
+    assert.equal((await cancel(actor, transfer.id)).ok, true);
     assert.equal((await status).state, 'cancelled');
     assert.deepEqual(peers().map(peer => peer.socketId), [source.id]);
     assert.equal((await join(target, transfer.id)).ok, false);
@@ -174,61 +170,58 @@ test('declining and cancelling staged transfers preserve source and make the tar
   }
 }));
 
-test('expiry releases only the staged target and leaves the source call connected', async () => fixture(async ({ client, peers }) => {
+test('expiry cancels the pending invitation and leaves the source call connected', async () => fixture(async ({ client, peers }) => {
   const source = await client({ name: 'source' });
   const target = await client({ name: 'target' });
   await join(source);
   const status = event<CallTransferStatus>(source, 'call:transfer:status');
   const { transfer } = await request(source, 'target');
-  await join(target, transfer.id);
   assert.equal((await status).state, 'cancelled');
   assert.deepEqual(peers().map(peer => peer.socketId), [source.id]);
-  assert.equal((await ready(target, transfer.id)).ok, false);
+  assert.equal((await join(target, transfer.id)).ok, false);
 }, 120));
 
-test('target disconnect cancels pending or staged handoff without disconnecting source', async () => fixture(async ({ client, peers }) => {
+test('target disconnect cancels the invitation without disconnecting source', async () => fixture(async ({ client, peers }) => {
   const source = await client({ name: 'source' });
+  const target = await client({ name: 'target' });
   await join(source);
-  for (const staged of [false, true]) {
-    const target = await client({ name: `target-${staged}` });
-    const { transfer } = await request(source, `target-${staged}`);
-    if (staged) await join(target, transfer.id);
-    const status = event<CallTransferStatus>(source, 'call:transfer:status');
-    target.disconnect();
-    assert.equal((await status).state, 'cancelled');
-    assert.deepEqual(peers().map(peer => peer.socketId), [source.id]);
-    assert.equal(source.connected, true);
-  }
+  await request(source, 'target');
+  const status = event<CallTransferStatus>(source, 'call:transfer:status');
+  target.disconnect();
+  assert.equal((await status).state, 'cancelled');
+  assert.deepEqual(peers().map(peer => peer.socketId), [source.id]);
+  assert.equal(source.connected, true);
 }));
 
-test('source disconnect releases the staged target instead of leaving an orphan participant', async () => fixture(async ({ client, peers }) => {
+test('source disconnect cancels its pending invitation and cannot disconnect an already transferred call', async () => fixture(async ({ client, peers }) => {
   const source = await client({ name: 'source' });
   const target = await client({ name: 'target' });
   await join(source);
   const { transfer } = await request(source, 'target');
-  await join(target, transfer.id);
   const status = event<CallTransferStatus>(target, 'call:transfer:status');
   source.disconnect();
   assert.equal((await status).state, 'cancelled');
   assert.deepEqual(peers(), []);
-  assert.equal((await ready(target, transfer.id)).ok, false);
-  assert.equal(target.connected, true, 'ordinary chat connection remains usable');
+  assert.equal((await join(target, transfer.id)).ok, false);
+  assert.equal(target.connected, true);
+  const newSource = await client({ name: 'new-source' });
+  await join(newSource);
+  const next = await request(newSource, 'target');
+  assert.equal((await join(target, next.transfer.id)).ok, true);
+  newSource.disconnect();
+  await target.timeout(2500).emitWithAck('call:devices:list');
+  assert.deepEqual(peers().map(peer => peer.socketId), [target.id]);
 }));
 
-test('fresh access checks reject revoked target at join and cancel a staged target at commit', async () => fixture(async ({ client, access, peers }) => {
+test('a fresh access check rejects revoked targets without removing the source', async () => fixture(async ({ client, access, peers }) => {
   const source = await client({ name: 'source' });
   const target = await client({ name: 'target' });
   await join(source);
-  let { transfer } = await request(source, 'target');
+  const { transfer } = await request(source, 'target');
   access.set('target', false);
   assert.equal((await join(target, transfer.id)).ok, false);
-  await cancel(source, transfer.id);
-  access.set('target', true);
-  ({ transfer } = await request(source, 'target'));
-  await join(target, transfer.id);
-  access.set('target', false);
-  assert.equal((await ready(target, transfer.id)).ok, false);
   assert.deepEqual(peers().map(peer => peer.socketId), [source.id]);
+  assert.equal((await cancel(source, transfer.id)).ok, true);
 }));
 
 test('permission refresh and channel close cancel invitations before they can be accepted', async () => fixture(async ({ io, client, access, peers }) => {
@@ -260,6 +253,18 @@ test('concurrent requests reserve one target and stale requests cannot disturb a
   assert.equal((await cancel(first, old.id)).ok, false);
   assert.equal((await join(first, old.id)).ok, false);
   assert.equal((await join(second, transfer.id)).ok, true);
-  assert.equal((await ready(second, transfer.id)).ok, true);
   assert.deepEqual(peers().map(peer => peer.socketId), [second.id]);
+}));
+
+test('an ordinary device join supersedes a pending manual invitation without allowing its stale acceptance to reclaim the call', async () => fixture(async ({ client, peers }) => {
+  const source = await client({ name: 'source' });
+  const invited = await client({ name: 'invited' });
+  const direct = await client({ name: 'direct' });
+  await join(source);
+  const { transfer } = await request(source, 'invited');
+  const cancelled = event<CallTransferStatus>(invited, 'call:transfer:status');
+  assert.equal((await join(direct)).ok, true);
+  assert.equal((await cancelled).state, 'cancelled');
+  assert.equal((await join(invited, transfer.id)).ok, false);
+  assert.deepEqual(peers().map(peer => peer.socketId), [direct.id]);
 }));

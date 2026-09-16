@@ -239,6 +239,7 @@ export function CallSetup({
   participantCount,
   capacity,
   connected = true,
+  replacingSession = false,
   onJoin,
   onClose,
 }: {
@@ -247,6 +248,7 @@ export function CallSetup({
   participantCount?: number;
   capacity?: number;
   connected?: boolean;
+  replacingSession?: boolean;
   onJoin: () => void;
   onClose: () => void;
 }) {
@@ -260,6 +262,7 @@ export function CallSetup({
   const settingsId = useId();
   const modeHelpId = useId();
   const full =
+    !replacingSession &&
     participantCount !== undefined &&
     capacity !== undefined &&
     participantCount >= capacity;
@@ -515,6 +518,10 @@ export function CallSetup({
                 : "Şu an görüşmeye katılamıyorsun. Kanal erişimini kontrol et."}
           </p>
         )}
+        <p className="call-device-hint">
+          Başka bir cihazında görüşmedeysen katıldığında görüşme otomatik olarak
+          buraya geçer ve önceki cihazın bağlantısı kapanır.
+        </p>
         <div className="call-preflight-actions">
           <Button
             variant="unstyled"

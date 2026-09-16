@@ -265,9 +265,8 @@ test("deleting a workspace preserves shared accounts, other sessions, files and 
     );
     const otherA = client(alpha.userId, beta.workspaceId),
       lastMember = client(onlyAlpha, alpha.workspaceId);
-    const [targetSocket, outsideSocket, remainingSocket, memberSocket] =
+    const [outsideSocket, remainingSocket, memberSocket] =
       await Promise.all([
-        socket(a),
         socket(otherA),
         socket(b),
         socket(lastMember),
@@ -278,9 +277,11 @@ test("deleting a workspace preserves shared accounts, other sessions, files and 
     const betaVoice = runtime.repo
       .channels(alpha.userId, beta.workspaceId)
       .find((channel) => channel.kind === "voice")!.id;
+    // The account active in Beta cannot also be a participant in Alpha.
+    // Use Alpha's other member to verify that deletion closes its call.
     assert.equal(
       (
-        await targetSocket
+        await memberSocket
           .timeout(2000)
           .emitWithAck("call:join", { channelId: alphaVoice })
       ).ok,
@@ -334,7 +335,7 @@ test("deleting a workspace preserves shared accounts, other sessions, files and 
         new Date().toISOString(),
       );
     const callClosed = new Promise<any>((done) =>
-      targetSocket.once("call:closed", done),
+      memberSocket.once("call:closed", done),
     );
     const changed = new Promise<any>((done) =>
       memberSocket.once("workspace:changed", done),

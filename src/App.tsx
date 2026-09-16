@@ -4566,6 +4566,11 @@ function WorkspaceApp() {
               : undefined
           }
           capacity={6}
+          replacingSession={
+            (voiceChannels.get(callSetupChannel.id) || []).some(
+              (peer) => peer.user.id === data.user.id,
+            )
+          }
           onClose={() => setCallSetupChannel(null)}
           onJoin={() => {
             const target = callSetupChannel;

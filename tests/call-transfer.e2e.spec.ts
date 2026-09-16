@@ -125,7 +125,23 @@ async function setup(
       permissions: ["microphone", "camera"],
     });
     contexts.push(observer);
-    await observer.addCookies(await source.cookies());
+    const invitation = await source.request.post(`${origin}/api/invites`, {
+      headers: { Origin: origin },
+    });
+    expect(invitation.status()).toBe(201);
+    const inviteToken = new URL((await invitation.json()).url).searchParams.get(
+      "invite",
+    )!;
+    const peer = await observer.request.post(`${origin}/api/auth/register`, {
+      headers: { Origin: origin },
+      data: {
+        email: `handoff-peer-${randomUUID()}@example.com`,
+        password,
+        name: "Diğer Katılımcı",
+        inviteToken,
+      },
+    });
+    expect(peer.ok()).toBeTruthy();
     c = await observer.newPage();
     await instrument(c);
     await c.goto("/");
@@ -149,6 +165,218 @@ async function join(page: Page) {
     page.getByRole("button", { name: "Mikrofonu kapat", exact: true }),
   ).toBeVisible();
 }
+
+async function expectMediaReleased(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          window.__handoffTest.tracks.length > 0 &&
+          window.__handoffTest.tracks.every(
+            (track) => track.readyState === "ended",
+          ) &&
+          window.__handoffTest.peers.every(
+            (pc) => pc.connectionState === "closed",
+          ),
+      ),
+    )
+    .toBe(true);
+}
+
+async function expectConnectedAudio(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const connected = window.__handoffTest.peers.filter(
+          (pc) => pc.connectionState === "connected",
+        );
+        let bytes = 0;
+        for (const pc of connected)
+          (await pc.getStats()).forEach((stat) => {
+            if (stat.type === "inbound-rtp" && stat.kind === "audio")
+              bytes += Number(stat.bytesReceived || 0);
+          });
+        return connected.length === 1 && bytes > 0;
+      }),
+    )
+    .toBe(true);
+}
+
+test("joining on another device automatically replaces the active account session and releases camera, microphone and screen", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { a, b, c, close } = await setup(browser, true);
+  try {
+    await join(a);
+    await join(c!);
+    await expectConnectedAudio(a);
+    await a.getByRole("button", { name: "Kamerayı aç", exact: true }).click();
+    await a.getByRole("button", { name: "Ekranı paylaş", exact: true }).click();
+    await expect
+      .poll(() =>
+        a.evaluate(
+          () =>
+            window.__handoffTest.tracks.filter(
+              (track) => track.readyState === "live",
+            ).length,
+        ),
+      )
+      .toBe(3);
+    // Ordinary Join on the other session is sufficient: no outgoing offer.
+    await join(b);
+    await expectMediaReleased(a);
+    await expect(
+      a.getByRole("button", { name: "Görüşmeden ayrıl", exact: true }),
+    ).toHaveCount(0);
+    await expect(a.locator(".channel-tab-end")).toHaveAttribute(
+      "data-connected",
+      "true",
+    );
+    await expect(c!.getByText(/^2 kişi görüşmede/)).toBeVisible();
+    await expect(c!.locator(".call-person")).toHaveCount(2);
+    await expectConnectedAudio(b);
+    await expectConnectedAudio(c!);
+    expect(
+      await b.evaluate(() =>
+        window.__handoffTest.tracks.every((track) => track.kind === "audio"),
+      ),
+    ).toBe(true);
+  } finally {
+    await close();
+  }
+});
+
+test("an evicted session cannot resume from a delayed successful join acknowledgement", async ({
+  browser,
+}) => {
+  let releaseAck: (() => void) | undefined;
+  let ackReceived = false;
+  const { a, b, close } = await setup(browser, false, async (a) => {
+    a.on("websocket", (socket) => {
+      socket.on("framereceived", ({ payload }) => {
+        const text = String(payload);
+        if (/^43\d+\[/.test(text) && text.includes('"peers":'))
+          ackReceived = true;
+      });
+    });
+    await a.routeWebSocket(/socket\.io\//, (route) => {
+      const server = route.connectToServer();
+      server.onMessage((message) => {
+        const text = String(message);
+        if (/^43\d+\[/.test(text) && text.includes('"peers":'))
+          releaseAck = () => route.send(message);
+        else route.send(message);
+      });
+    });
+  });
+  try {
+    await a.getByRole("button", { name: "Bir araya gel", exact: true }).click();
+    await a
+      .getByRole("button", { name: "Görüşmeye katıl", exact: true })
+      .click();
+    await expect.poll(() => Boolean(releaseAck)).toBe(true);
+    await join(b);
+    await expectMediaReleased(a);
+    releaseAck!();
+    await expect.poll(() => ackReceived).toBe(true);
+    await expect(
+      a.getByRole("button", { name: "Mikrofonu kapat", exact: true }),
+    ).toHaveCount(0);
+    await expectMediaReleased(a);
+    await expect(
+      b.getByRole("button", { name: "Mikrofonu kapat", exact: true }),
+    ).toBeVisible();
+  } finally {
+    releaseAck?.();
+    await close();
+  }
+});
+
+test("automatic takeover preserves the muted source and respects the receiving device's muted join preference", async ({
+  browser,
+}) => {
+  const { a, b, close } = await setup(browser);
+  try {
+    await join(a);
+    await a
+      .getByRole("button", { name: "Mikrofonu kapat", exact: true })
+      .click();
+    await b.getByRole("button", { name: "Bir araya gel", exact: true }).click();
+    await expect(
+      b.getByLabel("Mikrofonum kapalı katıl", { exact: true }),
+    ).not.toBeChecked();
+    await b
+      .getByRole("button", { name: "Görüşmeye katıl", exact: true })
+      .click();
+    await expect(
+      b.getByRole("button", { name: "Mikrofonu aç", exact: true }),
+    ).toBeVisible();
+    await expectMediaReleased(a);
+    expect(
+      await b.evaluate(() =>
+        window.__handoffTest.tracks.every(
+          (track) => track.kind === "audio" && !track.enabled,
+        ),
+      ),
+    ).toBe(true);
+
+    await b.getByRole("button", { name: "Mikrofonu aç", exact: true }).click();
+    await expect(
+      b.getByRole("button", { name: "Mikrofonu kapat", exact: true }),
+    ).toBeVisible();
+    await a.getByRole("button", { name: "Bir araya gel", exact: true }).click();
+    await a.getByLabel("Mikrofonum kapalı katıl", { exact: true }).check();
+    await a
+      .getByRole("button", { name: "Görüşmeye katıl", exact: true })
+      .click();
+    await expect(
+      a.getByRole("button", { name: "Mikrofonu aç", exact: true }),
+    ).toBeVisible();
+    await expectMediaReleased(b);
+    expect(
+      await a.evaluate(() =>
+        window.__handoffTest.tracks
+          .filter((track) => track.readyState === "live")
+          .every((track) => track.kind === "audio" && !track.enabled),
+      ),
+    ).toBe(true);
+  } finally {
+    await close();
+  }
+});
+
+test("camera permission returning after automatic takeover cannot restart capture on the old device", async ({
+  browser,
+}) => {
+  const { a, b, close } = await setup(browser);
+  try {
+    await join(a);
+    await a.evaluate(() => {
+      window.__handoffTest.pause = true;
+    });
+    await a.getByRole("button", { name: "Kamerayı aç", exact: true }).click();
+    await expect
+      .poll(() => a.evaluate(() => Boolean(window.__handoffTest.release)))
+      .toBe(true);
+    await join(b);
+    await expectMediaReleased(a);
+    const count = await a.evaluate(() => window.__handoffTest.tracks.length);
+    await a.evaluate(() => window.__handoffTest.release!());
+    await expect
+      .poll(() => a.evaluate(() => window.__handoffTest.tracks.length))
+      .toBe(count + 1);
+    await expectMediaReleased(a);
+    await expect(
+      a.getByRole("button", { name: "Kamerayı kapat", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      b.getByRole("button", { name: "Mikrofonu kapat", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await close();
+  }
+});
 async function offer(a: Page, b: Page, open = true) {
   if (open)
     await a
@@ -401,67 +629,82 @@ test("a completed transfer is applied even when the source request acknowledgeme
   }
 });
 
-test("a cancel click cannot undo a transfer already committed while completion delivery is delayed", async ({
-  browser,
-}) => {
-  let releaseMessages: (() => void) | undefined;
-  const { a, b, close } = await setup(browser, false, async (_a, b) => {
-    await b.routeWebSocket(/socket\.io\//, (route) => {
-      const server = route.connectToServer();
-      let holding = false;
-      const queued: (string | Buffer)[] = [];
-      server.onMessage((message) => {
-        const text = String(message);
-        if (
-          text.includes('"call:transfer:status"') &&
-          text.includes('"completed"')
-        ) {
-          holding = true;
-          releaseMessages = () => {
-            holding = false;
-            for (const item of queued.splice(0)) route.send(item);
-          };
-        }
-        if (holding) queued.push(message);
-        else route.send(message);
+for (const action of ["cancel button", "header close", "Escape"] as const) {
+  test(`${action} cannot undo a transfer already committed while completion delivery is delayed`, async ({
+    browser,
+  }) => {
+    let releaseMessages: (() => void) | undefined;
+    const { a, b, close } = await setup(browser, false, async (_a, b) => {
+      await b.routeWebSocket(/socket\.io\//, (route) => {
+        const server = route.connectToServer();
+        let holding = false;
+        const queued: (string | Buffer)[] = [];
+        server.onMessage((message) => {
+          const text = String(message);
+          if (
+            text.includes('"call:transfer:status"') &&
+            text.includes('"completed"')
+          ) {
+            holding = true;
+            releaseMessages = () => {
+              holding = false;
+              for (const item of queued.splice(0)) route.send(item);
+            };
+          }
+          if (holding) queued.push(message);
+          else route.send(message);
+        });
       });
     });
-  });
-  try {
-    await join(a);
-    await offer(a, b);
-    await b
-      .getByRole("button", { name: "Bu cihazda devam et", exact: true })
-      .click();
-    await expect.poll(() => Boolean(releaseMessages)).toBe(true);
-    await b.getByRole("button", { name: "İptal et", exact: true }).click();
-    releaseMessages!();
-    await expect(
-      b.getByText("Görüşme bu cihazda devam ediyor.", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      b.getByRole("button", { name: "Mikrofonu kapat", exact: true }),
-    ).toBeVisible();
-    expect(
-      await b.evaluate(() =>
-        window.__handoffTest.tracks.some(
-          (track) => track.readyState === "live" && track.enabled,
-        ),
-      ),
-    ).toBe(true);
-    await expect
-      .poll(() =>
-        a.evaluate(() =>
-          window.__handoffTest.tracks.every(
-            (track) => track.readyState === "ended",
+    try {
+      await join(a);
+      await offer(a, b);
+      await b
+        .getByRole("button", { name: "Bu cihazda devam et", exact: true })
+        .click();
+      await expect.poll(() => Boolean(releaseMessages)).toBe(true);
+      await expect(
+        b.getByRole("button", { name: "İptal et", exact: true }),
+      ).toHaveCount(1);
+      if (action === "cancel button")
+        await b
+          .getByRole("status")
+          .getByRole("button", { name: "İptal et", exact: true })
+          .click();
+      else if (action === "header close")
+        await b
+          .getByRole("dialog")
+          .getByRole("button", { name: "Kapat", exact: true })
+          .click();
+      else await b.keyboard.press("Escape");
+      releaseMessages!();
+      await expect(
+        b.getByText("Görüşme bu cihazda devam ediyor.", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        b.getByRole("button", { name: "Mikrofonu kapat", exact: true }),
+      ).toBeVisible();
+      expect(
+        await b.evaluate(() =>
+          window.__handoffTest.tracks.some(
+            (track) => track.readyState === "live" && track.enabled,
           ),
         ),
-      )
-      .toBe(true);
-  } finally {
-    await close();
-  }
-});
+      ).toBe(true);
+      await expect
+        .poll(() =>
+          a.evaluate(() =>
+            window.__handoffTest.tracks.every(
+              (track) => track.readyState === "ended",
+            ),
+          ),
+        )
+        .toBe(true);
+    } finally {
+      await close();
+    }
+  });
+}
 
 test("accepting a transfer preserves unsaved profile work on the receiving device", async ({
   browser,
