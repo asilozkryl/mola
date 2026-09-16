@@ -23,4 +23,12 @@
 - [x] Add `desktop/update-window.cjs`, exact-sender IPC, native menu/background checks, and a fixed window-opening marker; cover confirmation and untrusted sender rejection before implementation.
 - [x] Add the settings entry using explicit native capability/version in user agent; older clients retain a one-time installer link. Preserve browser/mobile behavior.
 - [x] Run focused unit and real Electron tests; native package jobs also verify OS metadata. Build web and inspect native UI at narrow/wide sizes.
-- [ ] Document platform-specific final steps, bump package/lock/release notes, commit/push, and publish after all native artifact checks. Verify live frontend and the M3 bootstrap link.
+- [x] Document platform-specific final steps, bump package/lock/release notes, commit/push, and publish after all native artifact checks. Verify live frontend and the M3 bootstrap link.
+
+## Verification record
+
+Released as [Mola Desktop 1.0.7](https://github.com/asilozkryl/mola/releases/tag/desktop-v1.0.7) at commit `6c644b7cd70c316f62486c9395f7b2b0488991d4`. [Desktop CI](https://github.com/asilozkryl/mola/actions/runs/35101035959) passed all four native builds, OS metadata tests, complete installer checksums, and the Mac ZIP/DMG signature, launch, and updater-window checks.
+
+Local validation passed 56 unit tests (the native Mac metadata check runs on Mac CI), 18 real Electron smoke tests, 2 real Mola API/notification integration tests, and 4 desktop settings browser tests. Native updater UI passed four state/viewport accessibility checks. A clean dependency install verified one Electron preparation before parallel workers.
+
+The live frontend includes the settings entry. Production updater code using installed version 1.0.5 discovered and verified the public 1.0.7 arm64 DMG. Its direct download returned HTTP 200 with the expected 127115349 bytes. The AppImage restart check used an isolated copy in extraction mode; native FUSE startup was not available on the local host.
