@@ -1,10 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
-async function desktop(page: Page) {
-  await page.addInitScript(() => {
+async function desktop(page: Page, version = "") {
+  await page.addInitScript((desktopVersion: string) => {
     Object.defineProperty(navigator, "userAgent", {
-      value: `${navigator.userAgent} Electron/44.3.0`,
+      value: `${navigator.userAgent} Electron/44.3.0${desktopVersion ? ` MolaDesktop/${desktopVersion}` : ""}`,
     });
     let permission: NotificationPermission = "denied";
     const qa = {
@@ -49,12 +49,25 @@ async function desktop(page: Page) {
       qa.sounds++;
       setTimeout(() => this.dispatchEvent(new Event("ended")), 0);
     };
-  });
+  }, version);
   await page.goto("/");
   await page
     .getByRole("button", { name: "Bildirimler ve uygulama", exact: true })
     .click();
 }
+
+test("desktop update settings open only the fixed native updater capability", async ({ page }) => {
+  await desktop(page, "1.0.6");
+  await page.evaluate(() => {
+    const requests: string[] = [];
+    Object.assign(window, { desktopUpdateRequests: requests });
+    window.open = (url) => { requests.push(String(url)); return null; };
+  });
+  await expect(page.getByText("Yüklü sürüm: 1.0.6", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Güncellemeleri kontrol et", exact: true }).click();
+  expect(await page.evaluate(() => (window as any).desktopUpdateRequests)).toEqual(["mola-desktop://app/updates"]);
+  await expect(page.getByRole("dialog", { name: "Bildirimler ve uygulama" })).toBeVisible();
+});
 
 test("Electron can request initially denied permission without a Web Push subscription", async ({
   page,

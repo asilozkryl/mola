@@ -97,6 +97,8 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
       - run: npm ci
+      - name: Verify native updater safeguards
+        run: npm test
       - name: Create installers with ad-hoc Mac bundle signatures
         run: npm run dist -- ${{ matrix.args }}
       - name: Verify Mac installer signatures and packaged app launch

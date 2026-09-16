@@ -58,6 +58,15 @@ async function verifyApplication(appPath, root) {
     assert.deepEqual(await remote.evaluate(() => ({ require: typeof window.require, process: typeof window.process })), {
       require: 'undefined', process: 'undefined',
     });
+    await remote.evaluate(() => window.open('mola-desktop://app/updates', '_blank'));
+    await expect.poll(() => application.windows().some(page => page.url() === 'mola-desktop://app/updates.html')).toBe(true);
+    const updates = application.windows().find(page => page.url() === 'mola-desktop://app/updates.html');
+    await expect(updates.getByRole('heading', { name: 'Mola güncellemeleri', exact: true })).toBeVisible();
+    const updateState = await updates.evaluate(() => window.molaDesktop.getUpdateState());
+    assert.equal(updateState.currentVersion, version);
+    assert.equal(updateState.format, 'dmg');
+    assert.notEqual(updateState.phase, 'unsupported');
+    await updates.close();
     console.log(`Verified ${path.basename(root)}: ${architecture.stdout.trim()}, valid bundle signature, packaged ${version}, setup and sandboxed renderer.`);
   } finally {
     try {

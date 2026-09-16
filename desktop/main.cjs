@@ -1,10 +1,11 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, protocol, session, shell, desktopCapturer, systemPreferences } = require('electron');
+const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, protocol, session, shell, desktopCapturer, systemPreferences } = require('electron');
 const { join, basename, resolve } = require('node:path');
 const { readFile } = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { normalizeServerUrl, isTrustedUrl, isTrustedDownloadUrl, popupAction, permissionKinds, isDisplayCapturePermission } = require('./policy.cjs');
 const { readSettings, saveSettings } = require('./settings.cjs');
 const { createNotificationPermissionStore } = require('./notification-permissions.cjs');
+const { createUpdateWindowController } = require('./update-window.cjs');
 
 app.setName('Mola');
 if (app.commandLine.hasSwitch('user-data-dir')) {
@@ -30,6 +31,7 @@ let connecting = false;
 let quitting = false;
 let picker = null;
 let notificationPermissions;
+let updates;
 const configuredSessions = new WeakSet();
 
 function localWindow(page, options = {}) {
@@ -107,6 +109,10 @@ function guardRemoteWindow(window, origin, callPopup = false) {
       if (window.isMinimized()) window.restore();
       window.show();
       window.focus();
+      return { action: 'deny' };
+    }
+    if (url === 'mola-desktop://app/updates' && (!referrer.url || isTrustedUrl(referrer.url, origin))) {
+      updates?.show();
       return { action: 'deny' };
     }
     const action = popupAction(url, origin);
@@ -264,6 +270,8 @@ async function connect(value) {
     webPreferences: { ...remotePreferences, session: ses, autoplayPolicy: 'no-user-gesture-required' },
   });
   mainWindow = window;
+  // The server UI can discover this one capability without a privileged bridge.
+  window.webContents.setUserAgent(`${window.webContents.getUserAgent()} MolaDesktop/${app.getVersion()}`);
   serverUrl = origin;
   guardRemoteWindow(window, origin);
   window.on('closed', () => { if (mainWindow === window) mainWindow = null; });
@@ -299,6 +307,7 @@ function installMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'Mola', submenu: [
       { label: 'Mola hakkında', click: () => dialog.showMessageBox({ type: 'info', title: 'Mola', message: `Mola ${app.getVersion()}`, detail: 'Birlikte, aynı yerde.\nLinux, macOS ve Windows masaüstü istemcisi.' }) },
+      { id: 'mola-updates', label: 'Güncellemeleri kontrol et…', click: () => updates?.show() },
       { label: 'Sunucu adresini değiştir…', accelerator: 'CmdOrCtrl+,', click: () => showSetup() },
       { type: 'separator' },
       ...macItems,
@@ -319,7 +328,7 @@ if (!app.requestSingleInstanceLock()) {
     const window = setupWindow || mainWindow;
     if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); }
   });
-  app.on('before-quit', () => { quitting = true; });
+  app.on('before-quit', () => { quitting = true; updates?.dispose(); });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -330,7 +339,8 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(async () => {
     app.setAppUserModelId('app.mola.desktop');
     notificationPermissions = await createNotificationPermissionStore(notificationPermissionsFile);
-    const localFiles = { 'setup.html': 'text/html', 'screen.html': 'text/html', 'setup.js': 'text/javascript', 'screen.js': 'text/javascript', 'styles.css': 'text/css' };
+    const localFiles = { 'setup.html': 'text/html', 'screen.html': 'text/html', 'setup.js': 'text/javascript', 'screen.js': 'text/javascript', 'styles.css': 'text/css',
+      'updates.html': 'text/html', 'updates.js': 'text/javascript', 'updates.css': 'text/css' };
     protocol.handle('mola-desktop', async request => {
       const url = new URL(request.url);
       const name = url.pathname.slice(1);
@@ -373,6 +383,11 @@ if (!app.requestSingleInstanceLock()) {
       if (id !== null && (typeof id !== 'string' || !picker.sources.some(source => source.id === id))) throw new Error('Geçersiz ekran seçimi.');
       picker.finish(id);
     });
+    const packageType = process.platform === 'darwin' ? 'dmg' : process.platform === 'win32' ? 'exe'
+      : process.platform === 'linux' ? (process.env.APPIMAGE ? 'AppImage' : 'deb') : null;
+    updates = createUpdateWindowController({ app, ipcMain, Menu, Notification, dialog,
+      localWindow, validateLocalSender, cacheDir: join(app.getPath('userData'), 'updates'),
+      packageType, openPath: filePath => shell.openPath(filePath) });
     installMenu();
     try {
       serverUrl = process.env.MOLA_SERVER_URL !== undefined ? normalizeServerUrl(process.env.MOLA_SERVER_URL) : await readSettings(settingsFile) || '';

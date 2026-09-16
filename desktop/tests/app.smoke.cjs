@@ -196,6 +196,28 @@ test('desktop setup validates the server, isolates remote content, and preserves
     assert.equal(remote.url(), url);
   });
 
+  await t.test('the trusted workspace opens an isolated updater without navigating or interrupting its call', async () => {
+    const remote = application.windows().find(page => page.url() === url);
+    await remote.getByRole('button', { name: 'Görüşmeyi ayrı pencerede aç' }).click();
+    const call = application.windows().find(page => page.url() === 'about:blank');
+    assert.ok(call);
+    await remote.evaluate(() => window.open('mola-desktop://app/updates', '_blank'));
+    await expect.poll(() => application.windows().some(page => page.url() === 'mola-desktop://app/updates.html')).toBe(true);
+    const updates = application.windows().find(page => page.url() === 'mola-desktop://app/updates.html');
+    const version = await application.evaluate(({ app }) => app.getVersion());
+    assert.ok((await remote.evaluate(() => navigator.userAgent)).endsWith(`MolaDesktop/${version}`));
+    assert.equal(remote.url(), url);
+    await expect(call.locator('body')).toHaveText('Görüşme penceresi');
+    assert.deepEqual(await updates.evaluate(() => ({ require: typeof window.require, process: typeof window.process })), {
+      require: 'undefined', process: 'undefined',
+    });
+    await assert.rejects(updates.evaluate(() => window.molaDesktop.connect('http://127.0.0.1:9')), /yerel penceresinden/);
+    await call.evaluate(() => window.open('mola-desktop://app/updates', '_blank'));
+    assert.equal(application.windows().filter(page => page.url() === updates.url()).length, 1);
+    await updates.close();
+    await call.close();
+  });
+
   await t.test('approved microphone and camera requests produce real media streams', async () => {
     const remote = application.windows().find((page) => page.url() === url);
     await application.evaluate(({ dialog }) => {

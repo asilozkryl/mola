@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'" />
+    <title>Mola — Güncellemeler</title>
+    <link rel="stylesheet" href="updates.css" />
+    <script src="updates.js" defer></script>
+  </head>
+  <body>
+    <main class="updates-shell">
+      <header class="updates-header">
+        <div class="brand" aria-label="Mola">mola.</div>
+        <span class="desktop-label">MASAÜSTÜ UYGULAMASI</span>
+      </header>
+      <div class="updates-intro">
+        <h1>Mola güncellemeleri</h1>
+        <p>Yeni sürümler, aynı çalışma alanın.</p>
+      </div>
+
+      <section class="update-card" aria-labelledby="state-title">
+        <div class="state-heading">
+          <span class="update-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m-4 4 4-4 4 4M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5" /></svg>
+          </span>
+          <div class="state-copy" role="status" aria-live="polite" aria-atomic="true">
+            <h2 id="state-title">Hazırlanıyor…</h2>
+            <p id="state-description">Masaüstü sürümün okunuyor.</p>
+          </div>
+        </div>
+        <dl class="version-list">
+          <div><dt>Yüklü sürüm</dt><dd id="current-version">—</dd></div>
+          <div id="latest-version-row" hidden><dt>Yeni sürüm</dt><dd id="latest-version">—</dd></div>
+        </dl>
+        <div id="download-progress" hidden>
+          <div class="progress-heading"><span id="progress-label">İndiriliyor</span><span id="progress-percent">%0</span></div>
+          <div id="progress-track" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-fill"></div></div>
+          <span id="transfer-size" class="transfer-size"></span>
+        </div>
+        <p id="update-error" class="update-error" role="alert" hidden></p>
+        <p id="last-checked" class="last-checked" hidden></p>
+      </section>
+
+      <aside id="installation-note" class="installation-note" hidden>
+        <span class="note-marker" aria-hidden="true">i</span>
+        <p id="installation-help"></p>
+      </aside>
+      <p id="continuity-note" class="continuity-note">Kontrol ve indirme sırasında görüşmene devam edebilirsin. Kurulumu sen başlatırsın.</p>
+
+      <footer class="updates-footer">
+        <button id="later" class="button button-quiet" type="button">Sonra</button>
+        <div class="update-actions">
+          <button id="cancel-update" class="button button-secondary" type="button" hidden>İndirmeyi iptal et</button>
+          <button id="check-updates" class="button button-primary" type="button" disabled>Güncellemeleri kontrol et</button>
+          <button id="download-update" class="button button-primary" type="button" hidden>Güncellemeyi indir</button>
+          <button id="install-update" class="button button-primary" type="button" hidden>Kurulumu başlat</button>
+        </div>
+      </footer>
+    </main>
+  </body>
+</html>

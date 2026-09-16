@@ -14,6 +14,7 @@ import { playMolaNotificationSound } from "../lib/notificationSound";
 
 export function DesktopNotificationSettings(props: NotificationSettingsProps) {
   const { userId, workspaceId, onClose } = props;
+  const desktopVersion = navigator.userAgent.match(/(?:^|\s)MolaDesktop\/(\d+\.\d+\.\d+)(?:\s|$)/)?.[1];
   const [preferences, setPreferences] = useState(() =>
     readDesktopNotificationPreferences(userId),
   );
@@ -263,6 +264,30 @@ export function DesktopNotificationSettings(props: NotificationSettingsProps) {
             Bu tercih yalnızca bu bilgisayardaki hesabın için geçerlidir.
             Pencere açık veya küçültülmüş olmalı; Mola'dan çıkınca bildirim ve
             ses gelmez.
+          </p>
+        </section>
+        <section aria-labelledby="desktop-updates-heading">
+          <div className="notification-section-heading">
+            <span><RefreshCw size={20} /></span>
+            <div>
+              <h3 id="desktop-updates-heading">Uygulama güncellemeleri</h3>
+              <p>{desktopVersion ? `Yüklü sürüm: ${desktopVersion}` : "Mola’nın yeni masaüstü sürümlerini takip et."}</p>
+            </div>
+          </div>
+          <div className="notification-actions">
+            {desktopVersion ? (
+              <Button variant="unstyled" size="unset" className="notification-primary"
+                onClick={() => window.open("mola-desktop://app/updates", "_blank")}>
+                <RefreshCw size={15} /> Güncellemeleri kontrol et
+              </Button>
+            ) : (
+              <a href="/download" className="notification-primary">Yeni masaüstü sürümünü indir</a>
+            )}
+          </div>
+          <p className="notification-desktop-help">
+            {desktopVersion
+              ? "Yeni sürümler otomatik kontrol edilir. İndirme ve kurulum sen başlattığında yapılır."
+              : "Uygulama içinden güncelleme özelliği için Mola’yı bir kez yeni kurulum dosyasıyla güncelle."}
           </p>
         </section>
         {error && (
