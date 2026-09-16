@@ -13,7 +13,7 @@
 - Preserve remote renderer isolation, live calls during checks/downloads, and OS trust checks.
 - No Developer ID currently exists: macOS finishes through DMG and Applications.
 - No updater URL/path/command arguments from renderers; no elevated shell commands.
-- Keep published versions immutable; release 1.0.6 after required verification.
+- Keep published versions immutable; release 1.0.7 after required verification.
 
 ## Tasks
 

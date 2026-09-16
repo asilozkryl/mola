@@ -150,7 +150,7 @@ Windows'ta kendi kod imzalama sağlayıcınızı electron-builder'ın Windows im
 - Ekran paylaşımı her başlatıldığında Mola'nın izin penceresi gösterilir. İzin verdikten sonra mevcutsa işletim sisteminin kaynak seçicisi, diğer durumlarda Mola'nın ekran/pencere seçicisi açılır. macOS'ta ekran kaydı izni, Linux Wayland'de uygun masaüstü portalı gerekir. Ekran paylaşımı sistem sesini içermez.
 - Görüşmeyi küçük pencereye alma mevcut web özelliğini kullanır. Destek cihaz ve Electron sürümüyle doğrulanmalıdır.
 - Harici bağlantılar sistem tarayıcısında açılır. Uzak Mola sayfasının Node.js erişimi yoktur; kurulum arayüzü ayrı tutulur.
-- Güncelleme kontrolü ve kullanıcı tarafından başlatılan indirme/kurulum 1.0.6 ile sunulur. Sistem tepsisi bulunmaz. Bildirimler aşağıdaki masaüstü akışını kullanır; Mola penceresi kapatıldığında veya uygulamadan çıkıldığında mesajları dinleyen bağlantı da kapanır.
+- Güncelleme kontrolü ve kullanıcı tarafından başlatılan indirme/kurulum 1.0.7 ile sunulur. Sistem tepsisi bulunmaz. Bildirimler aşağıdaki masaüstü akışını kullanır; Mola penceresi kapatıldığında veya uygulamadan çıkıldığında mesajları dinleyen bağlantı da kapanır.
 
 ## Masaüstü bildirimleri ve Mola sesi
 
@@ -168,7 +168,7 @@ Sunucu güncellemeleri istemci içindeki web arayüzüne yansır. Electron veya 
 
 ### Uygulama içinden güncelleme
 
-1.0.6 ve üzeri sürümlerde **Mola → Güncellemeleri kontrol et** menüsünü veya **Bildirimler ve uygulama → Uygulama güncellemeleri** bölümünü açın. Uygulama açılıştan yaklaşık bir dakika sonra ve altı saatte bir kararlı sürümleri kontrol eder; yeni sürüm menüde görünür, sistem izin veriyorsa sessiz bir bildirim gösterilir. Kontrol ve indirme görüşmeyi kesmez. **Güncellemeyi indir** ile ilerlemeyi izleyin; indirmeyi iptal edip tekrar başlatabilirsiniz. Tamamlanan dosyalar tekrar kullanılırken de doğrulanır. İptal edilen yarım indirme baştan başlar.
+1.0.7 ve üzeri sürümlerde **Mola → Güncellemeleri kontrol et** menüsünü veya **Bildirimler ve uygulama → Uygulama güncellemeleri** bölümünü açın. Uygulama açılıştan yaklaşık bir dakika sonra ve altı saatte bir kararlı sürümleri kontrol eder; yeni sürüm menüde görünür, sistem izin veriyorsa sessiz bir bildirim gösterilir. Kontrol ve indirme görüşmeyi kesmez. **Güncellemeyi indir** ile ilerlemeyi izleyin; indirmeyi iptal edip tekrar başlatabilirsiniz. Tamamlanan dosyalar tekrar kullanılırken de doğrulanır. İptal edilen yarım indirme baştan başlar.
 
 **Kurulumu başlat** (Mac'te **DMG’yi aç**) ayrı bir onay ister ve kurulum penceresi açılınca Mola kapanır. Açık görüşmenizi bitirip gönderilmemiş mesajınızı kontrol edin. Kullanıcı profili ve sunucu adresi silinmez.
 
@@ -179,7 +179,7 @@ Sunucu güncellemeleri istemci içindeki web arayüzüne yansır. Electron veya 
 
 Güncelleme kaynağı, çalışma alanı sunucusundan bağımsız olarak sabit `asilozkryl/mola` GitHub deposudur. Yalnızca `desktop-vX.Y.Z` kararlı etiketleri, tam yedi kurulum dosyası ve `SHA256SUMS` kabul edilir. Yerel işletim sistemi ve mimari seçilir; daha eski sürüme geçilmez. HTTPS indirmesi boyut ve zamanla sınırlıdır, özet kurulumdan hemen önce tekrar denetlenir. Bu bütünlük kontrolü Apple/Windows yayıncı imzası yerine geçmez. İndirme önbelleği özel kullanıcı dizinindedir; mevcut ve bir önceki sürüm dışındaki eski kurucular temizlenir.
 
-**İlk geçiş:** 1.0.5 ve öncesi için 1.0.6 kurulum dosyasını bir kez elle indirip kurun. Geliştirme ortamındaki paketlenmemiş Electron çalıştırmaları ve desteklenmeyen mimariler güncellenmez.
+**İlk geçiş:** 1.0.5 ve öncesi için 1.0.7 kurulum dosyasını bir kez elle indirip kurun. Geliştirme ortamındaki paketlenmemiş Electron çalıştırmaları ve desteklenmeyen mimariler güncellenmez.
 
 ## Doğrulama
 

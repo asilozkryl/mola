@@ -8,7 +8,7 @@ Mola masaüstü istemcisi mevcut Mola sunucunuza bağlanır. Bilgisayarınıza a
 
 İlk açılışta ekibinizin Mola sunucu adresini (`https://…`) girin ve mevcut hesabınızla giriş yapın. Sunucu adresi bu bilgisayarda saklanır; tarayıcı oturumu otomatik aktarılmaz.
 
-## 1.0.6 uygulama içinden güncelleme
+## 1.0.7 uygulama içinden güncelleme
 
 - **Mola → Güncellemeleri kontrol et** menüsü ve **Bildirimler ve uygulama → Uygulama güncellemeleri** bölümü eklendi.
 - Uygulama açıldıktan yaklaşık bir dakika sonra ve altı saatte bir yeni sürüm aranır. İndirme ve kurulum kullanıcı başlattığında yapılır; indirme görüşmeyi kesmez.
@@ -16,7 +16,7 @@ Mola masaüstü istemcisi mevcut Mola sunucunuza bağlanır. Bilgisayarınıza a
 - macOS'ta DMG açılır; Mola'yı Uygulamalar klasörüne sürükleyerek mevcut sürümü değiştirin. Windows ve Debian/Ubuntu'da sistem kurulum penceresini tamamlayın. AppImage, yazılabilir mevcut dosyayı yedekleyerek günceller ve yeniden açılır.
 - Kurulum başlatılmadan önce Mola'nın kapanacağı onaylanır. Uygulama haber vermeden yeniden başlamaz.
 
-**İlk geçiş:** 1.0.5 ve önceki sürümler güncelleme sistemini içermediği için 1.0.6'yı bir kez indirip kurun. Sonraki sürümler uygulama üzerinden indirilebilir ve kurulumu başlatılabilir. macOS'ta Developer ID bulunmadığı için son değiştirme adımı Uygulamalar klasöründe tamamlanır.
+**İlk geçiş:** 1.0.5 ve önceki sürümler güncelleme sistemini içermediği için 1.0.7'yı bir kez indirip kurun. Sonraki sürümler uygulama üzerinden indirilebilir ve kurulumu başlatılabilir. macOS'ta Developer ID bulunmadığı için son değiştirme adımı Uygulamalar klasöründe tamamlanır.
 
 ## Bildirimler ve Mola sesi
 
