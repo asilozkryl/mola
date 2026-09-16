@@ -1,18 +1,78 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
 import type { CallPeer, User, VoiceChannelRoster, VoiceRoster } from '../shared/types';
+import type { CallDevice, CallTransfer, CallTransferStatus } from '../shared/call-types';
 
 type CallRoom = Map<string, CallPeer>;
+interface CallSubscriber {
+  workspaceId: string;
+  userId: string;
+  device?: CallDevice;
+  readyForTransfer: boolean;
+  isJoining: () => boolean;
+  sendRoster: () => void;
+  canAccessChannel: (channelId: string) => boolean | Promise<boolean>;
+  leave: () => void;
+}
+interface PendingTransfer {
+  info: CallTransfer;
+  workspaceId: string;
+  userId: string;
+  targetSocketId: string;
+  state: 'pending' | 'staged' | 'committing';
+  timer: ReturnType<typeof setTimeout>;
+}
 interface CallRegistry {
   rooms: Map<string, CallRoom>;
   channels: Map<string, string>;
   workspaces: Map<string, string>;
   voiceChannels: Set<string>;
-  subscribers: Map<string, { workspaceId: string; sendRoster: () => void; canAccessChannel: (channelId: string) => boolean | Promise<boolean>; leave: () => void }>;
+  subscribers: Map<string, CallSubscriber>;
+  transfers: Map<string, PendingTransfer>;
 }
 const registries = new WeakMap<Server, CallRegistry>();
 const MAX_PARTICIPANTS = 6;
 const roomName = (channelId: string) => `call:${channelId}`;
+
+function publishDevices(io: Server, userId: string) {
+  for (const [socketId, subscriber] of registries.get(io)?.subscribers ?? []) {
+    if (subscriber.userId === userId && subscriber.readyForTransfer)
+      io.sockets.sockets.get(socketId)?.emit('call:devices:changed');
+  }
+}
+
+function transferForSocket(registry: CallRegistry, socketId: string) {
+  return [...registry.transfers.values()].find(transfer =>
+    transfer.info.sourceSocketId === socketId || transfer.targetSocketId === socketId);
+}
+
+function cancelTransfer(io: Server, transfer: PendingTransfer, reason: string) {
+  const registry = registries.get(io);
+  if (registry?.transfers.get(transfer.info.id) !== transfer) return;
+  registry.transfers.delete(transfer.info.id);
+  clearTimeout(transfer.timer);
+  const status: CallTransferStatus = { id: transfer.info.id, state: 'cancelled', reason };
+  io.to(transfer.info.sourceSocketId).to(transfer.targetSocketId).emit('call:transfer:status', status);
+  // Delete the transfer first: leave() also cancels transfers involving its socket.
+  if (transfer.state !== 'pending' && registry.channels.get(transfer.targetSocketId) === transfer.info.channelId)
+    registry.subscribers.get(transfer.targetSocketId)?.leave();
+  publishDevices(io, transfer.userId);
+}
+
+async function transferHasAccess(io: Server, registry: CallRegistry, transfer: PendingTransfer) {
+  const source = registry.subscribers.get(transfer.info.sourceSocketId);
+  const target = registry.subscribers.get(transfer.targetSocketId);
+  if (!source || !target || source.userId !== transfer.userId || target.userId !== transfer.userId
+    || source.workspaceId !== transfer.workspaceId || target.workspaceId !== transfer.workspaceId
+    || !io.sockets.sockets.get(transfer.info.sourceSocketId)?.connected
+    || !io.sockets.sockets.get(transfer.targetSocketId)?.connected
+    || registry.channels.get(transfer.info.sourceSocketId) !== transfer.info.channelId
+    || Date.now() >= transfer.info.expiresAt) return false;
+  try {
+    const allowed = await Promise.all([source.canAccessChannel(transfer.info.channelId), target.canAccessChannel(transfer.info.channelId)]);
+    return allowed.every(Boolean) && registry.transfers.get(transfer.info.id) === transfer;
+  } catch { return false; }
+}
 
 /** Filter voice presence by the recipient's current channel access. DMs and text calls stay private. */
 export function getVoiceRoster(io: Server, workspaceId: string, channelIds?: readonly string[]): VoiceChannelRoster[] {
@@ -46,6 +106,10 @@ export async function refreshVoiceAccess(io: Server, workspaceId: string) {
       subscriber.leave();
     }
   }));
+  await Promise.all([...registry.transfers.values()].map(async transfer => {
+    if (transfer.workspaceId === workspaceId && !await transferHasAccess(io, registry, transfer))
+      cancelTransfer(io, transfer, 'Görüşme erişimi değişti. Aktarım iptal edildi.');
+  }));
   publishVoiceRoster(io, workspaceId);
 }
 
@@ -78,6 +142,8 @@ export function closeCallRoom(io: Server, channelId: string, error: string) {
   if (!registry) return;
   const workspaceId = registry.workspaces.get(channelId);
   const wasVoice = registry.voiceChannels.has(channelId);
+  for (const transfer of registry.transfers.values())
+    if (transfer.info.channelId === channelId) cancelTransfer(io, transfer, error);
   for (const socketId of registry.rooms.get(channelId)?.keys() ?? []) {
     registry.channels.delete(socketId);
     const socket = io.sockets.sockets.get(socketId);
@@ -108,9 +174,12 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
   workspaceId: string;
   getVoiceChannelIds: () => string[];
   canAccessChannel: (channelId: string) => boolean | Promise<boolean>;
+  device?: CallDevice;
+  getChannelName?: (channelId: string) => string;
+  transferTimeoutMs?: number;
 }) {
   let registry = registries.get(io);
-  if (!registry) { registry = { rooms: new Map(), channels: new Map(), workspaces: new Map(), voiceChannels: new Set(), subscribers: new Map() }; registries.set(io, registry); }
+  if (!registry) { registry = { rooms: new Map(), channels: new Map(), workspaces: new Map(), voiceChannels: new Set(), subscribers: new Map(), transfers: new Map() }; registries.set(io, registry); }
   const { rooms, channels, workspaces, voiceChannels } = registry;
   let joining = false;
   let joinVersion = 0;
@@ -122,6 +191,10 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
   let joinRequests = 0;
   let rosterWindowStart = Date.now();
   let rosterRequests = 0;
+  let deviceWindowStart = Date.now();
+  let deviceRequests = 0;
+  let transferWindowStart = Date.now();
+  let transferRequests = 0;
   const publish = (channelId: string) => {
     io.to(roomName(channelId)).emit('call:peers', { channelId, peers: [...(rooms.get(channelId)?.values() ?? [])] });
     const workspaceId = workspaces.get(channelId);
@@ -132,14 +205,20 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
     const payload: VoiceRoster = { workspaceId: options.workspaceId, channels: getVoiceRoster(io, options.workspaceId, options.getVoiceChannelIds()) };
     socket.emit('voice:roster', payload);
   };
-  registry.subscribers.set(socket.id, { workspaceId: options.workspaceId, sendRoster, canAccessChannel: options.canAccessChannel, leave: () => { joinVersion++; leave(); } });
+  const subscriber: CallSubscriber = { workspaceId: options.workspaceId, userId: options.user.id,
+    device: options.device, readyForTransfer: false, isJoining: () => joining,
+    sendRoster, canAccessChannel: options.canAccessChannel, leave: () => { joinVersion++; leave(); } };
+  registry.subscribers.set(socket.id, subscriber);
   socket.on('voice:roster:request', () => {
     if (Date.now() - rosterWindowStart > 10_000) { rosterRequests = 0; rosterWindowStart = Date.now(); }
     if (++rosterRequests <= 20) sendRoster();
   });
   // The client also requests after installing listeners, covering reconnect and bootstrap races.
   sendRoster();
-  function leave() {
+  function leave(preserveTransferId?: string) {
+    for (const transfer of registry!.transfers.values())
+      if (transfer.info.id !== preserveTransferId && (transfer.info.sourceSocketId === socket.id || transfer.targetSocketId === socket.id))
+        cancelTransfer(io, transfer, 'Cihaz görüşmeden ayrıldı. Aktarım iptal edildi.');
     const channelId = channels.get(socket.id);
     if (!channelId) return;
     channels.delete(socket.id);
@@ -153,7 +232,123 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
       workspaces.delete(channelId);
       voiceChannels.delete(channelId);
     }
+    publishDevices(io, options.user.id);
   }
+
+  const eligibleTarget = (socketId: string, target: CallSubscriber) =>
+    socketId !== socket.id && target.userId === options.user.id
+    && target.workspaceId === options.workspaceId && Boolean(target.device)
+    && target.device!.id !== options.device?.id && target.readyForTransfer
+    && Boolean(io.sockets.sockets.get(socketId)?.connected) && !target.isJoining()
+    && !channels.has(socketId) && !transferForSocket(registry!, socketId)
+    && ![...registry!.subscribers].some(([otherId, other]) => other.userId === target.userId
+      && other.device?.id === target.device!.id
+      && (channels.has(otherId) || other.isJoining() || Boolean(transferForSocket(registry!, otherId))));
+
+  socket.on('call:devices:register', (ack: unknown) => {
+    subscriber.readyForTransfer = Boolean(options.device);
+    if (typeof ack === 'function') ack({ ok: true });
+    publishDevices(io, options.user.id);
+  });
+
+  socket.on('call:devices:list', async (ack: unknown) => {
+    if (typeof ack !== 'function') return;
+    if (Date.now() - deviceWindowStart > 10_000) { deviceRequests = 0; deviceWindowStart = Date.now(); }
+    if (++deviceRequests > 30) return ack({ ok: false, error: 'Cihaz listesini yenilemeden önce birkaç saniye bekleyin.' });
+    const channelId = channels.get(socket.id);
+    if (!channelId || !options.device || !subscriber.readyForTransfer) return ack({ ok: true, devices: [] });
+    try {
+      if (!await options.canAccessChannel(channelId)) return ack({ ok: false, error: 'Bu görüşmeye erişiminiz yok.' });
+      const devices = new Map<string, CallDevice>();
+      for (const [targetId, target] of registry!.subscribers) {
+        if (!eligibleTarget(targetId, target)) continue;
+        if (await target.canAccessChannel(channelId) && eligibleTarget(targetId, target))
+          devices.set(target.device!.id, target.device!);
+      }
+      if (!socket.connected || channels.get(socket.id) !== channelId) return ack({ ok: true, devices: [] });
+      ack({ ok: true, devices: [...devices.values()] });
+    } catch { ack({ ok: false, error: 'Cihaz listesi alınamadı. Yeniden deneyin.' }); }
+  });
+
+  socket.on('call:transfer:request', async (payload: unknown, ack: unknown) => {
+    if (typeof ack !== 'function') return;
+    if (Date.now() - transferWindowStart > 10_000) { transferRequests = 0; transferWindowStart = Date.now(); }
+    if (++transferRequests > 8) return ack({ ok: false, error: 'Yeni aktarım için birkaç saniye bekleyin.' });
+    const deviceId = (payload as { deviceId?: unknown } | null)?.deviceId;
+    const channelId = channels.get(socket.id);
+    if (typeof deviceId !== 'string' || deviceId.length > 128 || !channelId || !options.device
+      || !subscriber.readyForTransfer || joining || transferForSocket(registry!, socket.id))
+      return ack({ ok: false, error: 'Bu görüşme şu anda aktarılamıyor.' });
+    if ([...registry!.transfers.values()].some(item => item.info.channelId === channelId))
+      return ack({ ok: false, error: 'Bu görüşmede başka bir cihaz aktarımı sürüyor. Tamamlanmasını bekleyin.' });
+    const candidate = [...registry!.subscribers].find(([targetId, target]) => target.device?.id === deviceId && eligibleTarget(targetId, target));
+    if (!candidate) return ack({ ok: false, error: 'Cihaz artık uygun değil. Cihaz listesini yenileyin.' });
+    const [targetSocketId, target] = candidate;
+    try {
+      if (!(await Promise.all([options.canAccessChannel(channelId), target.canAccessChannel(channelId)])).every(Boolean)
+        || !socket.connected || channels.get(socket.id) !== channelId
+        || [...registry!.transfers.values()].some(item => item.info.channelId === channelId)
+        || transferForSocket(registry!, socket.id) || !eligibleTarget(targetSocketId, target))
+        return ack({ ok: false, error: 'Görüşme veya cihaz erişimi değişti. Yeniden deneyin.' });
+      const info: CallTransfer = {
+        id: randomUUID(), channelId, channelName: options.getChannelName?.(channelId) ?? channelId,
+        sourceSocketId: socket.id, sourceDevice: options.device.name, targetDevice: target.device!.name,
+        expiresAt: Date.now() + (options.transferTimeoutMs ?? 60_000),
+        mic: rooms.get(channelId)?.get(socket.id)?.mic ?? false,
+      };
+      const transfer: PendingTransfer = {
+        info, workspaceId: options.workspaceId, userId: options.user.id, targetSocketId, state: 'pending',
+        timer: setTimeout(() => cancelTransfer(io, transfer, 'Aktarım isteğinin süresi doldu. Görüşme mevcut cihazda devam ediyor.'), Math.max(1, info.expiresAt - Date.now())),
+      };
+      transfer.timer.unref();
+      registry!.transfers.set(info.id, transfer);
+      io.to(targetSocketId).emit('call:transfer:incoming', info);
+      ack({ ok: true, transfer: info });
+      publishDevices(io, options.user.id);
+    } catch { ack({ ok: false, error: 'Aktarım başlatılamadı. Yeniden deneyin.' }); }
+  });
+
+  socket.on('call:transfer:cancel', (payload: unknown, ack: unknown) => {
+    const id = (payload as { transferId?: unknown } | null)?.transferId;
+    const transfer = typeof id === 'string' ? registry!.transfers.get(id) : undefined;
+    if (!transfer || (transfer.info.sourceSocketId !== socket.id && transfer.targetSocketId !== socket.id)) {
+      if (typeof ack === 'function') ack({ ok: false, error: 'Aktarım isteği artık geçerli değil.' });
+      return;
+    }
+    cancelTransfer(io, transfer, socket.id === transfer.targetSocketId
+      ? 'Diğer cihaz aktarımı kabul etmedi. Görüşme burada devam ediyor.'
+      : 'Aktarım iptal edildi. Görüşme mevcut cihazda devam ediyor.');
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('call:transfer:ready', async (payload: unknown, ack: unknown) => {
+    if (typeof ack !== 'function') return;
+    const id = (payload as { transferId?: unknown } | null)?.transferId;
+    const transfer = typeof id === 'string' ? registry!.transfers.get(id) : undefined;
+    if (!transfer || transfer.targetSocketId !== socket.id || transfer.state !== 'staged'
+      || channels.get(socket.id) !== transfer.info.channelId)
+      return ack({ ok: false, error: 'Aktarım isteği artık geçerli değil.' });
+    transfer.state = 'committing';
+    if (!await transferHasAccess(io, registry!, transfer)
+      || channels.get(socket.id) !== transfer.info.channelId
+      || registry!.transfers.get(transfer.info.id) !== transfer) {
+      cancelTransfer(io, transfer, 'Aktarım tamamlanamadı. Görüşme mevcut cihazda devam ediyor.');
+      return ack({ ok: false, error: 'Aktarım tamamlanamadı. Yeniden deneyin.' });
+    }
+    const mic = rooms.get(transfer.info.channelId)?.get(transfer.info.sourceSocketId)?.mic ?? false;
+    registry!.transfers.delete(transfer.info.id);
+    clearTimeout(transfer.timer);
+    const status: CallTransferStatus = { id: transfer.info.id, state: 'completed', mic };
+    // Both clients learn the result before the roster removes the source. No
+    // call:closed error is emitted for a successful, intentional transfer.
+    io.to(transfer.info.sourceSocketId).to(socket.id).emit('call:transfer:status', status);
+    registry!.subscribers.get(transfer.info.sourceSocketId)?.leave();
+    const peer = rooms.get(transfer.info.channelId)?.get(socket.id);
+    if (peer) peer.mic = mic;
+    publish(transfer.info.channelId);
+    publishDevices(io, options.user.id);
+    ack({ ok: true, mic });
+  });
 
   socket.on('call:join', async (payload: unknown, ack: unknown) => {
     if (typeof ack !== 'function') return;
@@ -161,29 +356,41 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
     if (Date.now() - joinWindowStart > 10_000) { joinRequests = 0; joinWindowStart = Date.now(); }
     if (++joinRequests > 20) return reply({ ok: false, error: 'Çok fazla görüşme isteği. Birkaç saniye sonra tekrar deneyin.' });
     const channelId = (payload as { channelId?: unknown } | null)?.channelId;
+    const transferId = (payload as { transferId?: unknown } | null)?.transferId;
     if (typeof channelId !== 'string' || channelId.length > 128) return reply({ ok: false, error: 'Geçersiz görüşme kanalı.' });
     if (joining) return reply({ ok: false, error: 'Görüşmeye katılma işlemi devam ediyor.' });
     joining = true;
     const version = ++joinVersion;
     try {
+      const transfer = typeof transferId === 'string' ? registry!.transfers.get(transferId) : undefined;
+      if (transferId !== undefined && (!transfer || transfer.targetSocketId !== socket.id
+        || transfer.info.channelId !== channelId || transfer.state !== 'pending' || channels.has(socket.id)
+        || !await transferHasAccess(io, registry!, transfer)))
+        return reply({ ok: false, error: 'Aktarım isteği artık geçerli değil.' });
       if (!await options.canAccessChannel(channelId)) return reply({ ok: false, error: 'Bu görüşmeye erişiminiz yok.' });
       if (!socket.connected || version !== joinVersion) return reply({ ok: false, error: 'Görüşme isteği iptal edildi.' });
+      if (transfer && (registry!.transfers.get(transfer.info.id) !== transfer || channels.get(transfer.info.sourceSocketId) !== channelId))
+        return reply({ ok: false, error: 'Aktarım isteği iptal edildi.' });
       const existing = rooms.get(channelId);
       if (existing && workspaces.get(channelId) !== options.workspaceId) return reply({ ok: false, error: 'Bu görüşmeye erişiminiz yok.' });
-      if (existing && !existing.has(socket.id) && existing.size >= MAX_PARTICIPANTS) return reply({ ok: false, error: 'Bu görüşme dolu. En fazla 6 kişi katılabilir.' });
+      const stagedCount = [...registry!.transfers.values()].filter(item => item.info.channelId === channelId
+        && item.state !== 'pending' && existing?.has(item.targetSocketId)).length;
+      if (!transfer && existing && !existing.has(socket.id) && existing.size - stagedCount >= MAX_PARTICIPANTS) return reply({ ok: false, error: 'Bu görüşme dolu. En fazla 6 kişi katılabilir.' });
       const isVoice = options.getVoiceChannelIds().includes(channelId);
-      if (channels.get(socket.id) !== channelId) leave();
+      if (channels.get(socket.id) !== channelId) leave(transfer?.info.id);
       const room = rooms.get(channelId) ?? new Map<string, CallPeer>();
       const user = socket.data.user?.id === options.user.id ? socket.data.user as User : options.user;
-      if (!room.has(socket.id)) room.set(socket.id, { socketId: socket.id, user, mic: true, camera: false, sharing: false });
+      if (!room.has(socket.id)) room.set(socket.id, { socketId: socket.id, user, mic: !transfer, camera: false, sharing: false });
       rooms.set(channelId, room);
       workspaces.set(channelId, options.workspaceId);
       if (isVoice) voiceChannels.add(channelId);
       channels.set(socket.id, channelId);
+      if (transfer) transfer.state = 'staged';
       await socket.join(roomName(channelId));
       if (!socket.connected || channels.get(socket.id) !== channelId) { leave(); return; }
-      reply({ ok: true, peers: [...room.values()] });
+      reply({ ok: true, peers: [...room.values()], ...(transfer ? { transferId: transfer.info.id } : {}) });
       publish(channelId);
+      publishDevices(io, options.user.id);
     } catch {
       if (channels.get(socket.id) === channelId) leave();
       reply({ ok: false, error: 'Görüşmeye katılınamadı. Yeniden deneyin.' });
@@ -192,7 +399,7 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
   });
 
   socket.on('call:leave', () => { joinVersion++; leave(); });
-  socket.on('disconnect', () => { registry.subscribers.delete(socket.id); joinVersion++; leave(); });
+  socket.on('disconnect', () => { registry.subscribers.delete(socket.id); joinVersion++; leave(); publishDevices(io, options.user.id); });
   socket.on('call:state', (payload: unknown) => {
     if (!payload || typeof payload !== 'object') return;
     if (Date.now() - stateWindowStart > 10_000) { stateChanges = 0; stateWindowStart = Date.now(); }
@@ -200,6 +407,8 @@ export function registerCallHandlers(io: Server, socket: Socket, options: {
     const channelId = channels.get(socket.id);
     const peer = channelId ? rooms.get(channelId)?.get(socket.id) : undefined;
     if (!peer || !channelId) return;
+    const transfer = transferForSocket(registry!, socket.id);
+    if (transfer?.targetSocketId === socket.id) return;
     const state = payload as Partial<CallPeer>;
     for (const key of ['mic', 'camera', 'sharing'] as const) if (typeof state[key] === 'boolean') peer[key] = state[key];
     publish(channelId);

@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from "./ui/dialog";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
+  ArrowRightLeft,
   Check,
   ChevronDown,
   Headphones,
@@ -28,6 +29,7 @@ import {
 import type { CallController, CallParticipant } from "../lib/useCall";
 import type { ConnectionQuality } from "../../shared/call-types";
 import { MediaSettings } from "./CallSetup";
+import { CallTransferDevices } from "./CallTransfer";
 import { Avatar } from "./ui";
 import { ProfileIdentity } from "./ProfileIdentity";
 import { useFloatingCallDock } from "../lib/useFloatingCallDock";
@@ -374,6 +376,8 @@ export function CallPanel({
   const [elapsed, setElapsed] = useState(0);
   const [selectedSharing, setSelectedSharing] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [devicesOpen, setDevicesOpen] = useState(false);
+  const devicesButton = useRef<HTMLButtonElement>(null);
   const [roomExpanded, setRoomExpanded] = useState(false);
   const [expandedScreen, setExpandedScreen] = useState(false);
   const [fullscreenScreen, setFullscreenScreen] = useState(false);
@@ -400,6 +404,9 @@ export function CallPanel({
     } else if (expandedScreen) {
       setExpandedScreen(false);
       expandButton.current?.focus();
+    } else if (devicesOpen) {
+      setDevicesOpen(false);
+      devicesButton.current?.focus();
     } else if (settingsOpen) {
       setSettingsOpen(false);
       settingsButton.current?.focus();
@@ -411,6 +418,7 @@ export function CallPanel({
   const visible = !minimized && Boolean(call.channelId || call.error);
   useEffect(() => {
     setRoomExpanded(false);
+    setDevicesOpen(false);
   }, [call.channelId]);
   useEffect(() => {
     const mobile = window.matchMedia("(max-width: 560px)");
@@ -526,7 +534,7 @@ export function CallPanel({
         <RemoteAudio
           key={peer.socketId}
           stream={peer.stream}
-          muted={deafened}
+          muted={deafened || call.receivingTransfer}
           onBlocked={blockedCallback.current}
           playbackAttempt={playbackAttempt}
           outputDeviceId={call.preferences.outputDeviceId}
@@ -684,6 +692,8 @@ export function CallPanel({
         }}
       >
         <DialogContent
+          inert={!visible ? true : undefined}
+          aria-hidden={!visible ? true : undefined}
           className={`call-dialog call-panel ${audioOnly && !activeShare ? "call-panel-audio" : "call-panel-media"}${roomExpanded ? " call-panel-expanded" : ""}`}
           overlayClassName="call-backdrop"
           showCloseButton={false}
@@ -768,6 +778,26 @@ export function CallPanel({
               </div>
             </div>
             <div className="call-header-actions">
+              {call.joined && !call.receivingTransfer && (
+                <Button
+                  variant="unstyled"
+                  size="unset"
+                  type="button"
+                  className="call-icon-button call-transfer-toggle"
+                  aria-label="Görüşmeyi başka cihaza aktar"
+                  title="Görüşmeyi başka cihaza aktar"
+                  aria-expanded={devicesOpen}
+                  aria-controls="call-transfer-devices"
+                  ref={devicesButton}
+                  onClick={() => {
+                    setDevicesOpen((value) => !value);
+                    setSettingsOpen(false);
+                  }}
+                >
+                  <ArrowRightLeft size={18} />
+                  <span>Cihaza aktar</span>
+                </Button>
+              )}
               <Button
                 variant="unstyled"
                 size="unset"
@@ -804,6 +834,32 @@ export function CallPanel({
             </div>
           </header>
 
+          {devicesOpen && call.joined && !call.receivingTransfer && (
+            <CallTransferDevices
+              call={call}
+              onClose={() => {
+                setDevicesOpen(false);
+                devicesButton.current?.focus();
+              }}
+            />
+          )}
+          {call.receivingTransfer && (
+            <div className="call-transfer-connecting" role="status">
+              <LoaderCircle size={18} className="spin" />
+              <span>
+                Görüşme bu cihazda hazırlanıyor. Önceki cihazda devam
+                edebilirsin.
+              </span>
+              <Button
+                variant="unstyled"
+                size="unset"
+                className="text-button"
+                onClick={call.cancelTransfer}
+              >
+                İptal et
+              </Button>
+            </div>
+          )}
           {outputError && (
             <div className="call-error" role="alert">
               <span>
@@ -1090,6 +1146,7 @@ export function CallPanel({
                     className={`call-control ${!call.mic ? "call-control-off" : "call-control-active"}`}
                     aria-label={call.mic ? "Mikrofonu kapat" : "Mikrofonu aç"}
                     aria-pressed={call.mic}
+                    disabled={call.receivingTransfer}
                     onClick={call.toggleMic}
                   >
                     {call.mic ? <Mic size={21} /> : <MicOff size={21} />}
@@ -1167,7 +1224,10 @@ export function CallPanel({
                     aria-expanded={settingsOpen}
                     aria-controls="call-media-settings"
                     ref={settingsButton}
-                    onClick={() => setSettingsOpen((value) => !value)}
+                    onClick={() => {
+                      setSettingsOpen((value) => !value);
+                      setDevicesOpen(false);
+                    }}
                   >
                     <Settings2 size={21} />
                   </Button>

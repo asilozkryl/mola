@@ -1,0 +1,225 @@
+.call-panel .call-header-actions .call-icon-button.call-transfer-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+@media (min-width: 561px) {
+  .call-panel .call-header-actions .call-icon-button.call-transfer-toggle {
+    width: auto;
+    min-width: max-content;
+    padding: 8px 11px !important;
+    border: 1px solid var(--border);
+    color: var(--accent-foreground);
+    background: var(--muted) !important;
+    font-size: 12px;
+  }
+}
+.call-transfer-section {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  max-height: min(420px, 45dvh);
+  overflow: auto;
+  flex-shrink: 0;
+}
+.call-transfer-heading,
+.call-transfer-list-title,
+.call-transfer-pending {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.call-transfer-heading strong {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.call-transfer-heading p,
+.call-transfer-pending p {
+  margin: 5px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.call-transfer-list-title {
+  margin: 18px 0 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.call-transfer-list-title button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.call-transfer-device-list {
+  display: grid;
+  gap: 8px;
+}
+.call-transfer-device {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+}
+.call-transfer-device:hover {
+  background: var(--muted);
+  border-color: var(--accent-foreground);
+}
+.call-transfer-device > span:nth-child(2),
+.call-transfer-pending > div {
+  flex: 1;
+  min-width: 0;
+}
+.call-transfer-device strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.call-transfer-device small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.call-transfer-device-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 11px;
+  color: var(--accent-foreground);
+  background: var(--accent);
+}
+.call-transfer-empty {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 20px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted-foreground);
+}
+.call-transfer-empty p {
+  max-width: 410px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.call-transfer-empty strong {
+  color: var(--foreground);
+  font-size: 14px;
+}
+.call-transfer-note {
+  margin: 12px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.call-transfer-pending {
+  padding: 18px 0 4px;
+}
+.call-transfer-pending small,
+.call-transfer-incoming > small {
+  display: block;
+  color: var(--muted-foreground);
+  margin-top: 6px;
+  font-size: 12px;
+}
+.call-transfer-incoming {
+  text-align: center;
+}
+.call-transfer-hero {
+  display: grid;
+  place-items: center;
+  width: 66px;
+  height: 66px;
+  margin: 10px auto 18px;
+  border-radius: 20px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.call-transfer-incoming h3 {
+  margin: 0;
+  font-size: 22px;
+}
+.call-transfer-incoming p {
+  margin: 9px 0 22px;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.call-transfer-incoming ul {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--muted);
+  margin: 0 0 18px;
+  list-style: none;
+  text-align: left;
+  font-size: 13px;
+}
+.call-transfer-incoming li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.call-transfer-incoming li svg {
+  flex-shrink: 0;
+  color: var(--accent-foreground);
+  margin-top: 2px;
+}
+.call-transfer-incoming-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+.call-transfer-connecting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 22px;
+  color: var(--accent-foreground);
+  font-size: 13px;
+  background: var(--accent);
+}
+.call-transfer-connecting button {
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.call-transfer-connecting > svg {
+  flex-shrink: 0;
+}
+@media (max-width: 560px) {
+  .call-transfer-section {
+    padding: 14px;
+    max-height: 40dvh;
+  }
+  .call-transfer-toggle span {
+    display: none;
+  }
+  .call-transfer-pending {
+    flex-wrap: wrap;
+  }
+  .call-transfer-pending > button {
+    width: 100%;
+  }
+  .call-transfer-incoming-actions {
+    flex-direction: column-reverse;
+  }
+  .call-transfer-incoming-actions button {
+    width: 100%;
+  }
+}

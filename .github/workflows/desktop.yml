@@ -122,3 +122,40 @@ jobs:
             desktop/release/SHA256SUMS
           retention-days: 14
           if-no-files-found: error
+
+  release:
+    # A manually dispatched run builds review artifacts only. A version tag is
+    # the explicit publication action, after every native runner has passed.
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.20.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: mola-desktop-*
+          path: downloaded-installers
+      - name: Verify the complete installer set and checksums
+        run: node desktop/scripts/prepare-release.cjs downloaded-installers public-installers
+      - name: Publish the verified desktop release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DESKTOP_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if gh release view "$DESKTOP_TAG" --json isDraft > release-state.json 2>/dev/null; then
+            node -e 'if (!require("./release-state.json").isDraft) throw new Error("A published release cannot be overwritten. Bump the desktop version.")'
+          else
+            gh release create "$DESKTOP_TAG" --verify-tag --draft --title "Mola Desktop ${DESKTOP_TAG#desktop-v}" --notes-file desktop/RELEASE_NOTES.md
+          fi
+          gh release upload "$DESKTOP_TAG" public-installers/* --clobber
+          gh release edit "$DESKTOP_TAG" --draft=false --latest=false

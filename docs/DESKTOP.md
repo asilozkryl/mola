@@ -10,6 +10,16 @@ Masaüstü istemcisi Linux, macOS ve Windows üzerinde mevcut Mola sunucunuza ba
 
 Sunucu adresi bu bilgisayarda saklanır. Sonradan uygulama menüsündeki **Mola → Sunucu adresini değiştir…** seçeneğiyle değiştirilebilir. Oturum verileri Electron'un kullanıcı profili dizininde tutulur. Sunucuya erişilemiyorsa bağlantı ekranından yeniden deneyebilir veya adresi değiştirebilirsiniz.
 
+## Uygulama içinden indirme
+
+Sunucunuzdaki `/download` sayfası oturum açmadan kullanılabilir. Giriş ekranındaki **Masaüstü uygulamasını indir** bağlantısından veya Mola'nın yardım bölümünden açılır. Sayfa Windows, macOS ve Linux'u algılar; diğer işletim sistemlerinin paketleri de elle seçilebilir. macOS tarayıcıları Apple Silicon cihazlarda bile Intel bilgisi verebildiği için işlemci seçimi kullanıcıya bırakılır. Android, iPhone ve iPad bilgisayar olarak önerilmez; sayfa bu cihazlarda masaüstü paketlerinin bilgisayarlar için olduğunu açıklar.
+
+Kurulum bağlantıları `GET /api/desktop/releases` üzerinden GitHub'daki gerçek, yayımlanmış `desktop-vMAJOR.MINOR.PATCH` sürümlerinden alınır. Katalog yalnızca bu deponun doğru sürümüne ait yedi kurulum dosyası ve `SHA256SUMS` eksiksiz bulunduğunda bağlantı gösterir. Taslaklar, ön sürümler, Actions artifacts ve yalnızca Git etiketleri indirme olarak sunulmaz. Henüz sürüm yayımlanmadıysa sayfa bunu belirtir; tahmini bir indirme adresi üretmez. GitHub'ın genel `/releases/latest` adresi masaüstü sürümünün kaynağı değildir.
+
+Katalog başarılı yanıtları on dakika, boş veya geçici hata yanıtlarını bir dakika sunucuda önbelleğe alır ve eşzamanlı ziyaretçilerin isteklerini birleştirir. Geçici GitHub kesintisinde en fazla 24 saat önce doğrulanmış bağlantılar açıklama eşliğinde gösterilebilir; silinmiş bir sürüm başarılı bir sorguda görüldükten sonra yeniden sunulmaz. İlk sürümün yayımlanmasından sonra bağlantıların görünmesi boş katalog önbelleği nedeniyle yaklaşık bir dakika sürebilir. GitHub erişimi için sunucuya kişisel erişim anahtarı koymak gerekmez.
+
+İndirme sayfasındaki **Sunucu adresini kopyala** düğmesi, sayfanın açıldığı Mola sunucusunun kök adresini kopyalar. Kullanıcı indirilen dosyayı işletim sisteminin normal kurulum akışıyla açar, ardından bu adresi Mola'ya girer. Tarayıcıdan sessiz kurulum veya işletim sistemi izinlerini atlama uygulanmaz.
+
 Üretim sunucusu geçerli bir HTTPS sertifikası kullanmalıdır. HTTP yalnızca `localhost`, `127.0.0.1` ve `[::1]` gibi yerel geliştirme adresleri için kabul edilir. Sertifika hataları atlanmaz. Sunucu adresi pakete gömülü değildir; `MOLA_SERVER_URL` ortam değişkeniyle de verebilirsiniz. Bu değişken tanımlıysa her açılışta kayıtlı adresten önce kullanılır; normal sunucu seçimine dönmek için değişkeni kaldırın.
 
 ## Geliştirme
@@ -95,7 +105,11 @@ Paket tanımı `desktop/electron-builder.yml` içindedir. Uygulama kimliği `app
 
 İş akışı önce masaüstü birim ve gerçek Electron açılış testlerini Linux'ta çalıştırır. Ayrıca web uygulamasını derleyip gerçek Mola sunucusu üzerinde Electron'dan mesaj gönderme ve kalıcılık akışını doğrular. Ardından Linux, Windows, Intel macOS ve Apple Silicon macOS paketlerini ilgili işletim sistemlerinin ayrı çalıştırıcılarında üretir. [GitHub çalıştırıcı mimarileri](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
-Üretilen dosyalar ve bütünlük kontrolü için `SHA256SUMS` dosyası iş akışının **Artifacts** bölümünde 14 gün saklanır. İş akışı bir GitHub Release oluşturmaz, mağazaya göndermez ve paketleri kamuya yayımlamaz. CI çıktıları imzasız inceleme paketleridir; macOS'ta imzalama ve hardened runtime birlikte kapatılır. Test işindeki geçici Linux çalıştırıcısında Chromium sandbox'ının ihtiyaç duyduğu kullanıcı namespace desteği etkinleştirilir; Electron sandbox'ı açık kalır.
+Üretilen dosyalar ve bütünlük kontrolü için `SHA256SUMS` dosyası iş akışının **Artifacts** bölümünde 14 gün saklanır. Elle başlatılan çalıştırmalar yalnızca bu inceleme çıktılarını üretir. `desktop-v*` etiketiyle başlayan çalıştırmalarda, tüm test ve platform derlemeleri başarılı olduktan sonra ayrı yayın işi dört çalıştırıcının çıktılarını toplar. Yedi beklenen kurulum dosyasını ve her birinin SHA256 değerini doğrular; birleşik `SHA256SUMS` dosyası üretir. Dosyalar önce taslak GitHub Release'e yüklenir, ardından sürüm yayımlanır. Yayımlanmış bir sürümün üzerine yazılmaz; değişiklik için masaüstü sürümünü artırıp yeni etiket gönderin. Mağazaya gönderim yapılmaz.
+
+İlk gerçek indirme bağlantılarının oluşması için bu iş akışının bir sürüm etiketi üzerinde başarıyla tamamlanması gerekir; kodun ana uygulamayla dağıtılması tek başına paket yayımlamaz. Release, depodaki web sürümlerinin `latest` işaretini değiştirmez. İndirme kataloğu yayımlanmış masaüstü sürümlerini ayrıca bulur.
+
+Mevcut CI paketleri imzasızdır; macOS'ta imzalama ve hardened runtime birlikte kapatılır. İndirme sayfası Windows SmartScreen ve macOS Gatekeeper durumunu kurulumdan önce belirtir; yayımlama iş akışı kod imzalama veya Apple noter onayı sağlamaz. Test işindeki geçici Linux çalıştırıcısında Chromium sandbox'ının ihtiyaç duyduğu kullanıcı namespace desteği etkinleştirilir; Electron sandbox'ı açık kalır.
 
 ## İmzalama ve dağıtım
 

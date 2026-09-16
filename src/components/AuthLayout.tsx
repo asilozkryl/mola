@@ -61,6 +61,10 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         <div className="auth-form-wrap">{children}</div>
         <span className="auth-footer">
           Mola © {new Date().getFullYear()} · Birlikte, aynı yerde.
+          <br />
+          <a href="/download" target="_blank" rel="noopener noreferrer">
+            Masaüstü uygulamasını indir
+          </a>
         </span>
       </section>
     </main>

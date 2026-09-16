@@ -136,6 +136,8 @@ import {
 import { usePushSubscription } from "./lib/usePushSubscription";
 import { CallPanel } from "./components/CallPanel";
 import { CallSetup } from "./components/CallSetup";
+import { IncomingCallTransfer } from "./components/CallTransfer";
+import { DesktopDownloads } from "./components/DesktopDownloads";
 import ChannelAccessDialog from "./components/ChannelAccessDialog";
 import { ActivityCenter } from "./components/ActivityCenter";
 import { DirectMessagesCenter } from "./components/DirectMessagesCenter";
@@ -183,6 +185,15 @@ const uniqueMessages = (list: Message[]) =>
   );
 
 export default function App() {
+  if (
+    window.location.pathname === "/download" ||
+    window.location.pathname === "/download/"
+  )
+    return <DesktopDownloads />;
+  return <WorkspaceApp />;
+}
+
+function WorkspaceApp() {
   const [data, setData] = useState<Bootstrap | null>(null);
   const [accountData, setAccountData] = useState<AccountBootstrap | null>(null);
   const accountRef = useRef(accountData);
@@ -372,6 +383,11 @@ export default function App() {
     (message: string) => notify(message, true),
     [notify],
   );
+  useEffect(() => {
+    if (!call.transferNotice) return;
+    notify(call.transferNotice.message, call.transferNotice.error);
+    call.clearTransferNotice();
+  }, [call.transferNotice, call.clearTransferNotice, notify]);
   const savedState = useSavedMessages({
     userId: data?.user.id || "",
     workspaceId: data?.workspace.id || "",
@@ -4447,6 +4463,16 @@ export default function App() {
           </div>
           <div className="help-items">
             <div>
+              <MonitorUp size={22} />
+              <span>
+                <strong>Mola masaüstü uygulaması</strong>
+                <p>Cihazına uygun Windows, macOS veya Linux sürümünü indir.</p>
+                <a href="/download" target="_blank" rel="noopener noreferrer">
+                  Masaüstü uygulamasını indir →
+                </a>
+              </span>
+            </div>
+            <div>
               <Hash size={22} />
               <span>
                 <strong>Her konuya bir kanal</strong>
@@ -4496,6 +4522,15 @@ export default function App() {
           )}
         </Modal>
       )}
+      <IncomingCallTransfer
+        call={call}
+        onAccept={() => {
+          setDialog(null);
+          setCallSetupChannel(null);
+          setShowCall(true);
+          void call.acceptTransfer();
+        }}
+      />
       {(showCall || call.joined || call.joining || call.error) && (
         <CallPanel
           call={call}

@@ -5,6 +5,10 @@ import { subscribeVoiceRoster } from "./voiceRoster";
 import type {
   CallPreferences,
   ConnectionQuality,
+  CallTransfer,
+  CallTransferStatus,
+  CallTransferAck,
+  CallDevicesAck,
 } from "../../shared/call-types";
 import { useCallActivity } from "./useCallActivity";
 
@@ -39,6 +43,11 @@ type CallSignal = {
   renegotiate?: boolean;
 };
 type JoinAck = { ok: boolean; error?: string; peers?: CallPeer[] };
+type TransferState = {
+  details: CallTransfer;
+  direction: "incoming" | "outgoing";
+  phase: "waiting" | "connecting";
+};
 
 function mediaError(
   error: unknown,
@@ -92,6 +101,21 @@ export function useCall({
   const [error, setError] = useState<string | null>(null);
   const [relayConfigured, setRelayConfigured] = useState(true);
   const [mediaBusy, setMediaBusy] = useState(false);
+  const [transfer, setTransfer] = useState<TransferState | null>(null);
+  const transferRef = useRef<TransferState | null>(null);
+  const requestInFlight = useRef(false);
+  const [transferRequesting, setTransferRequesting] = useState(false);
+  const [transferNotice, setTransferNotice] = useState<{
+    message: string;
+    error: boolean;
+  } | null>(null);
+  const [devicesRevision, setDevicesRevision] = useState(0);
+  const completedTransfers = useRef(new Map<string, CallTransferStatus>());
+  const receiveTransferStatus = useRef<(status: CallTransferStatus) => void>(
+    () => {},
+  );
+  const cancelInFlight = useRef<string | null>(null);
+  const readySent = useRef<string | null>(null);
   const [preferences, updatePreferences] = useState<CallPreferences>({
     inputDeviceId: "",
     outputDeviceId: "",
@@ -143,6 +167,13 @@ export function useCall({
   }, []);
 
   const leave = useCallback(() => {
+    if (transferRef.current)
+      socket?.emit("call:transfer:cancel", {
+        transferId: transferRef.current.details.id,
+      });
+    transferRef.current = null;
+    setTransfer(null);
+    readySent.current = null;
     sessionVersion.current += 1;
     if (currentChannel.current || joiningRef.current)
       socket?.emit("call:leave");
@@ -189,6 +220,185 @@ export function useCall({
     },
     [socket],
   );
+
+  useEffect(() => {
+    if (!socket || !workspaceId) return;
+    const register = () => socket.emit("call:devices:register", () => {});
+    const changed = () => setDevicesRevision((value) => value + 1);
+    const incoming = (details: CallTransfer) => {
+      if (
+        joinedRef.current ||
+        joiningRef.current ||
+        transferRef.current ||
+        requestInFlight.current
+      ) {
+        socket.emit("call:transfer:cancel", { transferId: details.id });
+        return;
+      }
+      const next: TransferState = {
+        details,
+        direction: "incoming",
+        phase: "waiting",
+      };
+      transferRef.current = next;
+      setTransfer(next);
+    };
+    const status = (result: CallTransferStatus) => {
+      completedTransfers.current.set(result.id, result);
+      if (completedTransfers.current.size > 64)
+        completedTransfers.current.delete(
+          completedTransfers.current.keys().next().value!,
+        );
+      const current = transferRef.current;
+      if (!current || current.details.id !== result.id) return;
+      transferRef.current = null;
+      setTransfer(null);
+      readySent.current = null;
+      if (result.state === "completed") {
+        if (current.direction === "outgoing") leave();
+        else if (joinedRef.current) {
+          const enabled = result.mic ?? current.details.mic;
+          local.current?.getAudioTracks().forEach((track) => {
+            track.enabled = enabled;
+          });
+          setMic(enabled);
+          publishState({ mic: enabled });
+        }
+        setTransferNotice({
+          message:
+            current.direction === "outgoing"
+              ? `Görüşme ${current.details.targetDevice} cihazına aktarıldı.`
+              : "Görüşme bu cihazda devam ediyor.",
+          error: false,
+        });
+      } else {
+        if (current.direction === "incoming" && current.phase === "connecting")
+          leave();
+        setTransferNotice({
+          message:
+            result.reason ||
+            "Aktarım iptal edildi. Görüşme önceki cihazda devam ediyor.",
+          error: false,
+        });
+      }
+    };
+    const disconnected = () => {
+      transferRef.current = null;
+      setTransfer(null);
+      requestInFlight.current = false;
+      setTransferRequesting(false);
+      changed();
+    };
+    receiveTransferStatus.current = status;
+    socket.on("connect", register);
+    socket.on("call:devices:changed", changed);
+    socket.on("call:transfer:incoming", incoming);
+    socket.on("call:transfer:status", status);
+    socket.on("disconnect", disconnected);
+    if (socket.connected) register();
+    return () => {
+      socket.off("connect", register);
+      socket.off("call:devices:changed", changed);
+      socket.off("call:transfer:incoming", incoming);
+      socket.off("call:transfer:status", status);
+      socket.off("disconnect", disconnected);
+    };
+  }, [socket, workspaceId, leave, publishState]);
+
+  const getTransferDevices = useCallback(async () => {
+    if (!socket?.connected)
+      throw new Error("Cihazları görmek için sunucu bağlantısını bekleyin.");
+    const result = (await socket
+      .timeout(8_000)
+      .emitWithAck("call:devices:list")) as CallDevicesAck;
+    if (!result.ok) throw new Error(result.error);
+    return result.devices;
+  }, [socket]);
+
+  const requestTransfer = useCallback(
+    async (deviceId: string) => {
+      if (
+        !socket?.connected ||
+        !joinedRef.current ||
+        transferRef.current ||
+        requestInFlight.current
+      )
+        return;
+      const version = sessionVersion.current;
+      requestInFlight.current = true;
+      setTransferRequesting(true);
+      try {
+        const result = (await socket
+          .timeout(8_000)
+          .emitWithAck("call:transfer:request", {
+            deviceId,
+          })) as CallTransferAck;
+        if (!result.ok) throw new Error(result.error);
+        if (version !== sessionVersion.current || !joinedRef.current) {
+          socket.emit("call:transfer:cancel", {
+            transferId: result.transfer.id,
+          });
+          return;
+        }
+        const next: TransferState = {
+          details: result.transfer,
+          direction: "outgoing",
+          phase: "waiting",
+        };
+        transferRef.current = next;
+        setTransfer(next);
+        const terminal = completedTransfers.current.get(result.transfer.id);
+        if (terminal) receiveTransferStatus.current(terminal);
+      } catch (error) {
+        if (version === sessionVersion.current)
+          setTransferNotice({
+            message:
+              error instanceof Error
+                ? error.message
+                : "Aktarım isteği gönderilemedi.",
+            error: true,
+          });
+      } finally {
+        requestInFlight.current = false;
+        setTransferRequesting(false);
+      }
+    },
+    [socket],
+  );
+
+  const cancelTransfer = useCallback(() => {
+    const current = transferRef.current;
+    if (
+      !current ||
+      !socket?.connected ||
+      cancelInFlight.current === current.details.id
+    )
+      return;
+    const id = current.details.id;
+    cancelInFlight.current = id;
+    // Completion may have committed before this click. Preserve media/state
+    // until the server's ordered terminal event decides which action won.
+    void socket
+      .timeout(8_000)
+      .emitWithAck("call:transfer:cancel", { transferId: id })
+      .then((result: { ok: boolean }) => {
+        if (result.ok && transferRef.current?.details.id === id)
+          receiveTransferStatus.current({ id, state: "cancelled" });
+      })
+      .catch(() => {
+        if (transferRef.current?.details.id === id)
+          setTransferNotice({
+            message:
+              "İptal sonucu henüz doğrulanamadı. Sunucu yanıtı bekleniyor.",
+            error: true,
+          });
+      })
+      .finally(() => {
+        if (cancelInFlight.current === id) cancelInFlight.current = null;
+      });
+  }, [socket]);
+
+  const clearTransferNotice = useCallback(() => setTransferNotice(null), []);
 
   const createPeer = useCallback(
     (peer: CallPeer) => {
@@ -463,13 +673,24 @@ export function useCall({
   }, [joined]);
 
   const join = useCallback(
-    async (channel: { id: string; name: string }) => {
+    async (channel: { id: string; name: string }, handoff?: CallTransfer) => {
       if (
         joiningRef.current ||
         (currentChannel.current === channel.id && joinedRef.current)
       )
         return;
+      // Keep the accepted offer while resetting any earlier local call state.
+      if (handoff) transferRef.current = null;
       leave();
+      if (handoff) {
+        const next: TransferState = {
+          details: handoff,
+          direction: "incoming",
+          phase: "connecting",
+        };
+        transferRef.current = next;
+        setTransfer(next);
+      }
       const version = sessionVersion.current;
       setChannelId(channel.id);
       setChannelName(channel.name);
@@ -478,6 +699,7 @@ export function useCall({
       setError(null);
       joiningRef.current = true;
       if (!socket?.connected || !user) {
+        if (handoff) cancelTransfer();
         setError("Görüşmeye katılmak için sunucu bağlantısını bekleyin.");
         setJoining(false);
         joiningRef.current = false;
@@ -488,6 +710,7 @@ export function useCall({
         !navigator.mediaDevices?.getUserMedia ||
         !window.RTCPeerConnection
       ) {
+        if (handoff) cancelTransfer();
         setError(
           "Görüşmeler için HTTPS bağlantısı ve güncel bir tarayıcı gerekli.",
         );
@@ -519,8 +742,14 @@ export function useCall({
         // Make capture immediately reachable by leave(), including while the RTC
         // configuration request is still in flight.
         local.current = acquired;
+        if (
+          !acquired
+            .getAudioTracks()
+            .some((track) => track.readyState === "live")
+        )
+          throw new Error("Mikrofon bulunamadı.");
         acquired.getAudioTracks().forEach((track) => {
-          track.enabled = !preferencesRef.current.startMuted;
+          track.enabled = !handoff && !preferencesRef.current.startMuted;
         });
         let config: { iceServers: RTCIceServer[]; relayConfigured?: boolean };
         try {
@@ -556,20 +785,21 @@ export function useCall({
         });
         currentChannel.current = channel.id;
         const ack = await new Promise<JoinAck>((resolve, reject) =>
-          socket
-            .timeout(8_000)
-            .emit(
-              "call:join",
-              { channelId: channel.id },
-              (err: Error | null, result: JoinAck) =>
-                err
-                  ? reject(
-                      new Error(
-                        "Görüşme isteği zaman aşımına uğradı. Tekrar deneyin.",
-                      ),
-                    )
-                  : resolve(result),
-            ),
+          socket.timeout(8_000).emit(
+            "call:join",
+            {
+              channelId: channel.id,
+              ...(handoff ? { transferId: handoff.id } : {}),
+            },
+            (err: Error | null, result: JoinAck) =>
+              err
+                ? reject(
+                    new Error(
+                      "Görüşme isteği zaman aşımına uğradı. Tekrar deneyin.",
+                    ),
+                  )
+                : resolve(result),
+          ),
         );
         if (version !== sessionVersion.current) {
           stopStream(acquired);
@@ -580,8 +810,8 @@ export function useCall({
         setJoined(true);
         setJoining(false);
         joiningRef.current = false;
-        setMic(!preferencesRef.current.startMuted);
-        publishState({ mic: !preferencesRef.current.startMuted });
+        setMic(!handoff && !preferencesRef.current.startMuted);
+        publishState({ mic: !handoff && !preferencesRef.current.startMuted });
         updatePeers(ack.peers ?? []);
       } catch (err) {
         stopStream(acquired);
@@ -596,11 +826,80 @@ export function useCall({
         setError(message);
       }
     },
-    [socket, user, leave, updatePeers, publishState],
+    [socket, user, leave, updatePeers, publishState, cancelTransfer],
   );
 
+  const acceptTransfer = useCallback(async () => {
+    const current = transferRef.current;
+    if (
+      !current ||
+      current.direction !== "incoming" ||
+      current.phase !== "waiting" ||
+      joinedRef.current ||
+      joiningRef.current
+    )
+      return;
+    await join(
+      { id: current.details.channelId, name: current.details.channelName },
+      current.details,
+    );
+  }, [join]);
+
+  useEffect(() => {
+    if (
+      !socket ||
+      !joined ||
+      transfer?.direction !== "incoming" ||
+      transfer.phase !== "connecting" ||
+      readySent.current === transfer.details.id
+    )
+      return;
+    // The join ACK only confirms room admission. Keep both capture and playback
+    // silent until WebRTC has connected to everyone except the departing device.
+    if (
+      !local.current
+        ?.getAudioTracks()
+        .some((track) => track.readyState === "live")
+    )
+      return;
+    if (
+      [...connections.current.values()].some(
+        (peer) =>
+          peer.user.socketId !== transfer.details.sourceSocketId &&
+          peer.pc.connectionState !== "connected",
+      )
+    )
+      return;
+    const id = transfer.details.id;
+    readySent.current = id;
+    void socket
+      .timeout(8_000)
+      .emitWithAck("call:transfer:ready", { transferId: id })
+      .then((result: { ok: boolean; error?: string }) => {
+        if (!result.ok && transferRef.current?.details.id === id) {
+          cancelTransfer();
+          setTransferNotice({
+            message:
+              result.error ||
+              "Aktarım tamamlanamadı. Önceki cihazda devam edebilirsin.",
+            error: true,
+          });
+        }
+      })
+      .catch(() => {
+        if (transferRef.current?.details.id !== id) return;
+        cancelTransfer();
+        setTransferNotice({
+          message:
+            "Aktarım bağlantısı zaman aşımına uğradı. Önceki cihazda devam edebilirsin.",
+          error: true,
+        });
+      });
+  }, [socket, joined, transfer, peers, cancelTransfer]);
+
   const toggleMic = useCallback(() => {
-    if (!joinedRef.current) return;
+    if (!joinedRef.current || transferRef.current?.direction === "incoming")
+      return;
     if (
       !local.current
         ?.getAudioTracks()
@@ -619,6 +918,10 @@ export function useCall({
 
   const selectInputDevice = useCallback(
     async (deviceId: string) => {
+      if (transferRef.current?.direction === "incoming")
+        throw new Error(
+          "Cihaz değişimi için aktarımın tamamlanmasını bekleyin.",
+        );
       if (!joinedRef.current) {
         setPreferences({ inputDeviceId: deviceId });
         return;
@@ -700,7 +1003,12 @@ export function useCall({
   );
 
   const toggleCamera = useCallback(async () => {
-    if (!joinedRef.current || mediaOperation.current) return;
+    if (
+      !joinedRef.current ||
+      mediaOperation.current ||
+      transferRef.current?.direction === "incoming"
+    )
+      return;
     mediaOperation.current = true;
     setMediaBusy(true);
     setError(null);
@@ -786,7 +1094,12 @@ export function useCall({
   }, [publishState]);
 
   const toggleScreen = useCallback(async () => {
-    if (!joinedRef.current || mediaOperation.current) return;
+    if (
+      !joinedRef.current ||
+      mediaOperation.current ||
+      transferRef.current?.direction === "incoming"
+    )
+      return;
     if (!stateRef.current.sharing && !navigator.mediaDevices.getDisplayMedia) {
       setError(
         "Ekran paylaşımı bu tarayıcıda desteklenmiyor. Bilgisayarınızın tarayıcısından katılmayı deneyin.",
@@ -891,7 +1204,18 @@ export function useCall({
     sharing,
     error,
     relayConfigured,
-    mediaBusy,
+    mediaBusy: mediaBusy || transfer?.direction === "incoming",
+    transfer,
+    transferRequesting,
+    transferNotice,
+    clearTransferNotice,
+    devicesRevision,
+    getTransferDevices,
+    requestTransfer,
+    acceptTransfer,
+    cancelTransfer,
+    receivingTransfer:
+      transfer?.direction === "incoming" && transfer.phase === "connecting",
     user,
     join,
     leave,

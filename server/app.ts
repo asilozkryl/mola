@@ -33,6 +33,7 @@ import { installCollections } from './collections.js';
 import { AttachmentUnavailableError, installReliableMessages } from './message-reliability.js';
 import type { SessionBootstrap, Message } from '../shared/types.js';
 import { createRequestLimits } from './request-limits.js';
+import { installDesktopDownloads } from './desktop-downloads.js';
 
 declare global { namespace Express { interface Request { auth?: Row; sessionHash?: string; } } }
 
@@ -209,6 +210,7 @@ export function createApp(options: AppOptions = {}) {
   let localMailboxUrl: string | undefined;
   if (!production && process.env.LOCAL_MAILBOX_URL) { try { const url = new URL(process.env.LOCAL_MAILBOX_URL); if (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) && !url.username && !url.password) localMailboxUrl = url.toString(); } catch {} }
   app.get('/api/config', (_req, res) => res.json({ demoEnabled, emailVerificationRequired: verificationRequired, emailDeliveryAvailable: mail.available, registrationAvailable: !verificationRequired || mail.available, relayConfigured, ...(mail.available && localMailboxUrl ? { localMailboxUrl } : {}) }));
+  installDesktopDownloads(app);
   app.get('/api/auth/me', authenticate, (req, res) => res.json(bootstrap(req.auth!)));
   app.post('/api/auth/demo', authLimiter, (req, res) => {
     if (!demoEnabled) throw new HttpError(403, 'Örnek alan bu sunucuda kapalı.');
@@ -612,7 +614,14 @@ export function createApp(options: AppOptions = {}) {
       const result = z.object({ channelId: idSchema, typing: z.boolean() }).safeParse(payload);
       if (result.success && socketContextActive() && repo.canWriteChannel(user.id, result.data.channelId, workspaceId)) socket.to(`channel:${result.data.channelId}`).emit('typing', { channelId: result.data.channelId, userId: user.id, typing: result.data.typing });
     });
-    registerCallHandlers(io, socket, { user, workspaceId, getVoiceChannelIds: () => socketContextActive() ? repo.channels(user.id, workspaceId).filter(channel => channel.kind === 'voice' && !channel.archived).map(channel => channel.id) : [], canAccessChannel: channelId => socketContextActive() && repo.canWriteChannel(user.id, channelId, workspaceId) });
+    const callDevice = repo.get('SELECT id,device FROM session_devices WHERE token_hash=?', socket.data.sessionHash);
+    registerCallHandlers(io, socket, {
+      user, workspaceId,
+      device: callDevice ? { id: callDevice.id, name: callDevice.device } : undefined,
+      getChannelName: channelId => repo.get('SELECT name FROM channels WHERE id=? AND workspace_id=?', channelId, workspaceId)?.name ?? 'Görüşme',
+      getVoiceChannelIds: () => socketContextActive() ? repo.channels(user.id, workspaceId).filter(channel => channel.kind === 'voice' && !channel.archived).map(channel => channel.id) : [],
+      canAccessChannel: channelId => socketContextActive() && repo.canWriteChannel(user.id, channelId, workspaceId),
+    });
     socket.on('disconnect', () => {
       clearTimeout(expiryTimer);
       const members = onlineByWorkspace.get(workspaceId); const sockets = members?.get(user.id); sockets?.delete(socket.id);
