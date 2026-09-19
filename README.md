@@ -52,6 +52,8 @@ npm run mobile:ios:generate
 
 Android APK kurulumu, iOS derlemesi ve mevcut sınırlar: [mobil rehber](docs/MOBILE.md). Mağaza imzalama/yayınlama, arka plan bildirimleri ve yerel ekran yayını ayrı kurulum gerektirir.
 
+Kendi iPhone'unda ücretsiz Apple hesabıyla denemek için Mac'te `bash mobile/ios/open-project.command` çalıştır. Xcode'da **Personal Team** seçip bağlı iPhone'a **Run** ile kurabilirsin; App Store yayını gerekmez. Önkoşullar ve 7 günlük imza yenileme adımları: [iPhone'a ücretsiz kurulum](docs/MOBILE_IOS.md#kendi-iphoneuna-ücretsiz-kurulum).
+
 ## Kullanım
 
 - **Görünüm:** Profil ve ayarlar → Görünüm bölümünden açık, koyu veya sistem temasını ve kompakt/rahat yoğunluğu seçin. Tercihler bu tarayıcıda saklanır; sistem teması işletim sistemiyle birlikte değişir. Arayüzün ortak bileşenleri shadcn/ui ve Base UI üzerine kuruludur. [Tasarım sistemi](docs/UI_DESIGN_SYSTEM.md).
